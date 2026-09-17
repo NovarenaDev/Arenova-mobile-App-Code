@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, TouchableOpacity, FlatList, RefreshControl, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography } from '@/components/ui';
+import { Typography, ConfirmModal } from '@/components/ui';
 import { useRouter } from 'expo-router';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/services/api';
@@ -56,6 +56,8 @@ export default function NotificationsScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const [isMarkAllModalVisible, setIsMarkAllModalVisible] = useState(false);
+  const [notificationToDelete, setNotificationToDelete] = useState<string | null>(null);
 
   const {
     data,
@@ -122,17 +124,7 @@ export default function NotificationsScreen() {
   const hasUnread = unreadCount > 0;
 
   const handleMarkAllRead = () => {
-    Alert.alert(
-      'Mark All Read',
-      'Are you sure you want to mark all notifications as read?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Confirm', 
-          onPress: () => markAllReadMutation.mutate() 
-        }
-      ]
-    );
+    setIsMarkAllModalVisible(true);
   };
 
   const renderEmptyComponent = () => (
@@ -267,20 +259,7 @@ export default function NotificationsScreen() {
                 
                 {/* Delete button */}
                 <TouchableOpacity 
-                  onPress={() => {
-                    Alert.alert(
-                      'Delete Notification',
-                      'Are you sure you want to delete this notification?',
-                      [
-                        { text: 'Cancel', style: 'cancel' },
-                        { 
-                          text: 'Delete', 
-                          style: 'destructive',
-                          onPress: () => deleteMutation.mutate(item._id) 
-                        }
-                      ]
-                    );
-                  }}
+                  onPress={() => setNotificationToDelete(item._id)}
                   className="p-1 justify-center items-center"
                 >
                   <Ionicons name="trash-outline" size={18} color="#EF4444" />
@@ -313,6 +292,41 @@ export default function NotificationsScreen() {
           ListEmptyComponent={renderEmptyComponent}
         />
       )}
+      {/* Modern Confirm Modal for Mark All Read */}
+      <ConfirmModal
+        visible={isMarkAllModalVisible}
+        onClose={() => setIsMarkAllModalVisible(false)}
+        onConfirm={() => {
+          setIsMarkAllModalVisible(false);
+          markAllReadMutation.mutate();
+        }}
+        title="Mark All as Read"
+        message="Are you sure you want to mark all notifications as read?"
+        confirmText="Mark Read"
+        cancelText="Cancel"
+        variant="warning"
+        iconName="checkmark-done"
+        isLoading={markAllReadMutation.isPending}
+      />
+
+      {/* Modern Confirm Modal for Delete Notification */}
+      <ConfirmModal
+        visible={!!notificationToDelete}
+        onClose={() => setNotificationToDelete(null)}
+        onConfirm={() => {
+          if (notificationToDelete) {
+            deleteMutation.mutate(notificationToDelete);
+            setNotificationToDelete(null);
+          }
+        }}
+        title="Delete Notification"
+        message="Are you sure you want to delete this notification?"
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+        iconName="trash"
+        isLoading={deleteMutation.isPending}
+      />
     </SafeAreaView>
   );
 }

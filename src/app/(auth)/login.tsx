@@ -76,10 +76,17 @@ export default function LoginScreen() {
   const setToken = useAuthStore(state => state.setToken);
   const setUser = useAuthStore(state => state.setUser);
 
+  const resolveUserRole = (rawRole?: string): 'parent' | 'individual' | 'coach' => {
+    if (role === 'coach' || rawRole === 'coach') return 'coach';
+    if (role === 'parent' || rawRole === 'parent') return 'parent';
+    if (role === 'individual' || rawRole === 'individual' || rawRole === 'player') return 'individual';
+    return rawRole === 'parent' ? 'parent' : (role as any) || 'parent';
+  };
+
   const directLoginMutation = useMutation({
     mutationFn: async () => {
       const response = await api.post('/auth/login', {
-        email,
+        email: email.trim().toLowerCase(),
         password
       });
       return response.data;
@@ -87,13 +94,14 @@ export default function LoginScreen() {
     onSuccess: (data) => {
       const realToken = data.token || data.jwt || data.access_token || (data.data && data.data.token);
       setToken(realToken);
-      const userObj = data.user || data.data?.user;
+      const userObj = data.user || data.data?.user || data.data;
+      const finalRole = resolveUserRole(userObj?.role);
       setUser({
         id: userObj?._id || userObj?.id || '1',
-        name: userObj?.name || `${userObj?.firstName || ''} ${userObj?.lastName || ''}`.trim() || '',
+        name: userObj?.name || `${userObj?.firstName || ''} ${userObj?.lastName || ''}`.trim() || userObj?.email || email,
         phone: userObj?.phone || userObj?.phoneNumber || '',
         email: userObj?.email || email || '',
-        role: role || userObj?.role || 'individual',
+        role: finalRole,
         status: 'active',
         isRegistered: true,
       });
@@ -116,29 +124,31 @@ export default function LoginScreen() {
     onSuccess: async (data) => {
       const realToken = data.token || data.jwt || data.access_token || (data.data && data.data.token);
       setToken(realToken);
-      const userObj = data.user || data.data?.user;
+      const userObj = data.user || data.data?.user || data.data;
       let resolvedStatus = 'active';
 
       if (role === 'coach') {
         try {
           const profileRes = await api.get('/coaches/my/profile');
           const profileObj = profileRes.data?.data || profileRes.data;
-          const kycStatus = profileObj?.kyc || profileObj?.profile?.kyc || profileObj?.status || userObj?.kyc || 'pending';
-          resolvedStatus = kycStatus === 'approved' ? 'active' : kycStatus;
+          const kycStatus = profileObj?.kyc || profileObj?.profile?.kyc || profileObj?.status || userObj?.kyc || userObj?.status;
+          resolvedStatus = (kycStatus === 'pending' || kycStatus === 'rejected') ? kycStatus : 'active';
         } catch (e) {
-          const userKyc = userObj?.kyc || userObj?.status || 'pending';
-          resolvedStatus = userKyc === 'approved' ? 'active' : userKyc;
+          const userKyc = userObj?.kyc || userObj?.status;
+          resolvedStatus = (userKyc === 'pending' || userKyc === 'rejected') ? userKyc : 'active';
         }
       } else {
         resolvedStatus = userObj?.status || 'active';
       }
 
+      const finalRole = resolveUserRole(userObj?.role);
+
       setUser({
         id: userObj?._id || userObj?.id || '1',
-        name: userObj?.name || userObj?.firstName || '',
+        name: userObj?.name || `${userObj?.firstName || ''} ${userObj?.lastName || ''}`.trim() || userObj?.email || email,
         phone: userObj?.phone || userObj?.phoneNumber || '',
-        email: userObj?.email || '',
-        role: role || userObj?.role || 'individual',
+        email: userObj?.email || email || '',
+        role: finalRole,
         status: resolvedStatus,
         isRegistered: true,
       });

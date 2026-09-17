@@ -55,7 +55,6 @@ export default function ParentTabLayout() {
           tabBarIcon: ({ color }) => <Ionicons name="person-outline" size={24} color={color} />
         }}
       />
-      <Tabs.Screen name="family-tree" options={{ href: null }} />
     </Tabs>
   );
 }

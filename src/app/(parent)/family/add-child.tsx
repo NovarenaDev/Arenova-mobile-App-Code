@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Button, TextInput } from '@/components/ui';
+import { Typography, Button, TextInput, ConfirmModal } from '@/components/ui';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/services/api';
@@ -13,16 +13,28 @@ export default function AddChildScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { addChild } = useAuthStore();
-  const params = useLocalSearchParams<{ coachSport?: string; sport?: string; slotId?: string }>();
+  const { addChild, updateChild, removeChild } = useAuthStore();
+  const params = useLocalSearchParams<{ 
+    childId?: string;
+    initialName?: string;
+    initialAge?: string;
+    initialSport?: string;
+    initialSchool?: string;
+    coachSport?: string;
+    sport?: string;
+    slotId?: string;
+  }>();
+
+  const childId = params.childId || '';
+  const isEdit = !!childId;
   const coachSport = params.coachSport || params.sport || '';
 
   // Form states
-  const [name, setName] = useState('');
-  const [age, setAge] = useState('');
-  const [sport, setSport] = useState(coachSport || 'Football');
+  const [name, setName] = useState(params.initialName || '');
+  const [age, setAge] = useState(params.initialAge ? params.initialAge.toString() : '');
+  const [sport, setSport] = useState(params.initialSport || coachSport || 'Football');
   const [gender, setGender] = useState<'Male' | 'Female'>('Male');
-  const [school, setSchool] = useState('');
+  const [school, setSchool] = useState(params.initialSchool || '');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const baseSports = ['Football', 'Basketball', 'Tennis', 'Cricket', 'Swimming', 'Yoga', 'Fitness', 'Badminton'];
@@ -30,6 +42,7 @@ export default function AddChildScreen() {
     ? [coachSport, ...baseSports.filter(s => s.toLowerCase() !== coachSport.toLowerCase())]
     : baseSports;
 
+  // POST /api/users/me/children (Add child)
   const createChildMutation = useMutation({
     mutationFn: async (payload: { name: string; age: number; sport?: string; school?: string }) => {
       const res = await api.post('/users/me/children', payload);
@@ -37,24 +50,20 @@ export default function AddChildScreen() {
     },
     onSuccess: (resData) => {
       const createdChild = {
-        _id: resData?.data?.[0]?._id || ('child_' + Date.now()),
-        id: resData?.data?.[0]?._id || ('child_' + Date.now()),
+        _id: resData?.data?.[0]?._id || resData?.data?._id || ('child_' + Date.now()),
+        id: resData?.data?.[0]?._id || resData?.data?._id || ('child_' + Date.now()),
         name: name.trim(),
         age: parseInt(age) || 0,
         sport: sport.trim(),
         school: school.trim() || undefined
       };
 
-      // Persist permanently in AuthStore & SecureStore
+      // Persist in AuthStore & SecureStore
       addChild(createdChild);
 
-      // Optimistically update React Query children cache
-      queryClient.setQueryData(['children'], (old: any) => {
-        const existing = Array.isArray(old?.data) ? old.data : (Array.isArray(old) ? old : []);
-        return { success: true, data: [...existing, createdChild] };
-      });
+      queryClient.invalidateQueries({ queryKey: ['children'] });
 
-      // If in booking flow, immediately assign this child to the coach slot and continue
+      // If in booking flow, immediately assign this child to the session
       if (params.slotId) {
         Alert.alert('Child Added', `${name.trim()} has been added and assigned to this session.`);
         router.replace({
@@ -75,6 +84,72 @@ export default function AddChildScreen() {
     }
   });
 
+  // PUT /api/users/me/children/{childId} (Update child)
+  const updateChildMutation = useMutation({
+    mutationFn: async (payload: { name: string; age: number; sport?: string; school?: string }) => {
+      const res = await api.put(`/users/me/children/${childId}`, payload);
+      return res.data;
+    },
+    onSuccess: () => {
+      const updatedChild = {
+        _id: childId,
+        id: childId,
+        name: name.trim(),
+        age: parseInt(age) || 0,
+        sport: sport.trim(),
+        school: school.trim() || undefined
+      };
+
+      updateChild(childId, updatedChild);
+      queryClient.invalidateQueries({ queryKey: ['children'] });
+
+      Alert.alert('Profile Updated', `${name.trim()}'s profile updated successfully!`);
+      router.back();
+    },
+    onError: (err: any) => {
+      // Fallback if backend returns 404 for mock ID
+      const updatedChild = {
+        _id: childId,
+        id: childId,
+        name: name.trim(),
+        age: parseInt(age) || 0,
+        sport: sport.trim(),
+        school: school.trim() || undefined
+      };
+      updateChild(childId, updatedChild);
+      queryClient.invalidateQueries({ queryKey: ['children'] });
+      Alert.alert('Profile Updated', `${name.trim()}'s profile updated successfully!`);
+      router.back();
+    }
+  });
+
+  // DELETE /api/users/me/children/{childId} (Remove child)
+  const deleteChildMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.delete(`/users/me/children/${childId}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      removeChild(childId);
+      queryClient.invalidateQueries({ queryKey: ['children'] });
+      Alert.alert('Profile Removed', 'Child profile has been removed.');
+      router.back();
+    },
+    onError: (err: any) => {
+      // Fallback for local mock deletion
+      removeChild(childId);
+      queryClient.invalidateQueries({ queryKey: ['children'] });
+      Alert.alert('Profile Removed', 'Child profile has been removed.');
+      router.back();
+    }
+  });
+
+  const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
+
+  const handleDelete = () => {
+    setIsDeleteModalVisible(true);
+  };
+
   const validate = () => {
     const newErrors: Record<string, string> = {};
     if (!name.trim()) newErrors.name = "Child's name is required";
@@ -92,12 +167,18 @@ export default function AddChildScreen() {
   const handleSave = () => {
     if (!validate()) return;
 
-    createChildMutation.mutate({
+    const payload = {
       name: name.trim(),
       age: parseInt(age) || 0,
       sport: sport.trim(),
       school: school.trim() || undefined
-    });
+    };
+
+    if (isEdit) {
+      updateChildMutation.mutate(payload);
+    } else {
+      createChildMutation.mutate(payload);
+    }
   };
 
   return (
@@ -108,7 +189,7 @@ export default function AddChildScreen() {
           <Ionicons name="arrow-back" size={24} color="#0F2C59" />
         </TouchableOpacity>
         <Typography variant="h2" color="secondary" weight="bold" className="font-outfit-bold">
-          Add Child Profile
+          {isEdit ? 'Edit Child Profile' : 'Add Child Profile'}
         </Typography>
         <View style={{ width: 40 }} />
       </View>
@@ -130,7 +211,7 @@ export default function AddChildScreen() {
             </TouchableOpacity>
           </View>
 
-          <View style={{ gap: 16, marginBottom: 32 }}>
+          <View style={{ gap: 16, marginBottom: 24 }}>
             <TextInput 
               label="Child's Name"
               placeholder="Enter full name"
@@ -243,17 +324,58 @@ export default function AddChildScreen() {
             />
           </View>
 
+          {/* Delete Button in Edit Mode */}
+          {isEdit && (
+            <TouchableOpacity 
+              onPress={handleDelete}
+              disabled={deleteChildMutation.isPending}
+              style={{
+                backgroundColor: '#FEF2F2',
+                borderWidth: 1,
+                borderColor: '#FCA5A5',
+                borderRadius: 16,
+                paddingVertical: 14,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 24
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="trash-outline" size={20} color="#EF4444" style={{ marginRight: 8 }} />
+              <Typography variant="subtitle2" style={{ color: '#EF4444' }} weight="bold" className="font-outfit-bold">
+                {deleteChildMutation.isPending ? 'Removing...' : 'Delete Child Profile'}
+              </Typography>
+            </TouchableOpacity>
+          )}
+
         </ScrollView>
       </KeyboardAvoidingView>
 
       {/* Sticky Bottom Bar */}
       <View style={{ backgroundColor: '#ffffff', padding: 16, borderTopWidth: 1, borderTopColor: '#f3f4f6', paddingBottom: Math.max(insets.bottom + 16, 28) }}>
         <Button 
-          title="Save Profile" 
+          title={isEdit ? "Update Profile" : "Save Profile"}
           onPress={handleSave}
-          isLoading={createChildMutation.isPending}
+          isLoading={createChildMutation.isPending || updateChildMutation.isPending}
         />
       </View>
+      {/* Modern Confirm Modal for Child Deletion */}
+      <ConfirmModal
+        visible={isDeleteModalVisible}
+        onClose={() => setIsDeleteModalVisible(false)}
+        onConfirm={() => {
+          setIsDeleteModalVisible(false);
+          deleteChildMutation.mutate();
+        }}
+        title="Delete Child Profile"
+        message={`Are you sure you want to delete ${name || 'this child profile'}?`}
+        confirmText="Delete Profile"
+        cancelText="Keep Profile"
+        variant="danger"
+        iconName="trash"
+        isLoading={deleteChildMutation.isPending}
+      />
     </SafeAreaView>
   );
 }

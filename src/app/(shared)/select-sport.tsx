@@ -3,9 +3,10 @@ import { View, ScrollView, TouchableOpacity, Image } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography } from '@/components/ui';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 
 export default function SelectSportScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const sports = [
     { 

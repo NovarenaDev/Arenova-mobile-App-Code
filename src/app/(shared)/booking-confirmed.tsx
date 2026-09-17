@@ -179,7 +179,7 @@ export default function BookingConfirmedScreen() {
             <View className="mb-4">
               <Button 
                 title="Book Another Session" 
-                onPress={() => router.push('/(parent)/(parent-tabs)/family-tree')}
+                onPress={() => router.push('/(parent)/family-tree')}
               />
             </View>
           )}

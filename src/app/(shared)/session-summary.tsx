@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Modal, TextInput } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Button } from '@/components/ui';
+import { Typography, Button, ConfirmModal } from '@/components/ui';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuthStore } from '@/store';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -40,7 +40,6 @@ export default function SessionSummaryScreen() {
   }>();
 
   const isCheckoutMode = !!slotId;
-  const statusParam = status || (isCheckoutMode ? 'checkout' : 'requested');
   const { user } = useAuthStore();
   const isCoach = user?.role === 'coach';
 
@@ -67,6 +66,8 @@ export default function SessionSummaryScreen() {
   });
 
   const existingBooking = bookingDetailResponse?.data;
+  const rawStatusVal = status || existingBooking?.status || (isCheckoutMode ? 'checkout' : 'requested');
+  const statusParam = rawStatusVal.toString().toLowerCase().trim();
 
   // Real dynamic values from backend booking or navigation params
   const formatDateStr = (dStr?: string) => {
@@ -78,11 +79,74 @@ export default function SessionSummaryScreen() {
     return dStr;
   };
 
-  const resolvedDate = date || formatDateStr(existingBooking?.slot?.date) || formatDateStr(existingBooking?.date) || 'Scheduled Date';
-  const resolvedTime = time || existingBooking?.slot?.startTime || existingBooking?.time || 'Scheduled Time';
-  const resolvedLocation = location || existingBooking?.slot?.location || existingBooking?.location || 'Coaching Venue';
-  const resolvedStudentName = studentName || existingBooking?.bookedBy?.name || existingBooking?.participant?.name || existingBooking?.student?.name || 'Attendee';
-  const resolvedSport = coachSport || existingBooking?.slot?.title || existingBooking?.sport || 'Sports Coaching';
+  const resolvedDate = 
+    date || 
+    formatDateStr(existingBooking?.slot?.date) || 
+    formatDateStr(existingBooking?.date) || 
+    formatDateStr(existingBooking?.slotDate) || 
+    formatDateStr(existingBooking?.startDate) || 
+    formatDateStr(existingBooking?.bookingDate) || 
+    formatDateStr(existingBooking?.createdAt) || 
+    'Scheduled Date';
+
+  const resolvedTime = 
+    time || 
+    existingBooking?.slot?.startTime || 
+    existingBooking?.startTime || 
+    existingBooking?.time || 
+    existingBooking?.slotTime || 
+    existingBooking?.slot?.time || 
+    'Scheduled Time';
+
+  const resolvedLocation = 
+    location || 
+    (typeof existingBooking?.location === 'string' ? existingBooking.location : existingBooking?.location?.name || existingBooking?.location?.address) ||
+    existingBooking?.slot?.location || 
+    existingBooking?.venue || 
+    existingBooking?.slot?.venue || 
+    existingBooking?.stadium || 
+    existingBooking?.slot?.stadium || 
+    (existingBooking?.stadium?.name ? existingBooking.stadium.name : '') ||
+    (existingBooking?.slot?.stadium?.name ? existingBooking.slot.stadium.name : '') ||
+    (existingBooking?.venue?.name ? existingBooking.venue.name : '') ||
+    existingBooking?.locationName || 
+    existingBooking?.arena || 
+    existingBooking?.address || 
+    'Central Sports Complex • Field A';
+
+  const resolvedStudentName = 
+    existingBooking?.child?.name ||
+    existingBooking?.player?.name ||
+    existingBooking?.childName ||
+    existingBooking?.playerName ||
+    (Array.isArray(existingBooking?.children) && existingBooking.children.length > 0 ? existingBooking.children.map((c: any) => c.name || c).join(', ') : '') ||
+    existingBooking?.student?.name || 
+    existingBooking?.studentName || 
+    studentName || 
+    existingBooking?.participant?.name || 
+    existingBooking?.bookedBy?.name || 
+    (existingBooking?.bookedBy?.firstName ? `${existingBooking.bookedBy.firstName} ${existingBooking.bookedBy.lastName || ''}`.trim() : '') ||
+    existingBooking?.user?.name || 
+    (existingBooking?.user?.firstName ? `${existingBooking.user.firstName} ${existingBooking.user.lastName || ''}`.trim() : '') ||
+    'Attendee';
+
+  const resolvedSport = 
+    coachSport || 
+    existingBooking?.slot?.title || 
+    existingBooking?.slot?.sport || 
+    existingBooking?.sport || 
+    existingBooking?.sportName || 
+    existingBooking?.title || 
+    'Sports Coaching';
+
+  const resolvedPrice = 
+    price || 
+    existingBooking?.amountInr || 
+    existingBooking?.amount || 
+    existingBooking?.credits || 
+    existingBooking?.slot?.pricePerPerson || 
+    existingBooking?.slot?.price || 
+    '400';
 
   // 4-digit Attendance OTP generated for parent/student based on real booking ID
   const bookingIdStr = (id || existingBooking?._id || existingBooking?.id || '').toString();
@@ -105,19 +169,10 @@ export default function SessionSummaryScreen() {
     }
   });
 
+  const [isCancelModalVisible, setIsCancelModalVisible] = useState(false);
+
   const handleCancelBooking = () => {
-    Alert.alert(
-      'Cancel Booking',
-      'Are you sure you want to cancel this coaching session?',
-      [
-        { text: 'No, Keep It', style: 'cancel' },
-        { 
-          text: 'Yes, Cancel', 
-          style: 'destructive',
-          onPress: () => cancelBookingMutation.mutate("Cancelled by user")
-        }
-      ]
-    );
+    setIsCancelModalVisible(true);
   };
 
   const updateStatusMutation = useMutation({
@@ -304,7 +359,7 @@ export default function SessionSummaryScreen() {
                     Coaching Fee ({useLocalSearchParams().attendeeCount || 1} attendee{Number(useLocalSearchParams().attendeeCount || 1) > 1 ? 's' : ''})
                   </Typography>
                   <Typography variant="body1" color="secondary" weight="semibold" className="font-outfit-semibold">
-                    ₹{price || existingBooking?.amount || 400}
+                    ₹{resolvedPrice}
                   </Typography>
                 </View>
                 <View className="flex-row justify-between items-center mb-4">
@@ -320,7 +375,7 @@ export default function SessionSummaryScreen() {
                     Total
                   </Typography>
                   <Typography variant="subtitle1" color="primary" weight="bold" className="font-outfit-bold">
-                    ₹{useLocalSearchParams().totalAmount || (Number(price || existingBooking?.amount || 400) + 50)}
+                    ₹{useLocalSearchParams().totalAmount || (Number(resolvedPrice) + 50)}
                   </Typography>
                 </View>
               </View>
@@ -410,7 +465,7 @@ export default function SessionSummaryScreen() {
       {/* Footer Buttons */}
       <View className="p-4 bg-white border-t border-gray-100" style={{ paddingBottom: Math.max(insets.bottom + 16, 28) }}>
         {isCoach ? (
-          statusParam === 'requested' ? (
+          (statusParam === 'requested' || statusParam === 'pending') ? (
             <View className="flex-row justify-between">
               <View className="flex-1 mr-2">
                 <Button 
@@ -435,13 +490,34 @@ export default function SessionSummaryScreen() {
               isLoading={updateStatusMutation.isPending}
               variant="outline"
             />
-          ) : (
+          ) : (statusParam === 'confirmed' || statusParam === 'accepted' || statusParam === 'approved') ? (
             <Button 
               title="Verify OTP & Start Session" 
               onPress={() => setShowOtpVerifyModal(true)}
               isLoading={updateStatusMutation.isPending}
               variant="primary"
             />
+          ) : statusParam === 'completed' ? (
+            <View className="bg-emerald-50 border border-emerald-200 py-3 px-4 rounded-xl items-center flex-row justify-center">
+              <Ionicons name="checkmark-circle" size={20} color="#047857" className="mr-2" />
+              <Typography variant="subtitle2" className="text-emerald-800 font-bold font-outfit-bold">
+                Session Completed
+              </Typography>
+            </View>
+          ) : (statusParam === 'cancelled' || statusParam === 'declined' || statusParam === 'rejected') ? (
+            <View className="bg-red-50 border border-red-200 py-3 px-4 rounded-xl items-center flex-row justify-center">
+              <Ionicons name="close-circle" size={20} color="#B91C1C" className="mr-2" />
+              <Typography variant="subtitle2" className="text-red-800 font-bold font-outfit-bold">
+                Session Cancelled
+              </Typography>
+            </View>
+          ) : (
+            <View className="bg-orange-50 border border-orange-200 py-3 px-4 rounded-xl items-center flex-row justify-center">
+              <Ionicons name="alert-circle" size={20} color="#C2410C" className="mr-2" />
+              <Typography variant="subtitle2" className="text-orange-800 font-bold font-outfit-bold">
+                Status: {statusParam.toUpperCase()}
+              </Typography>
+            </View>
           )
         ) : isCheckoutMode ? (
           <Button 
@@ -469,8 +545,38 @@ export default function SessionSummaryScreen() {
             onPress={handleCancelBooking}
             isLoading={cancelBookingMutation.isPending}
           />
+        ) : statusParam === 'completed' ? (
+          <View className="bg-emerald-50 border border-emerald-200 py-3 px-4 rounded-xl items-center flex-row justify-center">
+            <Ionicons name="checkmark-circle" size={20} color="#047857" className="mr-2" />
+            <Typography variant="subtitle2" className="text-emerald-800 font-bold font-outfit-bold">
+              Session Completed
+            </Typography>
+          </View>
+        ) : statusParam === 'cancelled' ? (
+          <View className="bg-red-50 border border-red-200 py-3 px-4 rounded-xl items-center flex-row justify-center">
+            <Ionicons name="close-circle" size={20} color="#B91C1C" className="mr-2" />
+            <Typography variant="subtitle2" className="text-red-800 font-bold font-outfit-bold">
+              Session Cancelled
+            </Typography>
+          </View>
         ) : null}
       </View>
+      {/* Modern Confirm Modal for Session Cancellation */}
+      <ConfirmModal
+        visible={isCancelModalVisible}
+        onClose={() => setIsCancelModalVisible(false)}
+        onConfirm={() => {
+          setIsCancelModalVisible(false);
+          cancelBookingMutation.mutate("Cancelled by user");
+        }}
+        title="Cancel Booking"
+        message="Are you sure you want to cancel this coaching session? This action cannot be undone."
+        confirmText="Yes, Cancel Session"
+        cancelText="No, Keep It"
+        variant="danger"
+        iconName="calendar"
+        isLoading={cancelBookingMutation.isPending}
+      />
     </SafeAreaView>
   );
 }

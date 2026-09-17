@@ -3,12 +3,13 @@ import { View, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-nat
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Button } from '@/components/ui';
-import { router, useNavigation } from 'expo-router';
+import { useRouter, useNavigation } from 'expo-router';
 import { useAuthStore } from '@/store';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/services/api';
 
 export default function IndividualDashboard() {
+  const router = useRouter();
   const { user } = useAuthStore();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();

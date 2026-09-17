@@ -1,16 +1,28 @@
-import React, { useState } from 'react';
-import { View, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Button } from '@/components/ui';
-import { useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/services/api';
 
 export default function CoachActivityScreen() {
   const router = useRouter();
+  const { tab } = useLocalSearchParams<{ tab?: string }>();
   const insets = useSafeAreaInsets();
-  const [activeTab, setActiveTab] = useState<'current' | 'upcoming' | 'completed'>('current');
+  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<'upcoming' | 'current' | 'completed'>(
+    (tab === 'current' || tab === 'completed' || tab === 'upcoming') ? (tab as any) : 'upcoming'
+  );
+
+  useEffect(() => {
+    if (tab && (tab === 'current' || tab === 'upcoming' || tab === 'completed')) {
+      setActiveTab(tab as any);
+    } else if (tab === 'requested') {
+      setActiveTab('upcoming');
+    }
+  }, [tab]);
 
   const { data: sessionsResponse, isLoading: isSessionsLoading } = useQuery({
     queryKey: ['coachSessions'],
@@ -20,10 +32,30 @@ export default function CoachActivityScreen() {
     }
   });
 
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const res = await api.put(`/coaches/my/sessions/${id}/status`, { status });
+      return res.data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['coachSessions'] });
+      queryClient.invalidateQueries({ queryKey: ['coachDashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['segmentedSessions'] });
+      if (variables.status === 'accepted') {
+        Alert.alert('Request Accepted', 'The booking request has been accepted!');
+      } else if (variables.status === 'cancelled') {
+        Alert.alert('Request Declined', 'The booking request was declined.');
+      }
+    },
+    onError: (err: any) => {
+      Alert.alert('Error', err?.response?.data?.message || 'Failed to update session status');
+    }
+  });
+
   const allSessions = Array.isArray(sessionsResponse) ? sessionsResponse : [];
 
   const formatSessionDate = (dateStr: string) => {
-    if (!dateStr) return '';
+    if (!dateStr) return 'Scheduled Date';
     const date = new Date(dateStr);
     if (!isNaN(date.getTime())) {
       return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -32,7 +64,8 @@ export default function CoachActivityScreen() {
   };
 
   const formatSessionTime = (timeStr: string) => {
-    if (!timeStr) return '';
+    if (!timeStr) return '07:00 AM - 08:00 AM';
+    if (timeStr.includes('AM') || timeStr.includes('PM')) return timeStr;
     const parts = timeStr.split(':');
     if (parts.length >= 2) {
       const hours = parseInt(parts[0]);
@@ -49,40 +82,105 @@ export default function CoachActivityScreen() {
   const mapSessionToUI = (session: any) => {
     const id = session._id || session.id || Math.random().toString();
     const studentName = 
-      session.bookedBy?.name || 
-      session.participant?.name || 
-      session.student?.name || 
-      session.user?.name || 
+      session.child?.name ||
+      session.player?.name ||
+      session.childName ||
+      session.playerName ||
+      (Array.isArray(session.children) && session.children.length > 0 ? session.children.map((c: any) => c.name || c).join(', ') : '') ||
       session.studentName || 
+      session.student?.name || 
+      session.participant?.name || 
+      session.bookedBy?.name || 
+      (session.bookedBy?.firstName ? `${session.bookedBy.firstName} ${session.bookedBy.lastName || ''}`.trim() : '') ||
+      session.user?.name || 
+      (session.user?.firstName ? `${session.user.firstName} ${session.user.lastName || ''}`.trim() : '') ||
       'Student';
-    const subtitle = session.slot?.title || session.sport || 'Coaching Session';
-    const rawDate = session.slot?.date || session.date || '';
-    const rawTime = session.slot?.startTime || session.time || '';
-    const status = session.status || 'requested';
 
-    let uiStatus = status;
-    if (status === 'confirmed' || status === 'accepted') {
-      uiStatus = 'Confirmed';
-    } else if (status === 'requested') {
-      uiStatus = 'Requested';
-    } else if (status === 'completed') {
-      uiStatus = 'Completed';
-    } else if (status === 'cancelled') {
-      uiStatus = 'Cancelled';
-    } else if (status === 'no_show') {
-      uiStatus = 'No Show';
+    const sportTitle = 
+      session.sport || 
+      session.sportName || 
+      session.slot?.sport || 
+      session.slot?.title || 
+      session.title || 
+      'Coaching Session';
+
+    const rawDate = 
+      session.slot?.date || 
+      session.date || 
+      session.slotDate || 
+      session.startDate || 
+      session.bookingDate || 
+      session.createdAt || 
+      '';
+
+    const rawTime = 
+      session.slot?.startTime || 
+      session.startTime || 
+      session.time || 
+      session.slotTime || 
+      session.slot?.time || 
+      '';
+
+    const locationName = 
+      (typeof session.location === 'string' ? session.location : session.location?.name || session.location?.address) || 
+      session.slot?.location || 
+      session.venue || 
+      session.slot?.venue || 
+      session.stadium || 
+      session.slot?.stadium || 
+      (session.stadium?.name ? session.stadium.name : '') ||
+      (session.slot?.stadium?.name ? session.slot.stadium.name : '') ||
+      (session.venue?.name ? session.venue.name : '') ||
+      (session.locationName ? session.locationName : '') ||
+      session.arena || 
+      session.address || 
+      'Central Sports Complex • Field A';
+
+    const numericPrice = 
+      session.amountInr || 
+      session.amount || 
+      session.slot?.pricePerPerson || 
+      session.slot?.price || 
+      session.price || 
+      400;
+
+    const priceText = session.credits 
+      ? `${session.credits} Credits` 
+      : `₹${numericPrice}`;
+
+    const rawStatusNormalized = (session.status || session.rawStatus || 'requested').toString().toLowerCase().trim();
+    let normStatus = 'requested';
+    if (rawStatusNormalized === 'ongoing' || rawStatusNormalized === 'active') {
+      normStatus = 'ongoing';
+    } else if (rawStatusNormalized === 'confirmed' || rawStatusNormalized === 'accepted' || rawStatusNormalized === 'approved') {
+      normStatus = 'accepted';
+    } else if (rawStatusNormalized === 'completed' || rawStatusNormalized === 'done') {
+      normStatus = 'completed';
+    } else if (rawStatusNormalized === 'cancelled' || rawStatusNormalized === 'canceled' || rawStatusNormalized === 'declined' || rawStatusNormalized === 'no_show' || rawStatusNormalized === 'no-show') {
+      normStatus = 'cancelled';
+    } else {
+      normStatus = 'requested';
     }
+
+    let uiStatus = 'Requested';
+    if (normStatus === 'ongoing') uiStatus = 'Ongoing';
+    else if (normStatus === 'accepted') uiStatus = 'Confirmed';
+    else if (normStatus === 'completed') uiStatus = 'Completed';
+    else if (normStatus === 'cancelled') uiStatus = 'Cancelled';
+    else uiStatus = 'Requested';
 
     return {
       id,
       name: studentName,
-      subtitle: `${subtitle} • ${session.credits ? session.credits + ' Credits' : (session.amountInr ? '₹' + session.amountInr : (session.slot?.pricePerPerson ? '₹' + session.slot.pricePerPerson : ''))}`,
+      sport: sportTitle,
+      subtitle: `${sportTitle} • ${priceText}`,
+      price: numericPrice.toString(),
       date: formatSessionDate(rawDate),
       time: formatSessionTime(rawTime),
       rawDate,
       status: uiStatus,
-      rawStatus: status,
-      location: session.slot?.location || session.location || '',
+      rawStatus: normStatus,
+      location: locationName,
       startedLate: session.startedLate || false,
       delayStatus: session.delayStatus || '',
       delayMinutes: session.delayMinutes || 0,
@@ -91,39 +189,61 @@ export default function CoachActivityScreen() {
     };
   };
 
-  const todayStr = new Date().toISOString().split('T')[0];
-
   const dedupe = (list: any[]) => {
     const seenIds = new Set();
-    const seenSlots = new Set();
     return list.filter(item => {
-      const slotKey = `${item.name}_${item.date}_${item.time}`;
-      if (seenIds.has(item.id) || (item.date && item.time && seenSlots.has(slotKey))) return false;
+      if (!item.id || seenIds.has(item.id)) return false;
       seenIds.add(item.id);
-      if (item.date && item.time) seenSlots.add(slotKey);
       return true;
     });
   };
 
-  const currentBookings = dedupe(allSessions.filter((s: any) => {
-    const sDate = s.slot?.date || s.date || '';
-    const isToday = sDate && sDate.includes(todayStr);
-    const isActive = s.status === 'accepted' || s.status === 'confirmed' || s.status === 'ongoing';
-    return isActive && isToday;
-  }).map(mapSessionToUI));
+  const getNormalizedStatus = (s: any) => {
+    if (!s) return 'requested';
+    const st = (
+      s.status || 
+      s.rawStatus || 
+      s.bookingStatus || 
+      s.slotStatus || 
+      s.state || 
+      s.slot?.status || 
+      ''
+    ).toString().toLowerCase().trim();
 
-  const coachBookings = dedupe(allSessions.filter((s: any) => {
-    const sDate = s.slot?.date || s.date || '';
-    const isToday = sDate && sDate.includes(todayStr);
-    const isActive = s.status === 'accepted' || s.status === 'confirmed' || s.status === 'requested';
-    return isActive && !isToday;
-  }).map(mapSessionToUI));
+    if (st === 'confirmed' || st === 'accepted' || st === 'approved' || st === 'upcoming') return 'accepted';
+    if (st === 'ongoing' || st === 'active' || st === 'started' || st === 'in_progress') return 'ongoing';
+    if (st === 'completed' || st === 'done' || st === 'finished') return 'completed';
+    if (st === 'cancelled' || st === 'canceled' || st === 'declined' || st === 'rejected' || st === 'no_show' || st === 'no-show') return 'cancelled';
+    
+    return 'requested';
+  };
 
-  const coachCompleted = dedupe(allSessions.filter((s: any) => {
-    return s.status === 'completed' || s.status === 'cancelled' || s.status === 'no_show';
-  }).map(mapSessionToUI));
+  // Segregate sessions into 3 tabs: Upcoming (requested + accepted), Current (ongoing), Completed
+  const upcomingBookings = dedupe(
+    allSessions
+      .filter((s: any) => {
+        const st = getNormalizedStatus(s);
+        return st === 'requested' || st === 'accepted';
+      })
+      .map(mapSessionToUI)
+  );
 
-  const displayBookings = activeTab === 'current' ? currentBookings : activeTab === 'upcoming' ? coachBookings : coachCompleted;
+  const currentBookings = dedupe(
+    allSessions
+      .filter((s: any) => getNormalizedStatus(s) === 'ongoing')
+      .map(mapSessionToUI)
+  );
+
+  const completedBookings = dedupe(
+    allSessions
+      .filter((s: any) => getNormalizedStatus(s) === 'completed')
+      .map(mapSessionToUI)
+  );
+
+  const displayBookings = 
+    activeTab === 'upcoming' ? upcomingBookings : 
+    activeTab === 'current' ? currentBookings : 
+    completedBookings;
 
   return (
     <SafeAreaView className="flex-1 bg-[#EEF3F9]" edges={['top']}>
@@ -137,29 +257,30 @@ export default function CoachActivityScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      <View className="px-4 pt-4 pb-2">
-        <View className="flex-row bg-white rounded-full border border-gray-200 overflow-hidden h-12">
+      {/* 3 Segment Tabs: Upcoming, Current, Completed */}
+      <View className="px-3 pt-4 pb-2">
+        <View className="flex-row bg-white rounded-full border border-gray-200 overflow-hidden h-12 p-1">
           <TouchableOpacity 
-            className={`flex-1 justify-center items-center ${activeTab === 'current' ? 'bg-secondary' : 'bg-transparent'}`}
-            onPress={() => setActiveTab('current')}
-          >
-            <Typography variant="subtitle2" color={activeTab === 'current' ? 'white' : 'secondary'} weight="bold">
-              Current
-            </Typography>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            className={`flex-1 justify-center items-center ${activeTab === 'upcoming' ? 'bg-secondary' : 'bg-transparent'}`}
+            className={`flex-1 justify-center items-center rounded-full ${activeTab === 'upcoming' ? 'bg-secondary' : 'bg-transparent'}`}
             onPress={() => setActiveTab('upcoming')}
           >
-            <Typography variant="subtitle2" color={activeTab === 'upcoming' ? 'white' : 'secondary'} weight="bold">
-              Upcoming
+            <Typography variant="caption" color={activeTab === 'upcoming' ? 'white' : 'secondary'} weight="bold" className="font-outfit-bold text-[12px]">
+              Upcoming {upcomingBookings.length > 0 ? `(${upcomingBookings.length})` : ''}
             </Typography>
           </TouchableOpacity>
           <TouchableOpacity 
-            className={`flex-1 justify-center items-center ${activeTab === 'completed' ? 'bg-secondary' : 'bg-transparent'}`}
+            className={`flex-1 justify-center items-center rounded-full ${activeTab === 'current' ? 'bg-secondary' : 'bg-transparent'}`}
+            onPress={() => setActiveTab('current')}
+          >
+            <Typography variant="caption" color={activeTab === 'current' ? 'white' : 'secondary'} weight="bold" className="font-outfit-bold text-[12px]">
+              Current {currentBookings.length > 0 ? `(${currentBookings.length})` : ''}
+            </Typography>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            className={`flex-1 justify-center items-center rounded-full ${activeTab === 'completed' ? 'bg-secondary' : 'bg-transparent'}`}
             onPress={() => setActiveTab('completed')}
           >
-            <Typography variant="subtitle2" color={activeTab === 'completed' ? 'white' : 'secondary'} weight="bold">
+            <Typography variant="caption" color={activeTab === 'completed' ? 'white' : 'secondary'} weight="bold" className="font-outfit-bold text-[12px]">
               Completed
             </Typography>
           </TouchableOpacity>
@@ -175,8 +296,19 @@ export default function CoachActivityScreen() {
         {isSessionsLoading ? (
           <ActivityIndicator size="large" color="#FF5100" style={{ marginTop: 24 }} />
         ) : displayBookings.length === 0 ? (
-          <View className="items-center justify-center py-12">
-            <Typography variant="body1" color="muted">No sessions found</Typography>
+          <View className="items-center justify-center py-12 bg-white rounded-3xl p-6 border border-gray-100 shadow-sm mt-2">
+            <Ionicons 
+              name={
+                activeTab === 'upcoming' ? "calendar-outline" :
+                activeTab === 'current' ? "play-circle-outline" : "checkmark-circle-outline"
+              } 
+              size={40} 
+              color="#9CA3AF" 
+              className="mb-3" 
+            />
+            <Typography variant="body1" color="muted" align="center" className="font-outfit">
+              No {activeTab} sessions found.
+            </Typography>
           </View>
         ) : (
           displayBookings.map(booking => (
@@ -198,18 +330,20 @@ export default function CoachActivityScreen() {
               <View className={`px-2 py-1 rounded-md ${
                 booking.status === 'Ongoing' ? 'bg-red-100 border border-red-200' : 
                 booking.status === 'Confirmed' || booking.status === 'Upcoming' ? 'bg-green-100 border border-green-200' : 
+                booking.status === 'Requested' ? 'bg-orange-100 border border-orange-200' :
                 booking.status === 'Completed' ? 'bg-emerald-50 border border-emerald-200' : 
                 booking.status === 'Delayed Warning' ? 'bg-amber-100 border border-amber-200' :
-                booking.status === 'Out of Time' || booking.status === 'Penalized' ? 'bg-red-100 border border-red-200' : 'bg-orange-100 border border-orange-200'
+                booking.status === 'Out of Time' || booking.status === 'Penalized' ? 'bg-red-100 border border-red-200' : 'bg-gray-100 border border-gray-200'
               }`}>
                 <Typography 
                   variant="caption" 
                   className={
                     booking.status === 'Ongoing' ? 'text-red-700' : 
                     booking.status === 'Confirmed' || booking.status === 'Upcoming' ? 'text-green-700' : 
+                    booking.status === 'Requested' ? 'text-orange-700' :
                     booking.status === 'Completed' ? 'text-emerald-700' : 
                     booking.status === 'Delayed Warning' ? 'text-amber-700' :
-                    booking.status === 'Out of Time' || booking.status === 'Penalized' ? 'text-red-700' : 'text-orange-700'
+                    booking.status === 'Out of Time' || booking.status === 'Penalized' ? 'text-red-700' : 'text-gray-700'
                   } 
                   weight="bold"
                 >
@@ -218,110 +352,89 @@ export default function CoachActivityScreen() {
               </View>
             </View>
 
-            <View className="flex-row justify-between items-center mb-4">
-              <View className="flex-row items-center">
-                <Ionicons name="calendar-outline" size={16} color="#6B7280" className="mr-2" />
-                <Typography variant="body2" color="text">{booking.date}</Typography>
+            <View className="flex-row justify-between items-center mb-2">
+              <View className="flex-row items-center flex-1 pr-2">
+                <Ionicons name="calendar-outline" size={15} color="#0F2C59" className="mr-1.5" />
+                <Typography variant="body2" color="secondary" weight="medium" className="text-xs">{booking.date}</Typography>
               </View>
-              <View className="flex-row items-center">
-                <Ionicons name="time-outline" size={16} color="#6B7280" className="mr-2" />
-                <Typography variant="body2" color="text">{booking.time}</Typography>
+              <View className="flex-row items-center flex-1">
+                <Ionicons name="time-outline" size={15} color="#0F2C59" className="mr-1.5" />
+                <Typography variant="body2" color="secondary" weight="medium" className="text-xs">{booking.time}</Typography>
               </View>
             </View>
 
-            {booking.status === 'Ongoing' && booking.delayStatus === 'started-late' && (
-              <View className="flex-row items-center bg-orange-50 border border-orange-200 px-3 py-2 rounded-xl mt-1 mb-3">
-                <Ionicons name="time" size={14} color="#C2410C" className="mr-1.5" />
-                <Typography variant="caption" className="flex-1 text-orange-700 font-semibold text-[11px]">
-                  Started Late ({booking.delayMinutes}m delay) • Rating Penalty Applied (-0.1★)
-                </Typography>
-              </View>
-            )}
-            {booking.status === 'Ongoing' && booking.delayStatus === 'rushing' && (
-              <View className="flex-row items-center bg-red-50 border border-red-200 px-3 py-2 rounded-xl mt-1 mb-3">
-                <Ionicons name="warning" size={14} color="#DC2626" className="mr-1.5" />
-                <Typography variant="caption" className="flex-1 text-red-700 font-bold text-[11px]">
-                  ⚠️ Rushing! Started near 1hr limit ({booking.delayMinutes}m delay) • Earnings & Rating Penalty
-                </Typography>
-              </View>
-            )}
-            {booking.delayStatus === 'warning-delay' && (
-              <View className="flex-row items-center bg-amber-50 border border-amber-200 px-3 py-2 rounded-xl mt-1 mb-3">
-                <Ionicons name="hourglass-outline" size={14} color="#D97706" className="mr-1.5" />
-                <Typography variant="caption" className="flex-1 text-amber-800 font-bold text-[11px]">
-                  ⚠️ Delayed by {booking.delayMinutes}m! Start in {60 - (booking.delayMinutes || 0)}m to avoid cancellation
-                </Typography>
-              </View>
-            )}
-            {booking.delayStatus === 'out-of-time' && booking.status !== 'Penalized' && (
-              <View className="flex-row items-center bg-red-50 border border-red-200 px-3 py-2 rounded-xl mt-1 mb-3">
-                <Ionicons name="alert-circle" size={14} color="#B91C1C" className="mr-1.5" />
-                <Typography variant="caption" className="flex-1 text-red-800 font-bold text-[11px]">
-                  ❌ Out of Time! Delay &gt; 1hr exceeded ({booking.delayMinutes}m delay) • Ratings & Target Count impacted
-                </Typography>
-              </View>
-            )}
+            <View className="flex-row items-center mb-3">
+              <Ionicons name="location-outline" size={15} color="#FF5100" className="mr-1.5" />
+              <Typography variant="body2" color="secondary" weight="medium" className="text-xs flex-1 font-outfit-medium" numberOfLines={1}>
+                {booking.location || 'Sports Stadium Arena'}
+              </Typography>
+            </View>
 
-            {(booking.status === 'Completed' || booking.status === 'Penalized') && (
-              <View className="flex-row flex-wrap border-t border-gray-100 pt-3 mb-3">
-                {booking.delayStatus === 'started-late' && (
-                  <View className="flex-row items-center bg-orange-100 px-2 py-1 rounded-md mr-2 mb-2">
-                    <Ionicons name="time" size={12} color="#C2410C" className="mr-1" />
-                    <Typography variant="caption" className="text-orange-700 font-bold text-[10px]">Started Late ({booking.delayMinutes}m)</Typography>
-                  </View>
-                )}
-                {booking.delayStatus === 'out-of-time' && (
-                  <View className="flex-row items-center bg-red-100 px-2 py-1 rounded-md mr-2 mb-2">
-                    <Ionicons name="alert-circle" size={12} color="#B91C1C" className="mr-1" />
-                    <Typography variant="caption" className="text-red-700 font-bold text-[10px]">Out of Time Limit ({booking.delayMinutes}m delay) • Lost Stars & Earnings</Typography>
-                  </View>
-                )}
-                {booking.startedLate && booking.delayStatus !== 'started-late' && booking.delayStatus !== 'out-of-time' && (
-                  <View className="flex-row items-center bg-orange-100 px-2 py-1 rounded-md mr-2 mb-2">
-                    <Ionicons name="time" size={12} color="#C2410C" className="mr-1" />
-                    <Typography variant="caption" className="text-orange-700 font-bold text-[10px]">Started Late</Typography>
-                  </View>
-                )}
-                {booking.absent > 0 && (
-                  <View className="flex-row items-center bg-gray-100 px-2 py-1 rounded-md mr-2 mb-2">
-                    <Ionicons name="person-remove" size={12} color="#4B5563" className="mr-1" />
-                    <Typography variant="caption" className="text-gray-700 font-bold text-[10px]">{booking.absent} Absent</Typography>
-                  </View>
-                )}
-                {booking.injured > 0 && (
-                  <View className="flex-row items-center bg-red-100 px-2 py-1 rounded-md mr-2 mb-2">
-                    <Ionicons name="medkit" size={12} color="#B91C1C" className="mr-1" />
-                    <Typography variant="caption" className="text-red-700 font-bold text-[10px]">{booking.injured} Injured</Typography>
-                  </View>
-                )}
-                {booking.delayStatus !== 'started-late' && booking.delayStatus !== 'out-of-time' && !booking.startedLate && booking.absent === 0 && booking.injured === 0 && (
-                  <View className="flex-row items-center bg-green-100 px-2 py-1 rounded-md mb-2">
-                    <Ionicons name="checkmark-circle" size={12} color="#047857" className="mr-1" />
-                    <Typography variant="caption" className="text-green-700 font-bold text-[10px]">Perfect Session</Typography>
-                  </View>
-                )}
-              </View>
-            )}
+            {/* Accept / Decline / Details Action Row for Requested Sessions */}
+            {booking.rawStatus === 'requested' ? (
+              <View className="flex-row gap-2 pt-3 border-t border-gray-100 items-center">
+                <TouchableOpacity
+                  disabled={updateStatusMutation.isPending}
+                  onPress={() => updateStatusMutation.mutate({ id: booking.id, status: 'cancelled' })}
+                  className="flex-1 py-2.5 rounded-xl bg-gray-100 border border-gray-200 items-center justify-center active:opacity-80"
+                >
+                  <Typography variant="subtitle2" color="secondary" weight="bold" className="text-gray-700 text-xs font-outfit-bold">
+                    Decline
+                  </Typography>
+                </TouchableOpacity>
 
-            <View className="flex-row justify-end mt-1">
-              <View className="w-36">
-                <Button 
-                  title="View Details" 
-                  size="sm"
+                <TouchableOpacity
+                  disabled={updateStatusMutation.isPending}
+                  onPress={() => updateStatusMutation.mutate({ id: booking.id, status: 'accepted' })}
+                  className="flex-1 py-2.5 rounded-xl bg-[#FF5100] items-center justify-center shadow-xs active:opacity-80"
+                >
+                  <Typography variant="subtitle2" style={{ color: '#FFFFFF' }} weight="bold" className="text-xs font-outfit-bold">
+                    Accept
+                  </Typography>
+                </TouchableOpacity>
+
+                <TouchableOpacity
                   onPress={() => router.push({
                     pathname: '/(shared)/session-summary',
                     params: { 
                       id: booking.id,
-                      status: booking.rawStatus,
+                      status: 'requested',
                       studentName: booking.name,
                       date: booking.date,
                       time: booking.time,
-                      location: booking.location
+                      location: booking.location,
+                      price: booking.price
                     }
                   })}
-                />
+                  className="px-3 py-2.5 rounded-xl bg-blue-50 border border-blue-200 items-center justify-center active:opacity-80"
+                >
+                  <Typography variant="subtitle2" className="text-blue-700 text-xs font-outfit-bold">
+                    Details
+                  </Typography>
+                </TouchableOpacity>
               </View>
-            </View>
+            ) : (
+              <View className="flex-row justify-end mt-1">
+                <View className="w-36">
+                  <Button 
+                    title="View Details" 
+                    size="sm"
+                    onPress={() => router.push({
+                      pathname: '/(shared)/session-summary',
+                      params: { 
+                        id: booking.id,
+                        status: activeTab === 'current' ? 'ongoing' : activeTab === 'upcoming' ? 'accepted' : booking.rawStatus,
+                        studentName: booking.name,
+                        date: booking.date,
+                        time: booking.time,
+                        location: booking.location,
+                        price: booking.price
+                      }
+                    })}
+                  />
+                </View>
+              </View>
+            )}
           </View>
         )))}
 

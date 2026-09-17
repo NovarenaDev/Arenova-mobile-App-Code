@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, ActivityIndicator } from 'react-native';
+import { View, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Modal } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -54,6 +54,8 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
+  const [location, setLocation] = useState('');
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [selectedSports, setSelectedSports] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   
@@ -228,6 +230,17 @@ export default function RegisterScreen() {
     }
   };
 
+  const handleNavigateToHome = () => {
+    setShowWelcomeModal(false);
+    if (role === 'coach') {
+      router.replace('/(coach)/(coach-tabs)/coach-dashboard');
+    } else if (role === 'parent') {
+      router.replace('/(parent)/(parent-tabs)/parent-dashboard');
+    } else {
+      router.replace('/(individual)/(individual-tabs)/individual-dashboard');
+    }
+  };
+
   const directRegisterMutation = useMutation({
     mutationFn: async () => {
       const nameParts = name.trim().split(/\s+/);
@@ -240,6 +253,8 @@ export default function RegisterScreen() {
         email,
         phone,
         password,
+        location: location.trim(),
+        address: location.trim(),
         role: role === 'individual' ? 'player' : 'parent'
       };
       const response = await api.post('/auth/register', payload);
@@ -260,15 +275,24 @@ export default function RegisterScreen() {
           name: name || '',
           phone: phone || '',
           email: email || '',
-          role: (role as any) || 'individual',
+          location: location || '',
+          role: (role as any) || 'parent',
           status: 'active',
           isRegistered: true,
         });
+        setShowWelcomeModal(true);
       } catch (loginError) {
-        setScreenSuccess('Account created successfully! Please log in with your email and password.');
-        setTimeout(() => {
-          router.replace({ pathname: '/(auth)/login', params: { role } });
-        }, 3000);
+        setUser({
+          id: '1',
+          name: name || '',
+          phone: phone || '',
+          email: email || '',
+          location: location || '',
+          role: (role as any) || 'parent',
+          status: 'active',
+          isRegistered: true,
+        });
+        setShowWelcomeModal(true);
       }
     },
     onError: (error: any) => {
@@ -330,6 +354,8 @@ export default function RegisterScreen() {
       } else if (val.trim().length < 10) {
         err = 'Please enter a valid 10-digit phone number';
       }
+    } else if (field === 'location') {
+      if (!val.trim()) err = 'Location / City is required';
     } else if (field === 'password') {
       const passError = validatePassword(val);
       if (passError) err = passError;
@@ -350,16 +376,20 @@ export default function RegisterScreen() {
     const newErrors: Record<string, string> = {};
     if (!name.trim()) newErrors.name = 'Full name is required';
     
+    if (!phone.trim()) {
+      newErrors.phone = 'Phone number is required';
+    } else if (phone.trim().length < 10) {
+      newErrors.phone = 'Please enter a valid 10-digit phone number';
+    }
+
     if (!email.trim()) {
       newErrors.email = 'Email is required';
     } else if (!validateEmail(email)) {
       newErrors.email = 'Please enter a valid email address';
     }
     
-    if (!phone.trim()) {
-      newErrors.phone = 'Phone number is required';
-    } else if (phone.trim().length < 10) {
-      newErrors.phone = 'Please enter a valid 10-digit phone number';
+    if (!location.trim()) {
+      newErrors.location = 'Location / City is required';
     }
     
     const passError = validatePassword(password);
@@ -551,6 +581,18 @@ export default function RegisterScreen() {
                 autoCapitalize="none" 
                 error={errors.email}
               />
+
+              <TextInput 
+                label="Location / City"
+                placeholder="e.g. Hyderabad, TS" 
+                value={location} 
+                onChangeText={(text) => {
+                  setLocation(text);
+                  validateField('location', text);
+                }}
+                onBlur={() => validateField('location', location)}
+                error={errors.location}
+              />
               
               <TextInput 
                 label="Password"
@@ -662,6 +704,115 @@ export default function RegisterScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Modern Welcome Success Modal Card */}
+      <Modal
+        visible={showWelcomeModal}
+        transparent
+        animationType="fade"
+        onRequestClose={handleNavigateToHome}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(15, 44, 89, 0.75)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <View 
+            style={{ 
+              backgroundColor: '#FFFFFF', 
+              borderRadius: 28, 
+              padding: 24, 
+              width: '100%', 
+              maxWidth: 380, 
+              alignItems: 'center',
+              shadowColor: '#000000', 
+              shadowOffset: { width: 0, height: 12 },
+              shadowOpacity: 0.3, 
+              shadowRadius: 24, 
+              elevation: 12,
+              borderWidth: 1,
+              borderColor: 'rgba(255, 81, 0, 0.15)'
+            }}
+          >
+            {/* Top Success Badge */}
+            <View 
+              style={{ 
+                width: 72, 
+                height: 72, 
+                borderRadius: 36, 
+                backgroundColor: '#ECFDF5', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                marginBottom: 16,
+                borderWidth: 2,
+                borderColor: '#A7F3D0'
+              }}
+            >
+              <Ionicons name="checkmark-circle" size={44} color="#10B981" />
+            </View>
+
+            {/* Title & Role */}
+            <Typography variant="h2" color="secondary" weight="bold" className="font-outfit-bold text-2xl text-center mb-1">
+              Welcome to Arenova!
+            </Typography>
+
+            <View className="bg-emerald-50 px-3.5 py-1 rounded-full border border-emerald-200 mb-4">
+              <Typography variant="caption" color="primary" weight="bold" className="text-emerald-700 font-outfit-bold text-xs uppercase tracking-wider">
+                {role === 'parent' ? '✓ Registered as Parent' : (role === 'individual' ? '✓ Registered as Athlete' : '✓ Registered Successfully')}
+              </Typography>
+            </View>
+
+            <Typography variant="body2" color="muted" className="font-outfit text-center text-sm leading-5 mb-5 text-gray-600 px-2">
+              {role === 'parent' 
+                ? 'Your parent account has been successfully created! You can now manage child profiles and book sports training.' 
+                : 'Your profile is active! You can now explore top coaches and book your training sessions.'}
+            </Typography>
+
+            {/* User Details Summary Card */}
+            <View className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 mb-6 space-y-2.5">
+              <View className="flex-row items-center justify-between">
+                <Typography variant="caption" color="muted" className="font-outfit">Full Name</Typography>
+                <Typography variant="subtitle2" color="secondary" weight="bold" className="font-outfit-bold">{name}</Typography>
+              </View>
+
+              <View className="h-[1px] bg-gray-200/60 my-0.5" />
+
+              <View className="flex-row items-center justify-between">
+                <Typography variant="caption" color="muted" className="font-outfit">Phone Number</Typography>
+                <Typography variant="subtitle2" color="secondary" weight="bold" className="font-outfit-bold">{phone}</Typography>
+              </View>
+
+              <View className="h-[1px] bg-gray-200/60 my-0.5" />
+
+              <View className="flex-row items-center justify-between">
+                <Typography variant="caption" color="muted" className="font-outfit">Location / City</Typography>
+                <Typography variant="subtitle2" color="secondary" weight="bold" className="font-outfit-bold">{location || 'Not Specified'}</Typography>
+              </View>
+            </View>
+
+            {/* Home Navigation Button */}
+            <TouchableOpacity
+              style={{ 
+                width: '100%', 
+                paddingVertical: 16, 
+                borderRadius: 18, 
+                backgroundColor: '#FF5100', 
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                shadowColor: '#FF5100',
+                shadowOffset: { width: 0, height: 6 },
+                shadowOpacity: 0.35,
+                shadowRadius: 10,
+                elevation: 6
+              }}
+              activeOpacity={0.85}
+              onPress={handleNavigateToHome}
+            >
+              <Typography color="white" weight="bold" className="font-outfit-bold text-base mr-2">
+                Go to Home Screen
+              </Typography>
+              <Ionicons name="arrow-forward" size={20} color="white" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

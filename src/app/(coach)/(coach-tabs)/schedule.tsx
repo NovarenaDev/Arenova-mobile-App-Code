@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, ScrollView, Modal, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Typography, Card, Button, TextInput } from '@/components/ui';
+import { Typography, Card, Button, TextInput, ConfirmModal } from '@/components/ui';
 import { Calendar } from 'react-native-calendars';
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -399,11 +399,10 @@ export default function ScheduleScreen() {
     setIsModalVisible(true);
   };
 
+  const [slotToDelete, setSlotToDelete] = useState<string | null>(null);
+
   const handleDeleteSlot = (id: string) => {
-    Alert.alert('Delete Slot', 'Are you sure you want to delete this availability slot?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => deleteSlotMutation.mutate(id) }
-    ]);
+    setSlotToDelete(id);
   };
 
   return (
@@ -757,6 +756,24 @@ export default function ScheduleScreen() {
           </View>
         )}
       </Modal>
+      {/* Modern Confirm Modal for Slot Deletion */}
+      <ConfirmModal
+        visible={!!slotToDelete}
+        onClose={() => setSlotToDelete(null)}
+        onConfirm={() => {
+          if (slotToDelete) {
+            deleteSlotMutation.mutate(slotToDelete);
+            setSlotToDelete(null);
+          }
+        }}
+        title="Delete Availability Slot"
+        message="Are you sure you want to delete this coaching availability slot?"
+        confirmText="Delete Slot"
+        cancelText="Cancel"
+        variant="danger"
+        iconName="trash"
+        isLoading={deleteSlotMutation.isPending}
+      />
     </SafeAreaView>
   );
 }

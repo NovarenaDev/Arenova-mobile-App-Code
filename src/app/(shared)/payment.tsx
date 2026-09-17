@@ -72,7 +72,7 @@ export default function PaymentScreen() {
 
       // 2. Step 5.1: Create Payment Order on backend
       const orderPayload: any = { slotId };
-      if (childId && childId.length === 24) {
+      if (childId) {
         orderPayload.childId = childId;
       }
 
@@ -120,7 +120,7 @@ export default function PaymentScreen() {
           paymentSignature: data.razorpay_signature,
           slotId: slotId
         };
-        if (childId && childId.length === 24) {
+        if (childId) {
           verifyPayload.childId = childId;
         }
 

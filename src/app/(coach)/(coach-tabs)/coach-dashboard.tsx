@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Button } from '@/components/ui';
 import { useRouter, useNavigation } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store';
 
@@ -71,6 +71,36 @@ export default function CoachDashboard() {
     queryFn: async () => {
       const res = await api.get('/coach-app/sessions/segmented');
       return res.data;
+    }
+  });
+
+  const queryClient = useQueryClient();
+
+  const { data: allSessionsResponse } = useQuery({
+    queryKey: ['coachSessions'],
+    queryFn: async () => {
+      const res = await api.get('/coaches/my/sessions');
+      return res.data?.data || res.data || [];
+    }
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const res = await api.put(`/coaches/my/sessions/${id}/status`, { status });
+      return res.data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['coachSessions'] });
+      queryClient.invalidateQueries({ queryKey: ['coachDashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['segmentedSessions'] });
+      if (variables.status === 'accepted') {
+        alert('Booking Request Accepted! Moved to Upcoming Sessions.');
+      } else if (variables.status === 'cancelled') {
+        alert('Booking Request Declined.');
+      }
+    },
+    onError: (err: any) => {
+      alert(err?.response?.data?.message || 'Failed to update session status');
     }
   });
 
@@ -186,64 +216,175 @@ export default function CoachDashboard() {
   const metrics = dashboardData?.data?.metrics;
   const avgRating = metrics?.averageRating ?? 0;
 
-  const mapSessionToUI = (session: any) => {
-    const studentName = 
-      session.bookedBy?.name || 
-      session.participant?.name || 
-      session.student?.name || 
-      session.user?.name || 
-      session.studentName || 
-      'Student';
-    const sportName = session.slot?.title || session.sport || session.title || 'Coaching';
-    
-    const formatTime12 = (timeStr: string) => {
-      if (!timeStr) return '';
-      if (timeStr.includes('AM') || timeStr.includes('PM')) return timeStr;
-      const [hStr, mStr] = timeStr.split(':');
-      const h = parseInt(hStr);
-      if (isNaN(h)) return timeStr;
-      const ampm = h >= 12 ? 'PM' : 'AM';
-      const displayHour = h % 12 || 12;
-      return `${String(displayHour).padStart(2, '0')}:${mStr} ${ampm}`;
-    };
-
-    const formatDateShort = (dateStr: string) => {
-      if (!dateStr) return '';
-      const date = new Date(dateStr);
-      if (isNaN(date.getTime())) return dateStr;
+  const formatSessionDate = (dateStr: string) => {
+    if (!dateStr) return 'Scheduled Date';
+    const date = new Date(dateStr);
+    if (!isNaN(date.getTime())) {
       return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
-    };
+    }
+    return dateStr;
+  };
 
-    const rawTime = session.slot?.startTime || session.startTime || session.time || '';
-    const rawDate = session.slot?.date || session.date || session.startDate || '';
+  const formatSessionTime = (timeStr: string) => {
+    if (!timeStr) return '07:00 AM - 08:00 AM';
+    if (timeStr.includes('AM') || timeStr.includes('PM')) return timeStr;
+    const parts = timeStr.split(':');
+    if (parts.length >= 2) {
+      const hours = parseInt(parts[0]);
+      const minutes = parseInt(parts[1]);
+      if (!isNaN(hours) && !isNaN(minutes)) {
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        const formattedHours = hours % 12 || 12;
+        return `${formattedHours}:${minutes < 10 ? '0' + minutes : minutes} ${ampm}`;
+      }
+    }
+    return timeStr;
+  };
+
+  const mapSessionToUI = (session: any) => {
+    const id = session._id || session.id || Math.random().toString();
+    const studentName = 
+      session.child?.name ||
+      session.player?.name ||
+      session.childName ||
+      session.playerName ||
+      (Array.isArray(session.children) && session.children.length > 0 ? session.children.map((c: any) => c.name || c).join(', ') : '') ||
+      session.studentName || 
+      session.student?.name || 
+      session.participant?.name || 
+      session.bookedBy?.name || 
+      (session.bookedBy?.firstName ? `${session.bookedBy.firstName} ${session.bookedBy.lastName || ''}`.trim() : '') ||
+      session.user?.name || 
+      (session.user?.firstName ? `${session.user.firstName} ${session.user.lastName || ''}`.trim() : '') ||
+      'Student';
+
+    const sportTitle = 
+      session.sport || 
+      session.sportName || 
+      session.slot?.sport || 
+      session.slot?.title || 
+      session.title || 
+      'Coaching Session';
+
+    const rawDate = 
+      session.slot?.date || 
+      session.date || 
+      session.slotDate || 
+      session.startDate || 
+      session.bookingDate || 
+      session.createdAt || 
+      '';
+
+    const rawTime = 
+      session.slot?.startTime || 
+      session.startTime || 
+      session.time || 
+      session.slotTime || 
+      session.slot?.time || 
+      '';
+
+    const locationName = 
+      (typeof session.location === 'string' ? session.location : session.location?.name || session.location?.address) || 
+      session.slot?.location || 
+      session.venue || 
+      session.slot?.venue || 
+      session.stadium || 
+      session.slot?.stadium || 
+      (session.stadium?.name ? session.stadium.name : '') ||
+      (session.slot?.stadium?.name ? session.slot.stadium.name : '') ||
+      (session.venue?.name ? session.venue.name : '') ||
+      (session.locationName ? session.locationName : '') ||
+      session.arena || 
+      session.address || 
+      'Central Sports Complex • Field A';
+
+    const numericPrice = 
+      session.amountInr || 
+      session.amount || 
+      session.slot?.pricePerPerson || 
+      session.slot?.price || 
+      session.price || 
+      400;
+
+    const priceText = session.credits 
+      ? `${session.credits} Credits` 
+      : `₹${numericPrice}`;
+
+    const rawStatusNormalized = (session.status || session.rawStatus || 'requested').toString().toLowerCase().trim();
+    let normStatus = 'requested';
+    if (rawStatusNormalized === 'ongoing' || rawStatusNormalized === 'active') {
+      normStatus = 'ongoing';
+    } else if (rawStatusNormalized === 'confirmed' || rawStatusNormalized === 'accepted' || rawStatusNormalized === 'approved') {
+      normStatus = 'accepted';
+    } else if (rawStatusNormalized === 'completed' || rawStatusNormalized === 'done') {
+      normStatus = 'completed';
+    } else if (rawStatusNormalized === 'cancelled' || rawStatusNormalized === 'canceled' || rawStatusNormalized === 'declined' || rawStatusNormalized === 'no_show' || rawStatusNormalized === 'no-show') {
+      normStatus = 'cancelled';
+    } else {
+      normStatus = 'requested';
+    }
+
+    let uiStatus = 'Requested';
+    if (normStatus === 'ongoing') uiStatus = 'Ongoing';
+    else if (normStatus === 'accepted') uiStatus = 'Confirmed';
+    else if (normStatus === 'completed') uiStatus = 'Completed';
+    else if (normStatus === 'cancelled') uiStatus = 'Cancelled';
+    else uiStatus = 'Requested';
 
     return {
-      id: session._id || session.id || Math.random().toString(),
+      id,
       name: studentName,
-      sport: sportName,
-      startedAt: session.startedAt ? formatTime12(session.startedAt) : undefined,
-      time: formatTime12(rawTime),
-      date: formatDateShort(rawDate),
-      delayStatus: session.delayStatus,
-      delayMinutes: session.delayMinutes
+      sport: sportTitle,
+      subtitle: `${sportTitle} • ${priceText}`,
+      price: numericPrice.toString(),
+      startedAt: session.startedAt ? formatSessionTime(session.startedAt) : undefined,
+      date: formatSessionDate(rawDate),
+      time: formatSessionTime(rawTime),
+      location: locationName,
+      status: uiStatus,
+      rawStatus: normStatus,
+      delayStatus: session.delayStatus || '',
+      delayMinutes: session.delayMinutes || 0
     };
   };
 
   const dedupe = (list: any[]) => {
     const seenIds = new Set();
-    const seenSlots = new Set();
     return list.filter(item => {
-      const slotKey = `${item.name}_${item.date}_${item.time}`;
-      if (seenIds.has(item.id) || (item.date && item.time && seenSlots.has(slotKey))) return false;
+      if (!item.id || seenIds.has(item.id)) return false;
       seenIds.add(item.id);
-      if (item.date && item.time) seenSlots.add(slotKey);
       return true;
     });
   };
 
-  const currentSessionsList = dedupe((dashboardData?.data?.activeSessions || []).map(mapSessionToUI));
-  const upcomingSessionsList = dedupe((dashboardData?.data?.upcomingSessions || []).map(mapSessionToUI));
-  const completedSessionsList = dedupe((segmentedSessions?.data?.completed || []).map(mapSessionToUI));
+  const getNormalizedStatus = (s: any) => {
+    if (!s) return 'requested';
+    const st = (
+      s.status || 
+      s.rawStatus || 
+      s.bookingStatus || 
+      s.slotStatus || 
+      s.state || 
+      s.slot?.status || 
+      ''
+    ).toString().toLowerCase().trim();
+
+    if (st === 'confirmed' || st === 'accepted' || st === 'approved' || st === 'upcoming') return 'accepted';
+    if (st === 'ongoing' || st === 'active' || st === 'started' || st === 'in_progress') return 'ongoing';
+    if (st === 'completed' || st === 'done' || st === 'finished') return 'completed';
+    if (st === 'cancelled' || st === 'canceled' || st === 'declined' || st === 'rejected' || st === 'no_show' || st === 'no-show') return 'cancelled';
+    
+    return 'requested';
+  };
+
+  const rawSessions = Array.isArray(allSessionsResponse) ? allSessionsResponse : [];
+
+  const upcomingSessionsList = dedupe(rawSessions.filter((s: any) => {
+    const st = getNormalizedStatus(s);
+    return st === 'requested' || st === 'accepted';
+  }).map(mapSessionToUI));
+  const currentSessionsList = dedupe(rawSessions.filter((s: any) => getNormalizedStatus(s) === 'ongoing').map(mapSessionToUI));
+  const completedSessionsList = dedupe(rawSessions.filter((s: any) => getNormalizedStatus(s) === 'completed').map(mapSessionToUI));
 
   const learningTips = [
     {
@@ -437,91 +578,20 @@ export default function CoachDashboard() {
       </View>
 
       <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} scrollEventThrottle={16} decelerationRate="normal" className="flex-1 pt-2" contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 40, 60) }}>
-        {/* Current Sessions */}
-        <View className="px-6 pb-6">
-          <View className="flex-row justify-between items-center mb-4">
+        {/* Upcoming Sessions Section */}
+        <View className="pb-6">
+          <View className="flex-row justify-between items-center mb-4 px-6">
             <View className="flex-row items-center">
               <Typography variant="h3" color="secondary" weight="bold">
-                Current Sessions
+                Upcoming Sessions
               </Typography>
-              {currentSessionsList.length > 0 && (
-                <View className="w-2 h-2 rounded-full bg-red-500 ml-2 shadow-sm" style={{ shadowColor: 'red' }} />
-              )}
-            </View>
-          </View>
-
-          {currentSessionsList.length === 0 ? (
-            <View className="bg-white rounded-2xl p-6 items-center justify-center border border-gray-100 shadow-sm">
-              <Ionicons name="play-circle-outline" size={32} color="#9CA3AF" className="mb-2" />
-              <Typography variant="body2" color="muted" align="center">No active sessions running right now.</Typography>
-            </View>
-          ) : (
-            currentSessionsList.map((session: any, index: number) => (
-              <View key={session.id} className="bg-white rounded-2xl p-4 shadow-sm border-l-4 border-red-500 mb-4">
-                <View className="flex-row justify-between items-center">
-                  <View className="flex-1">
-                    <Typography variant="subtitle1" color="text" weight="bold">
-                      {session.name}
-                    </Typography>
-                    <Typography variant="body2" color="primary" weight="bold" className="mb-2">
-                      {session.sport}
-                    </Typography>
-                    
-                    <View className="flex-row items-center mb-1">
-                      <Ionicons name="play-circle-outline" size={16} color="#10B981" className="mr-2" />
-                      <Typography variant="caption" color="text" weight="bold">
-                        {session.startedAt ? `Started at ${session.startedAt}` : 'Not Started'}
-                      </Typography>
-                    </View>
-                    <View className="flex-row items-center">
-                      <Ionicons name="time-outline" size={16} color="#6B7280" className="mr-2" />
-                      <Typography variant="caption" color="muted">
-                        Scheduled: {session.time}
-                      </Typography>
-                    </View>
-                  </View>
-
-                  <View className="w-24">
-                    <Button 
-                      title="View" 
-                      size="sm" 
-                      onPress={() => router.push({
-                        pathname: '/(shared)/session-summary',
-                        params: { id: session.id }
-                      })} 
-                    />
-                  </View>
-                </View>
-
-                {/* Delay Warning Remarks */}
-                {session.delayStatus === 'started-late' && (
-                  <View className="flex-row items-center bg-orange-50 border border-orange-200 px-3 py-2 rounded-xl mt-3">
-                    <Ionicons name="time" size={14} color="#C2410C" className="mr-1.5" />
-                    <Typography variant="caption" className="flex-1 text-orange-700 font-semibold text-[11px]">
-                      Started Late ({session.delayMinutes}m delay) • Rating Penalty Applied (-0.1★)
-                    </Typography>
-                  </View>
-                )}
-                {session.delayStatus === 'rushing' && (
-                  <View className="flex-row items-center bg-red-50 border border-red-200 px-3 py-2 rounded-xl mt-3">
-                    <Ionicons name="warning" size={14} color="#DC2626" className="mr-1.5" />
-                    <Typography variant="caption" className="flex-1 text-red-700 font-bold text-[11px]">
-                      ⚠️ Rushing! Started near 1hr limit ({session.delayMinutes}m delay) • Earnings & Rating Penalty
-                    </Typography>
-                  </View>
-                )}
+              <View className="bg-orange-500 px-2.5 py-0.5 rounded-full ml-2">
+                <Typography variant="caption" color="white" weight="bold" className="text-[10px]">
+                  {upcomingSessionsList.length}
+                </Typography>
               </View>
-            ))
-          )}
-        </View>
-
-        {/* Upcoming Sessions */}
-        <View className="px-6 pb-6">
-          <View className="flex-row justify-between items-center mb-4">
-            <Typography variant="h3" color="secondary" weight="bold">
-              Upcoming Sessions
-            </Typography>
-            <TouchableOpacity className="flex-row items-center" onPress={() => router.push('/activity')}>
+            </View>
+            <TouchableOpacity className="flex-row items-center" onPress={() => router.push({ pathname: '/(coach)/(coach-tabs)/activity', params: { tab: 'upcoming' } })}>
               <Typography variant="body2" color="secondary" weight="semibold">
                 See All
               </Typography>
@@ -530,67 +600,226 @@ export default function CoachDashboard() {
           </View>
 
           {upcomingSessionsList.length === 0 ? (
-            <View className="bg-white rounded-2xl p-6 items-center justify-center border border-gray-100 shadow-sm">
-              <Ionicons name="calendar-outline" size={32} color="#9CA3AF" className="mb-2" />
+            <View className="mx-6 bg-white rounded-3xl p-6 items-center justify-center border border-gray-100 shadow-sm">
+              <Ionicons name="calendar-outline" size={36} color="#9CA3AF" className="mb-2" />
               <Typography variant="body2" color="muted" align="center">No upcoming sessions scheduled.</Typography>
             </View>
           ) : (
-            upcomingSessionsList.map((session: any, index: number) => (
-              <View key={session.id} className="bg-white rounded-2xl p-4 mb-4 shadow-sm border border-gray-100">
-                <View className="flex-row justify-between items-center">
-                  <View className="flex-1">
-                    <Typography variant="subtitle1" color="text" weight="bold">
-                      {session.name}
-                    </Typography>
-                    <Typography variant="body2" color="primary" weight="bold" className="mb-2">
-                      {session.sport}
-                    </Typography>
-                    
-                    <View className="flex-row items-center mb-1">
-                      <Ionicons name="calendar-outline" size={16} color="#6B7280" className="mr-2" />
-                      <Typography variant="caption" color="muted">
-                        {session.date}
-                      </Typography>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 24, paddingRight: 8 }}>
+              {upcomingSessionsList.map((session: any) => {
+                const isRequested = session.rawStatus === 'requested';
+
+                return (
+                  <View 
+                    key={session.id} 
+                    style={{ width: Math.min(require('react-native').Dimensions.get('window').width - 48, 340) }} 
+                    className={`bg-white rounded-3xl p-5 mr-4 shadow-md border justify-between ${isRequested ? 'border-orange-100' : 'border-emerald-100'}`}
+                  >
+                    <View>
+                      <View className="flex-row items-center justify-between pb-3 border-b border-gray-100">
+                        <View className="flex-row items-center flex-1 pr-2">
+                          <View className={`w-11 h-11 rounded-2xl ${isRequested ? 'bg-orange-100' : 'bg-emerald-100'} mr-3 items-center justify-center`}>
+                            <Typography variant="subtitle1" style={{ color: isRequested ? '#FF5100' : '#047857' }} weight="bold">
+                              {session.name.charAt(0).toUpperCase()}
+                            </Typography>
+                          </View>
+                          <View className="flex-1">
+                            <Typography variant="subtitle1" color="secondary" weight="bold" numberOfLines={1} className="font-outfit-bold text-base">
+                              {session.name}
+                            </Typography>
+                            <Typography variant="caption" color="primary" weight="bold" className="text-xs font-outfit-bold">
+                              {session.sport}
+                            </Typography>
+                          </View>
+                        </View>
+                        <View className={`${isRequested ? 'bg-orange-50 border-orange-200' : 'bg-emerald-50 border-emerald-200'} border px-2.5 py-1 rounded-full`}>
+                          <Typography variant="caption" className={`${isRequested ? 'text-orange-700' : 'text-emerald-700'} text-[10px] font-bold`}>
+                            {isRequested ? 'Requested' : 'Confirmed'}
+                          </Typography>
+                        </View>
+                      </View>
+
+                      <View className="pt-3 space-y-2 mb-3">
+                        <View className="flex-row items-center">
+                          <Ionicons name="calendar-outline" size={16} color="#0F2C59" className="mr-2.5" />
+                          <Typography variant="caption" color="secondary" weight="medium" className="text-xs">{session.date}</Typography>
+                        </View>
+                        <View className="flex-row items-center mt-1">
+                          <Ionicons name="time-outline" size={16} color="#0F2C59" className="mr-2.5" />
+                          <Typography variant="caption" color="secondary" weight="medium" className="text-xs">{session.time}</Typography>
+                        </View>
+                        <View className="flex-row items-center mt-1">
+                          <Ionicons name="location-outline" size={16} color="#FF5100" className="mr-2.5" />
+                          <Typography variant="caption" color="secondary" weight="medium" className="text-xs flex-1 font-outfit-medium" numberOfLines={1}>
+                            {session.location}
+                          </Typography>
+                        </View>
+                      </View>
                     </View>
-                    <View className="flex-row items-center">
-                      <Ionicons name="time-outline" size={16} color="#6B7280" className="mr-2" />
-                      <Typography variant="caption" color="muted">
-                        {session.time}
-                      </Typography>
+
+                    {/* Action Row */}
+                    {isRequested ? (
+                      <View className="flex-row gap-2 pt-3 border-t border-gray-100 items-center">
+                        <TouchableOpacity
+                          disabled={updateStatusMutation.isPending}
+                          onPress={() => updateStatusMutation.mutate({ id: session.id, status: 'cancelled' })}
+                          className="flex-1 py-3 rounded-2xl bg-gray-100 border border-gray-200 items-center justify-center active:opacity-80"
+                        >
+                          <Typography variant="subtitle2" color="secondary" weight="bold" className="text-gray-700 text-xs font-outfit-bold">
+                            Decline
+                          </Typography>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          disabled={updateStatusMutation.isPending}
+                          onPress={() => updateStatusMutation.mutate({ id: session.id, status: 'accepted' })}
+                          className="flex-1 py-3 rounded-2xl bg-[#FF5100] items-center justify-center shadow-xs active:opacity-80"
+                        >
+                          <Typography variant="subtitle2" style={{ color: '#FFFFFF' }} weight="bold" className="text-xs font-outfit-bold">
+                            Accept
+                          </Typography>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          onPress={() => router.push({
+                            pathname: '/(shared)/session-summary',
+                            params: { 
+                              id: session.id,
+                              status: 'requested',
+                              studentName: session.name,
+                              date: session.date,
+                              time: session.time,
+                              location: session.location,
+                              price: session.price
+                            }
+                          })}
+                          className="px-4 py-3 rounded-2xl bg-blue-50 border border-blue-200 items-center justify-center active:opacity-80"
+                        >
+                          <Typography variant="subtitle2" className="text-blue-700 text-xs font-outfit-bold">
+                            Details
+                          </Typography>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        onPress={() => router.push({
+                          pathname: '/(shared)/session-summary',
+                          params: { 
+                            id: session.id,
+                            status: 'accepted',
+                            studentName: session.name,
+                            date: session.date,
+                            time: session.time,
+                            location: session.location,
+                            price: session.price
+                          }
+                        })}
+                        className="w-full py-3 rounded-2xl bg-[#0F2C59] items-center justify-center shadow-xs active:opacity-80 mt-2"
+                      >
+                        <Typography variant="subtitle2" style={{ color: '#FFFFFF' }} weight="bold" className="text-xs font-outfit-bold">
+                          View Details / Verify OTP
+                        </Typography>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              })}
+            </ScrollView>
+          )}
+        </View>
+
+        {/* Current Sessions */}
+        <View className="pb-6">
+          <View className="flex-row justify-between items-center mb-4 px-6">
+            <View className="flex-row items-center">
+              <Typography variant="h3" color="secondary" weight="bold">
+                Current Sessions
+              </Typography>
+              {currentSessionsList.length > 0 && (
+                <View className="w-2.5 h-2.5 rounded-full bg-red-500 ml-2 shadow-sm" style={{ shadowColor: 'red' }} />
+              )}
+            </View>
+            <TouchableOpacity className="flex-row items-center" onPress={() => router.push({ pathname: '/(coach)/(coach-tabs)/activity', params: { tab: 'current' } })}>
+              <Typography variant="body2" color="secondary" weight="semibold">
+                See All
+              </Typography>
+              <Ionicons name="chevron-forward" size={16} color="#0F2C59" />
+            </TouchableOpacity>
+          </View>
+
+          {currentSessionsList.length === 0 ? (
+            <View className="mx-6 bg-white rounded-3xl p-6 items-center justify-center border border-gray-100 shadow-sm">
+              <Ionicons name="play-circle-outline" size={36} color="#9CA3AF" className="mb-2" />
+              <Typography variant="body2" color="muted" align="center">No active sessions running right now.</Typography>
+            </View>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 24, paddingRight: 8 }}>
+              {currentSessionsList.map((session: any) => (
+                <View 
+                  key={session.id} 
+                  style={{ width: Math.min(require('react-native').Dimensions.get('window').width - 48, 340) }} 
+                  className="bg-white rounded-3xl p-5 mr-4 shadow-md border-l-4 border-l-red-500 border border-gray-100 justify-between"
+                >
+                  <View>
+                    <View className="flex-row items-center justify-between pb-3 border-b border-gray-100">
+                      <View className="flex-row items-center flex-1 pr-2">
+                        <View className="w-11 h-11 rounded-2xl bg-red-100 mr-3 items-center justify-center">
+                          <Typography variant="subtitle1" style={{ color: '#EF4444' }} weight="bold">
+                            {session.name.charAt(0).toUpperCase()}
+                          </Typography>
+                        </View>
+                        <View className="flex-1">
+                          <Typography variant="subtitle1" color="secondary" weight="bold" numberOfLines={1} className="font-outfit-bold text-base">
+                            {session.name}
+                          </Typography>
+                          <Typography variant="caption" color="primary" weight="bold" className="text-xs font-outfit-bold">
+                            {session.sport}
+                          </Typography>
+                        </View>
+                      </View>
+                      <View className="bg-red-50 border border-red-200 px-2.5 py-1 rounded-full">
+                        <Typography variant="caption" className="text-red-700 text-[10px] font-bold">Ongoing</Typography>
+                      </View>
+                    </View>
+
+                    <View className="pt-3 space-y-2 mb-4">
+                      <View className="flex-row items-center">
+                        <Ionicons name="play-circle-outline" size={16} color="#10B981" className="mr-2.5" />
+                        <Typography variant="caption" color="text" weight="bold" className="text-xs">
+                          {session.startedAt ? `Started at ${session.startedAt}` : 'Active Session'}
+                        </Typography>
+                      </View>
+                      <View className="flex-row items-center mt-1">
+                        <Ionicons name="location-outline" size={16} color="#FF5100" className="mr-2.5" />
+                        <Typography variant="caption" color="secondary" weight="medium" className="text-xs flex-1 font-outfit-medium" numberOfLines={1}>
+                          {session.location}
+                        </Typography>
+                      </View>
                     </View>
                   </View>
 
-                  <View className="w-24">
-                    <Button 
-                      title="View" 
-                      size="sm" 
-                      onPress={() => router.push({
-                        pathname: '/(shared)/session-summary',
-                        params: { id: session.id }
-                      })} 
-                    />
-                  </View>
+                  <TouchableOpacity
+                    onPress={() => router.push({
+                      pathname: '/(shared)/session-summary',
+                      params: { 
+                        id: session.id,
+                        status: 'ongoing',
+                        studentName: session.name,
+                        date: session.date,
+                        time: session.time,
+                        location: session.location,
+                        price: session.price
+                      }
+                    })}
+                    className="w-full py-3 rounded-2xl bg-[#0F2C59] items-center justify-center shadow-xs active:opacity-80"
+                  >
+                    <Typography variant="subtitle2" style={{ color: '#FFFFFF' }} weight="bold" className="text-xs font-outfit-bold">
+                      View Details
+                    </Typography>
+                  </TouchableOpacity>
                 </View>
-
-                {/* Delay Warning Remarks */}
-                {session.delayStatus === 'warning-delay' && (
-                  <View className="flex-row items-center bg-amber-50 border border-amber-200 px-3 py-2 rounded-xl mt-3">
-                    <Ionicons name="hourglass-outline" size={14} color="#D97706" className="mr-1.5" />
-                    <Typography variant="caption" className="flex-1 text-amber-800 font-bold text-[11px]">
-                      ⚠️ Delayed by {session.delayMinutes}m! Start in {60 - session.delayMinutes}m or session will cancel
-                    </Typography>
-                  </View>
-                )}
-                {session.delayStatus === 'out-of-time' && (
-                  <View className="flex-row items-center bg-red-50 border border-red-200 px-3 py-2 rounded-xl mt-3">
-                    <Ionicons name="alert-circle" size={14} color="#B91C1C" className="mr-1.5" />
-                    <Typography variant="caption" className="flex-1 text-red-800 font-bold text-[11px]">
-                      ❌ Out of Time! Delay &gt; 1hr ({session.delayMinutes}m delay) • Ratings & Weekly Count impacted
-                    </Typography>
-                  </View>
-                )}
-              </View>
-            ))
+              ))}
+            </ScrollView>
           )}
         </View>
 
@@ -600,7 +829,7 @@ export default function CoachDashboard() {
             <Typography variant="h3" color="secondary" weight="bold">
               Completed Sessions
             </Typography>
-            <TouchableOpacity className="flex-row items-center" onPress={() => router.push('/activity')}>
+            <TouchableOpacity className="flex-row items-center" onPress={() => router.push({ pathname: '/(coach)/(coach-tabs)/activity', params: { tab: 'completed' } })}>
               <Typography variant="body2" color="secondary" weight="semibold">
                 See All
               </Typography>
@@ -643,7 +872,14 @@ export default function CoachDashboard() {
                     className="flex-row items-center bg-white px-4 py-2.5 rounded-2xl self-start"
                     onPress={() => router.push({
                       pathname: '/(shared)/session-summary',
-                      params: { id: session.id }
+                      params: { 
+                        id: session.id,
+                        status: session.rawStatus || 'completed',
+                        studentName: session.name,
+                        date: session.date,
+                        time: session.time,
+                        location: session.location
+                      }
                     })}
                   >
                     <Ionicons name="chatbubble-ellipses-outline" size={16} color="#3b8c4c" className="mr-2" />
@@ -659,20 +895,20 @@ export default function CoachDashboard() {
 
         {/* My Communities & Programs Section */}
         <View className="px-6 pb-6">
-          <View className="flex-row justify-between items-center mb-4">
-            <View className="flex-row items-center">
-              <Typography variant="h3" color="secondary" weight="bold">
+          <View className="flex-row justify-between items-center mb-4 flex-wrap gap-y-2">
+            <View className="flex-1 flex-row items-center min-w-[180px] pr-2">
+              <Typography variant="h3" color="secondary" weight="bold" className="text-[17px] leading-6" numberOfLines={1}>
                 My Communities & Programs
               </Typography>
-              <View className="w-2.5 h-2.5 rounded-full bg-primary ml-2" />
+              <View className="w-2.5 h-2.5 rounded-full bg-primary ml-1.5 flex-shrink-0" />
             </View>
 
             <TouchableOpacity 
               onPress={() => setSalaryHistoryModalVisible(true)}
-              className="flex-row items-center bg-green-50 px-3 py-1.5 rounded-full border border-green-200"
+              className="flex-row items-center bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-200/80 flex-shrink-0 active:opacity-80"
             >
-              <Ionicons name="cash-outline" size={14} color="#2b7a43" className="mr-1" />
-              <Typography variant="caption" className="text-[#2b7a43] font-bold text-[11px]">
+              <Ionicons name="cash-outline" size={14} color="#047857" className="mr-1" />
+              <Typography variant="caption" className="text-[#047857] font-bold text-[11px] font-outfit-bold">
                 Salary History
               </Typography>
             </TouchableOpacity>

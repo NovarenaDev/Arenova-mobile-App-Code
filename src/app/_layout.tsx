@@ -70,7 +70,7 @@ export default function RootLayout() {
         // Redirect to app if logged in and registered
         let targetRoute = '';
         if (user.role === 'coach') {
-          if (user.status === 'active') {
+          if (user.status === 'active' || user.status === 'approved' || user.isRegistered) {
             targetRoute = '/(coach)/(coach-tabs)/coach-dashboard';
           } else {
             targetRoute = '/(coach)/onboarding';
@@ -89,7 +89,7 @@ export default function RootLayout() {
       // Catch users stuck on the old deleted (tabs) route and redirect them
       let targetRoute = '';
       if (user.role === 'coach') {
-        if (user.status === 'active') {
+        if (user.status === 'active' || user.status === 'approved' || user.isRegistered) {
           targetRoute = '/(coach)/(coach-tabs)/coach-dashboard';
         } else {
           targetRoute = '/(coach)/onboarding';

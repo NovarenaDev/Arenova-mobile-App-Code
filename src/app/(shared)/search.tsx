@@ -3,7 +3,7 @@ import { View, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-nat
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Button, TextInput } from '@/components/ui';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/services/api';
 
@@ -25,6 +25,7 @@ interface CoachItem {
 }
 
 export default function FindCoachScreen() {
+  const router = useRouter();
   const { sport } = useLocalSearchParams<{ sport?: string }>();
   const [activeFilter, setActiveFilter] = useState(sport || 'All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -71,7 +72,16 @@ export default function FindCoachScreen() {
     <SafeAreaView className="flex-1 bg-[#EEF3F9]" edges={['top']}>
       {/* Header */}
       <View className="px-4 py-4 flex-row justify-between items-center bg-white border-b border-gray-100 shadow-sm z-10">
-        <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
+        <TouchableOpacity 
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/(parent)/(parent-tabs)/parent-dashboard');
+            }
+          }} 
+          className="p-2 -ml-2"
+        >
           <Ionicons name="arrow-back" size={24} color="#0F2C59" />
         </TouchableOpacity>
         <Typography variant="h2" color="secondary" weight="bold" className="font-outfit-bold">

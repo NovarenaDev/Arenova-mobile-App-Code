@@ -39,6 +39,7 @@ export default function ProfileScreen() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isReferralModalVisible, setIsReferralModalVisible] = useState(false);
+  const [isLogoutModalVisible, setIsLogoutModalVisible] = useState(false);
 
   const handlePickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -295,7 +296,13 @@ export default function ProfileScreen() {
   };
 
   const standardMenuItems = [
-    ...(user?.role === 'parent' ? [{ id: 'family', title: 'My Family Tree', icon: 'people-outline', route: '/(parent)/(parent-tabs)/family-tree' }] : []),
+    { id: 'referral', title: 'Refer & Share App', icon: 'share-social-outline', route: null },
+    { id: 'settings', title: 'Settings & Preferences', icon: 'settings-outline', route: '/settings' },
+    { id: 'logout', title: 'Sign Out', icon: 'log-out-outline', route: '/(auth)' },
+  ];
+
+  const parentMenuItems = [
+    { id: 'family', title: 'My Family Members', icon: 'people-outline', route: '/(parent)/family-tree' },
     { id: 'referral', title: 'Refer & Share App', icon: 'share-social-outline', route: null },
     { id: 'settings', title: 'Settings & Preferences', icon: 'settings-outline', route: '/settings' },
     { id: 'logout', title: 'Sign Out', icon: 'log-out-outline', route: '/(auth)' },
@@ -309,7 +316,7 @@ export default function ProfileScreen() {
     { id: 'logout', title: 'Sign Out', icon: 'log-out-outline', route: '/(auth)' },
   ];
 
-  const menuItems = user?.role === 'coach' ? coachMenuItems : standardMenuItems;
+  const menuItems = user?.role === 'coach' ? coachMenuItems : (user?.role === 'parent' ? parentMenuItems : standardMenuItems);
 
   const getMenuDetails = (id: string) => {
     switch (id) {
@@ -329,8 +336,8 @@ export default function ProfileScreen() {
         };
       case 'family':
         return {
-          title: "My Family Tree",
-          desc: "Register child players and book coaching schedules",
+          title: "My Family Members",
+          desc: "Register child profiles, update info, and manage family accounts",
           color: "#0D9488", // Teal
           bgColor: "bg-teal-50 border-teal-100/50"
         };
@@ -778,17 +785,7 @@ export default function ProfileScreen() {
                   key={item.id}
                   onPress={() => {
                     if (item.id === 'logout') {
-                      Alert.alert('Confirm Logout', 'Are you sure you want to log out of your account?', [
-                        { text: 'Cancel', style: 'cancel' },
-                        { 
-                          text: 'Logout', 
-                          style: 'destructive',
-                          onPress: () => {
-                            logout();
-                            router.replace('/(auth)');
-                          }
-                        }
-                      ]);
+                      setIsLogoutModalVisible(true);
                     } else if (item.id === 'referral') {
                       setIsReferralModalVisible(true);
                     } else if (item.route) {
@@ -894,6 +891,108 @@ export default function ProfileScreen() {
                 <Ionicons name="share-social-outline" size={20} color="white" className="mr-2" />
                 <Typography color="white" weight="bold" className="font-outfit-bold">
                   Other Share Options
+                </Typography>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modern Themed Confirm Logout Modal */}
+      <Modal
+        visible={isLogoutModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsLogoutModalVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(15, 44, 89, 0.65)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <View 
+            style={{ 
+              backgroundColor: '#FFFFFF', 
+              borderRadius: 28, 
+              padding: 24, 
+              width: '100%', 
+              maxWidth: 360, 
+              alignItems: 'center',
+              shadowColor: '#000000', 
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.25, 
+              shadowRadius: 20, 
+              elevation: 10,
+              borderWidth: 1,
+              borderColor: 'rgba(239, 68, 68, 0.15)'
+            }}
+          >
+            {/* Top Badge Icon */}
+            <View 
+              style={{ 
+                width: 64, 
+                height: 64, 
+                borderRadius: 32, 
+                backgroundColor: '#FEF2F2', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                marginBottom: 16,
+                borderWidth: 1,
+                borderColor: '#FEE2E2'
+              }}
+            >
+              <Ionicons name="log-out" size={30} color="#EF4444" />
+            </View>
+
+            {/* Title & Subtitle */}
+            <Typography variant="h3" color="secondary" weight="bold" className="font-outfit-bold text-xl text-center mb-2">
+              Sign Out of Arenova?
+            </Typography>
+
+            <Typography variant="body2" color="muted" className="font-outfit text-center text-sm leading-5 mb-6 text-gray-500">
+              Are you sure you want to sign out? You will need to log back in to manage your sessions and activities.
+            </Typography>
+
+            {/* Action Buttons */}
+            <View className="flex-row w-full gap-3">
+              <TouchableOpacity
+                style={{ 
+                  flex: 1, 
+                  paddingVertical: 14, 
+                  borderRadius: 16, 
+                  backgroundColor: '#F3F4F6', 
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 1,
+                  borderColor: '#E5E7EB'
+                }}
+                activeOpacity={0.8}
+                onPress={() => setIsLogoutModalVisible(false)}
+              >
+                <Typography variant="subtitle2" color="secondary" weight="bold" className="font-outfit-bold text-sm">
+                  Cancel
+                </Typography>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{ 
+                  flex: 1.2, 
+                  paddingVertical: 14, 
+                  borderRadius: 16, 
+                  backgroundColor: '#EF4444', 
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  shadowColor: '#EF4444',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 6,
+                  elevation: 4
+                }}
+                activeOpacity={0.8}
+                onPress={() => {
+                  setIsLogoutModalVisible(false);
+                  logout();
+                  router.replace('/(auth)');
+                }}
+              >
+                <Typography variant="subtitle2" style={{ color: '#FFFFFF' }} weight="bold" className="font-outfit-bold text-sm">
+                  Sign Out
                 </Typography>
               </TouchableOpacity>
             </View>

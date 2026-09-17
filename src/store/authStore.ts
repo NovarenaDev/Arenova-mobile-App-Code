@@ -47,6 +47,8 @@ interface AuthState {
   setUser: (user: User) => void;
   setChildren: (children: Child[]) => void;
   addChild: (child: Child) => void;
+  updateChild: (id: string, updatedChild: Partial<Child>) => void;
+  removeChild: (id: string) => void;
   setSelectedLocationId: (id: string | null) => void;
   setSoundEnabled: (enabled: boolean) => void;
   setVibrationEnabled: (enabled: boolean) => void;
@@ -84,6 +86,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const updated = exists 
       ? current.map(c => (c._id === child._id || c.name.toLowerCase() === child.name.toLowerCase()) ? child : c)
       : [...current, child];
+    SecureStore.setItemAsync('parent_children', JSON.stringify(updated)).catch(console.error);
+    set({ children: updated });
+  },
+
+  updateChild: (id, updatedData) => {
+    const current = get().children;
+    const updated = current.map(c => (c._id === id || c.id === id) ? { ...c, ...updatedData } : c);
+    SecureStore.setItemAsync('parent_children', JSON.stringify(updated)).catch(console.error);
+    set({ children: updated });
+  },
+
+  removeChild: (id) => {
+    const current = get().children;
+    const updated = current.filter(c => c._id !== id && c.id !== id);
     SecureStore.setItemAsync('parent_children', JSON.stringify(updated)).catch(console.error);
     set({ children: updated });
   },
