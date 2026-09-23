@@ -682,7 +682,7 @@ export default function CoachDashboard() {
 
                         <TouchableOpacity
                           onPress={() => router.push({
-                            pathname: '/(shared)/session-summary',
+                            pathname: '/session-summary',
                             params: { 
                               id: session.id,
                               status: 'requested',
@@ -703,7 +703,7 @@ export default function CoachDashboard() {
                     ) : (
                       <TouchableOpacity
                         onPress={() => router.push({
-                          pathname: '/(shared)/session-summary',
+                          pathname: '/session-summary',
                           params: { 
                             id: session.id,
                             status: 'accepted',
@@ -800,7 +800,7 @@ export default function CoachDashboard() {
 
                   <TouchableOpacity
                     onPress={() => router.push({
-                      pathname: '/(shared)/session-summary',
+                      pathname: '/session-summary',
                       params: { 
                         id: session.id,
                         status: 'ongoing',
@@ -871,7 +871,7 @@ export default function CoachDashboard() {
                   <TouchableOpacity 
                     className="flex-row items-center bg-white px-4 py-2.5 rounded-2xl self-start"
                     onPress={() => router.push({
-                      pathname: '/(shared)/session-summary',
+                      pathname: '/session-summary',
                       params: { 
                         id: session.id,
                         status: session.rawStatus || 'completed',

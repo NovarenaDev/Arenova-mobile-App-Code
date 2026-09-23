@@ -246,7 +246,7 @@ export default function SessionSummaryScreen() {
                   </View>
                 </View>
                 {statusParam === 'completed' && (
-                  <TouchableOpacity onPress={() => router.push('/(shared)/review-player')} className="px-3 py-1.5 bg-[#EEF3F9] rounded-full">
+                  <TouchableOpacity onPress={() => router.push('/review-player')} className="px-3 py-1.5 bg-[#EEF3F9] rounded-full">
                     <Typography variant="caption" color="primary" weight="bold">Review</Typography>
                   </TouchableOpacity>
                 )}
@@ -523,7 +523,7 @@ export default function SessionSummaryScreen() {
           <Button 
             title={`Proceed To Pay (₹${Number(price || 400) + 50})`}
             onPress={() => router.push({
-              pathname: '/(shared)/payment',
+              pathname: '/payment',
               params: {
                 slotId,
                 childId: childId || '',

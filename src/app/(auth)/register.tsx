@@ -424,10 +424,12 @@ export default function RegisterScreen() {
           <TouchableOpacity onPress={() => {
             if (registrationPhase !== 'input') {
               setRegistrationPhase('input'); 
-            } else if (router.canGoBack()) {
-              router.back();
             } else {
-              router.replace('/(auth)/role-selection');
+              try {
+                router.back();
+              } catch (e) {
+                router.replace('/(auth)/role-selection');
+              }
             }
           }} className="p-2 -ml-2 w-12">
             <Ionicons name="arrow-back" size={28} color="#0F2C59" />

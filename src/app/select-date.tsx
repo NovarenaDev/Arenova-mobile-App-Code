@@ -81,7 +81,7 @@ export default function SelectDateScreen() {
     // If user is an Individual / Player, skip child selection and proceed directly to Session Summary.
     if (user?.role === 'parent') {
       router.push({
-        pathname: '/(shared)/select-player',
+        pathname: '/select-player',
         params: {
           coachId: coachId || '',
           slotId: selectedSlotId,
@@ -94,7 +94,7 @@ export default function SelectDateScreen() {
       });
     } else {
       router.push({
-        pathname: '/(shared)/session-summary',
+        pathname: '/session-summary',
         params: {
           coachId: coachId || '',
           slotId: selectedSlotId,

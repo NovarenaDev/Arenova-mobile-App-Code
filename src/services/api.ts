@@ -17,10 +17,14 @@ export const api = axios.create({
 
 api.interceptors.request.use(
   async (config) => {
-    // In a real app, we'd get this from the store or secure storage directly
-    const token = useAuthStore.getState().token;
+    let token = useAuthStore.getState().token;
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+      token = token.trim();
+      if (token.startsWith('Bearer ')) {
+        config.headers.Authorization = token;
+      } else {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
     }
     return config;
   },
@@ -36,11 +40,12 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
     
-    // Handle 401 Unauthorized globally
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-      // Handle token refresh logic here or simply logout
-      useAuthStore.getState().logout();
+    // Handle 401 Unauthorized globally without crashing active React render tree
+    if (error.response?.status === 401 && !originalRequest?._retry) {
+      if (originalRequest) originalRequest._retry = true;
+      setTimeout(() => {
+        useAuthStore.getState().logout();
+      }, 0);
     }
     
     return Promise.reject(error);

@@ -67,7 +67,7 @@ export default function AddChildScreen() {
       if (params.slotId) {
         Alert.alert('Child Added', `${name.trim()} has been added and assigned to this session.`);
         router.replace({
-          pathname: '/(shared)/session-summary',
+          pathname: '/session-summary',
           params: {
             ...params,
             childId: createdChild._id,

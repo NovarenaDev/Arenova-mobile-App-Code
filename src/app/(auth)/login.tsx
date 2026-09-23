@@ -106,6 +106,14 @@ export default function LoginScreen() {
         isRegistered: true,
       });
       setIsLoading(false);
+
+      if (finalRole === 'coach') {
+        router.replace('/(coach)/(coach-tabs)/coach-dashboard');
+      } else if (finalRole === 'parent') {
+        router.replace('/(parent)/(parent-tabs)/parent-dashboard');
+      } else {
+        router.replace('/(individual)/(individual-tabs)/individual-dashboard');
+      }
     },
     onError: (error: any) => {
       setIsLoading(false);
@@ -153,6 +161,18 @@ export default function LoginScreen() {
         isRegistered: true,
       });
       setIsLoading(false);
+
+      if (finalRole === 'coach') {
+        if (resolvedStatus === 'active' || resolvedStatus === 'approved') {
+          router.replace('/(coach)/(coach-tabs)/coach-dashboard');
+        } else {
+          router.replace('/(coach)/onboarding');
+        }
+      } else if (finalRole === 'parent') {
+        router.replace('/(parent)/(parent-tabs)/parent-dashboard');
+      } else {
+        router.replace('/(individual)/(individual-tabs)/individual-dashboard');
+      }
     },
     onError: (error: any) => {
       setIsLoading(false);
@@ -235,9 +255,9 @@ export default function LoginScreen() {
       >
         <View className="px-6 py-4 z-10">
           <TouchableOpacity onPress={() => {
-            if (router.canGoBack()) {
+            try {
               router.back();
-            } else {
+            } catch (e) {
               router.replace('/(auth)/role-selection');
             }
           }} className="p-2 -ml-2 w-12">

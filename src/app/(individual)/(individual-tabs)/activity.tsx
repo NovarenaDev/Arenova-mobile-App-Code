@@ -89,7 +89,7 @@ export default function BookingsScreen() {
           {activeTab === 'upcoming' && (
             <Button 
               title="Find a Coach" 
-              onPress={() => router.push('/(shared)/search')}
+              onPress={() => router.push('/search')}
               fullWidth={false}
               className="px-6"
             />
@@ -165,7 +165,7 @@ export default function BookingsScreen() {
                       variant="outline" 
                       size="sm"
                       onPress={() => router.push({
-                        pathname: '/(shared)/session-summary',
+                        pathname: '/session-summary',
                         params: { id: booking._id || booking.id, status: booking.status }
                       })}
                     />

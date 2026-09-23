@@ -296,6 +296,7 @@ export default function ProfileScreen() {
   };
 
   const standardMenuItems = [
+    { id: 'tournaments', title: 'My Tournament Registrations', icon: 'trophy-outline', route: '/my-tournaments' },
     { id: 'referral', title: 'Refer & Share App', icon: 'share-social-outline', route: null },
     { id: 'settings', title: 'Settings & Preferences', icon: 'settings-outline', route: '/settings' },
     { id: 'logout', title: 'Sign Out', icon: 'log-out-outline', route: '/(auth)' },
@@ -303,6 +304,7 @@ export default function ProfileScreen() {
 
   const parentMenuItems = [
     { id: 'family', title: 'My Family Members', icon: 'people-outline', route: '/(parent)/family-tree' },
+    { id: 'tournaments', title: 'My Tournament Registrations', icon: 'trophy-outline', route: '/my-tournaments' },
     { id: 'referral', title: 'Refer & Share App', icon: 'share-social-outline', route: null },
     { id: 'settings', title: 'Settings & Preferences', icon: 'settings-outline', route: '/settings' },
     { id: 'logout', title: 'Sign Out', icon: 'log-out-outline', route: '/(auth)' },
@@ -320,6 +322,13 @@ export default function ProfileScreen() {
 
   const getMenuDetails = (id: string) => {
     switch (id) {
+      case 'tournaments':
+        return {
+          title: "My Tournament Registrations",
+          desc: "View your registered tournaments, schedules, and payment status",
+          color: "#FF5100", // Arenova Orange
+          bgColor: "bg-orange-50 border-orange-100/50"
+        };
       case 'wallet':
         return {
           title: "Wallet & Withdrawals",

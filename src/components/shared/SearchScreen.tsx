@@ -74,10 +74,10 @@ export default function FindCoachScreen() {
       <View className="px-4 py-4 flex-row justify-between items-center bg-white border-b border-gray-100 shadow-sm z-10">
         <TouchableOpacity 
           onPress={() => {
-            if (router.canGoBack()) {
+            try {
               router.back();
-            } else {
-              router.replace('/(parent)/(parent-tabs)/parent-dashboard');
+            } catch (e) {
+              router.replace('/');
             }
           }} 
           className="p-2 -ml-2"
@@ -147,7 +147,7 @@ export default function FindCoachScreen() {
               <TouchableOpacity 
                 key={coachId}
                 onPress={() => router.push({
-                  pathname: '/(shared)/coach-profile',
+                  pathname: '/coach-profile',
                   params: { id: coachId }
                 })}
                 activeOpacity={0.8}

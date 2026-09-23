@@ -23,7 +23,7 @@ export default function ReviewSuccessScreen() {
         <Button 
           title="Back to Sessions" 
           variant="white" 
-          onPress={() => router.replace('/(shared)/session-summary')} 
+          onPress={() => router.replace('/session-summary')} 
           className="w-full"
         />
       </View>

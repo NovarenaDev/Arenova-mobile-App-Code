@@ -395,7 +395,7 @@ export default function CoachActivityScreen() {
 
                 <TouchableOpacity
                   onPress={() => router.push({
-                    pathname: '/(shared)/session-summary',
+                    pathname: '/session-summary',
                     params: { 
                       id: booking.id,
                       status: 'requested',
@@ -420,7 +420,7 @@ export default function CoachActivityScreen() {
                     title="View Details" 
                     size="sm"
                     onPress={() => router.push({
-                      pathname: '/(shared)/session-summary',
+                      pathname: '/session-summary',
                       params: { 
                         id: booking.id,
                         status: activeTab === 'current' ? 'ongoing' : activeTab === 'upcoming' ? 'accepted' : booking.rawStatus,

@@ -1,4 +1,4 @@
-import SharedProfile from '../../(shared)/profile';
+import SharedProfile from '../../profile';
 
 export default function ParentProfileScreen() {
   return <SharedProfile />;

@@ -146,7 +146,7 @@ export default function PaymentScreen() {
 
         setIsProcessing(false);
         router.push({
-          pathname: '/(shared)/booking-confirmed',
+          pathname: '/booking-confirmed',
           params: {
             coachName: coachName || 'Coach',
             studentName: studentName || 'Attendee',

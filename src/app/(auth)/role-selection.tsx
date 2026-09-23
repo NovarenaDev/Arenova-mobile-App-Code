@@ -23,9 +23,9 @@ export default function RoleSelectionScreen() {
       <View className="flex-1 px-6 pt-4">
         
         <TouchableOpacity onPress={() => {
-          if (router.canGoBack()) {
+          try {
             router.back();
-          } else {
+          } catch (e) {
             router.replace('/(auth)');
           }
         }} className="mb-8 p-2 -ml-2">

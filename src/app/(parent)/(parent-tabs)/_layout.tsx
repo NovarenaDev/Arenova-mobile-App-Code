@@ -48,6 +48,13 @@ export default function ParentTabLayout() {
           tabBarIcon: ({ color }) => <Ionicons name="calendar-outline" size={24} color={color} />
         }}
       />
+      <Tabs.Screen 
+        name="tournaments" 
+        options={{ 
+          title: 'Tournaments',
+          tabBarIcon: ({ color }) => <Ionicons name="trophy-outline" size={24} color={color} />
+        }} 
+      />
       <Tabs.Screen
         name="profile"
         options={{

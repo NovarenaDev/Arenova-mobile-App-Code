@@ -158,7 +158,7 @@ export default function PublicCoachProfileScreen() {
         <Button 
           title="Book Session" 
           onPress={() => router.push({
-            pathname: '/(shared)/select-date',
+            pathname: '/select-date',
             params: { coachId: targetCoachId }
           })}
         />

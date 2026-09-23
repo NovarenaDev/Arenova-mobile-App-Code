@@ -141,9 +141,9 @@ export default function OTPScreen() {
         >
           
           <TouchableOpacity onPress={() => {
-            if (router.canGoBack()) {
+            try {
               router.back();
-            } else {
+            } catch (e) {
               router.replace('/(auth)/role-selection');
             }
           }} className="mb-8">

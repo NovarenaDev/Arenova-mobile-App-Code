@@ -102,7 +102,7 @@ export default function SelectPlayerScreen() {
     const attendeeNames = selectedPlayers.map(p => p.name).join(', ');
 
     router.push({
-      pathname: '/(shared)/session-summary',
+      pathname: '/session-summary',
       params: {
         ...searchParams,
         childId: firstChild ? firstChild.id : '',
