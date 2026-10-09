@@ -7,6 +7,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuthStore } from '@/store';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/services/api';
+import { SessionOtpVerificationModal } from '@/components/shared/SessionOtpVerificationModal';
 
 export default function SessionSummaryScreen() {
   const insets = useSafeAreaInsets();
@@ -45,8 +46,6 @@ export default function SessionSummaryScreen() {
 
   // State for Coach OTP Verification Modal
   const [showOtpVerifyModal, setShowOtpVerifyModal] = useState(false);
-  const [enteredOtp, setEnteredOtp] = useState('');
-  const [otpError, setOtpError] = useState('');
 
   const queryClient = useQueryClient();
 
@@ -190,15 +189,6 @@ export default function SessionSummaryScreen() {
     }
   });
 
-  const handleVerifyOtp = () => {
-    if (!enteredOtp || enteredOtp.trim().length !== 4) {
-      setOtpError('Please enter a valid 4-digit OTP.');
-      return;
-    }
-    setOtpError('');
-    setShowOtpVerifyModal(false);
-    updateStatusMutation.mutate('ongoing');
-  };
 
   return (
     <SafeAreaView className="flex-1 bg-[#EEF3F9]">
@@ -384,83 +374,23 @@ export default function SessionSummaryScreen() {
         )}
       </ScrollView>
 
-      {/* Coach Attendance OTP Verification Modal */}
-      <Modal
+      {/* Coach Individual / Group Attendance OTP Verification Modal */}
+      <SessionOtpVerificationModal
         visible={showOtpVerifyModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowOtpVerifyModal(false)}
-      >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-          <View style={{ backgroundColor: '#ffffff', borderRadius: 20, padding: 24, width: '100%', maxWidth: 360, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 12, elevation: 5 }}>
-            <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#FFF2EB', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-              <Ionicons name="key" size={24} color="#FF5100" />
-            </View>
-            <Typography variant="h3" color="secondary" weight="bold" className="font-outfit-bold mb-2">
-              Enter Attendance OTP
-            </Typography>
-            <Typography variant="body2" color="muted" className="font-outfit mb-4">
-              Ask {resolvedStudentName} for the 4-digit Attendance OTP shown on their screen to start this session.
-            </Typography>
-
-            <TextInput
-              style={{
-                backgroundColor: '#F3F4F6',
-                borderRadius: 12,
-                paddingHorizontal: 16,
-                paddingVertical: 14,
-                fontSize: 24,
-                fontWeight: 'bold',
-                textAlign: 'center',
-                letterSpacing: 8,
-                color: '#0F2C59',
-                borderWidth: 1,
-                borderColor: otpError ? '#EF4444' : '#E5E7EB',
-                marginBottom: 8
-              }}
-              placeholder="••••"
-              placeholderTextColor="#9CA3AF"
-              keyboardType="number-pad"
-              maxLength={4}
-              value={enteredOtp}
-              onChangeText={(t) => {
-                setEnteredOtp(t);
-                if (otpError) setOtpError('');
-              }}
-              autoFocus
-            />
-
-            {otpError ? (
-              <Typography variant="caption" style={{ color: '#EF4444', marginBottom: 12 }} className="font-outfit">
-                {otpError}
-              </Typography>
-            ) : null}
-
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 }}>
-              <TouchableOpacity
-                style={{ flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: '#F3F4F6', alignItems: 'center', marginRight: 8 }}
-                onPress={() => {
-                  setShowOtpVerifyModal(false);
-                  setEnteredOtp('');
-                  setOtpError('');
-                }}
-              >
-                <Typography variant="subtitle2" color="secondary" weight="bold" className="font-outfit-bold">
-                  Cancel
-                </Typography>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={{ flex: 1.5, paddingVertical: 12, borderRadius: 12, backgroundColor: '#FF5100', alignItems: 'center', marginLeft: 8 }}
-                onPress={handleVerifyOtp}
-              >
-                <Typography variant="subtitle2" style={{ color: '#FFFFFF' }} weight="bold" className="font-outfit-bold">
-                  Start Session
-                </Typography>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        session={{
+          id: id,
+          studentName: resolvedStudentName,
+          sport: resolvedSport,
+          date: resolvedDate,
+          time: resolvedTime,
+          type: (resolvedStudentName.includes(',') || resolvedSport.toLowerCase().includes('group')) ? 'group' : 'individual'
+        }}
+        onClose={() => setShowOtpVerifyModal(false)}
+        onSuccess={(res) => {
+          setShowOtpVerifyModal(false);
+          updateStatusMutation.mutate('ongoing');
+        }}
+      />
 
       {/* Footer Buttons */}
       <View className="p-4 bg-white border-t border-gray-100" style={{ paddingBottom: Math.max(insets.bottom + 16, 28) }}>

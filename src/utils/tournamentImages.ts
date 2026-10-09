@@ -21,7 +21,7 @@ export const getTournamentBanner = (t: any): string => {
     if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
       return rawUrl;
     }
-    const backendOrigin = 'https://arenova-backend-production-3192.up.railway.app';
+    const backendOrigin = 'http://16.112.182.86';
     return `${backendOrigin}${rawUrl.startsWith('/') ? '' : '/'}${rawUrl}`;
   }
 

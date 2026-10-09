@@ -46,6 +46,75 @@ export default function IndividualDashboard() {
   const allBookings = bookingsResponse?.data || [];
   const hasBookings = allBookings.length > 0;
 
+  // Fetch User/Player Banners from backend API
+  const { data: userBannersResponse } = useQuery({
+    queryKey: ['usersBanners'],
+    queryFn: async () => {
+      try {
+        const res = await api.get('/users/banners');
+        return res.data?.banners || res.data?.data || res.data;
+      } catch (e) {
+        return null;
+      }
+    }
+  });
+
+  const defaultPlayerBanners = [
+    {
+      id: '1',
+      title: 'Learn From Expert Coaches',
+      desc: 'Book 1-on-1 training slots with certified sports trainers near you.',
+      color: 'bg-primary',
+      icon: 'ribbon',
+      route: '/(individual)/search',
+      buttonText: 'Book Session'
+    },
+    {
+      id: '2',
+      title: 'Explore Sports Venues',
+      desc: 'Discover and reserve premium turfs, courts, and training complexes.',
+      color: 'bg-[#4B9C73]',
+      icon: 'location',
+      route: '/(individual)/venues',
+      buttonText: 'Find Venues'
+    },
+    {
+      id: '3',
+      title: 'Join Community Matches',
+      desc: 'Connect with local players, form teams, and join competitive games.',
+      color: 'bg-[#0F2C59]',
+      icon: 'people',
+      route: '/(individual)/community',
+      buttonText: 'Join Community'
+    }
+  ];
+
+  const serverPlayerBanners = Array.isArray(userBannersResponse) ? userBannersResponse.map((b: any, idx: number) => ({
+    id: b._id || b.id || idx.toString(),
+    title: b.title || b.name || 'Sports Update',
+    desc: b.description || b.desc || b.subtitle || 'Discover sports, venues, and coaches.',
+    color: idx % 3 === 0 ? 'bg-primary' : idx % 3 === 1 ? 'bg-[#4B9C73]' : 'bg-[#0F2C59]',
+    icon: idx % 3 === 0 ? 'ribbon' : idx % 3 === 1 ? 'location' : 'people',
+    route: b.route || b.link || b.targetUrl || '/(individual)/search',
+    buttonText: b.buttonText || b.ctaText || 'Explore Now',
+    imageUrl: b.imageUrl || b.image
+  })) : [];
+
+  const playerBanners = serverPlayerBanners.length > 0 ? serverPlayerBanners : defaultPlayerBanners;
+
+  const [activeBannerIndex, setActiveBannerIndex] = React.useState(0);
+  const bannerScrollRef = React.useRef<ScrollView>(null);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const nextIndex = (activeBannerIndex + 1) % playerBanners.length;
+      const width = require('react-native').Dimensions.get('window').width - 48;
+      bannerScrollRef.current?.scrollTo({ x: nextIndex * width, animated: true });
+      setActiveBannerIndex(nextIndex);
+    }, 3500);
+    return () => clearInterval(timer);
+  }, [activeBannerIndex, playerBanners.length]);
+
   return (
     <View className="flex-1 bg-[#EEF3F9]">
       <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} scrollEventThrottle={16} decelerationRate="normal" className="flex-1" contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 40, 60) }}>
@@ -72,24 +141,58 @@ export default function IndividualDashboard() {
           </View>
         </View>
 
-        {/* Find Coach Prominent Banner */}
-        <View className="mx-6 mt-6 bg-primary rounded-3xl p-5 shadow-sm overflow-hidden relative">
-          <View className="w-2/3">
-            <Typography variant="h3" color="white" weight="bold" className="mb-2 font-outfit-bold">
-              Learn From Expert Coaches
-            </Typography>
-            <Typography variant="caption" color="white" className="mb-4 opacity-90 leading-4 font-outfit">
-              Book personal training slots with expert sports coaches in your area.
-            </Typography>
-            <TouchableOpacity 
-              onPress={() => router.push('/(individual)/search')}
-              className="bg-secondary px-4 py-2 rounded-full self-start"
-            >
-              <Typography variant="body2" color="white" weight="bold" className="font-outfit-bold">Book Session</Typography>
-            </TouchableOpacity>
-          </View>
-          <View className="absolute -right-4 -bottom-4 opacity-20">
-            <Ionicons name="ribbon" size={130} color="white" />
+        {/* Dynamic Player Banner Carousel */}
+        <View className="mt-6 mx-6 relative">
+          <ScrollView
+            ref={bannerScrollRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onScroll={(e) => {
+              const slideSize = e.nativeEvent.layoutMeasurement.width;
+              if (slideSize > 0) {
+                const index = e.nativeEvent.contentOffset.x / slideSize;
+                setActiveBannerIndex(Math.round(index));
+              }
+            }}
+            scrollEventThrottle={16}
+          >
+            {playerBanners.map((banner) => (
+              <View 
+                key={banner.id}
+                className={`${banner.color} rounded-3xl p-5 shadow-sm overflow-hidden relative justify-between`}
+                style={{ width: require('react-native').Dimensions.get('window').width - 48, minHeight: 150 }}
+              >
+                <View className="w-2/3 z-10">
+                  <Typography variant="h3" color="white" weight="bold" className="mb-1 font-outfit-bold text-lg">
+                    {banner.title}
+                  </Typography>
+                  <Typography variant="caption" color="white" className="mb-3 opacity-90 leading-4 font-outfit text-xs">
+                    {banner.desc}
+                  </Typography>
+                  <TouchableOpacity 
+                    onPress={() => router.push(banner.route as any)}
+                    activeOpacity={0.8}
+                    className="bg-white px-4 py-2 rounded-full self-start shadow-xs"
+                  >
+                    <Typography variant="caption" color="secondary" weight="bold" className="font-outfit-bold text-xs">{banner.buttonText}</Typography>
+                  </TouchableOpacity>
+                </View>
+                <View className="absolute -right-4 -bottom-4 opacity-20 pointer-events-none">
+                  <Ionicons name={banner.icon as any} size={140} color="white" />
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+
+          {/* Carousel Indicator Dots */}
+          <View className="flex-row justify-center items-center mt-3">
+            {playerBanners.map((_, i) => (
+              <View 
+                key={i} 
+                className={`h-1.5 rounded-full mx-1 ${activeBannerIndex === i ? 'w-5 bg-primary' : 'w-1.5 bg-gray-300'}`} 
+              />
+            ))}
           </View>
         </View>
 

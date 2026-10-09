@@ -236,6 +236,9 @@ export default function ProfileScreen() {
     if (user?.role === 'coach') {
       const payload: any = {
         name,
+        phone,
+        phoneNumber: phone,
+        mobile: phone,
         bio: description,
         description,
         experience: parseInt(experience) || 0,

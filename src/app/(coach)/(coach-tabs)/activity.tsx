@@ -6,6 +6,7 @@ import { Typography, Button } from '@/components/ui';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/services/api';
+import { SessionOtpVerificationModal } from '@/components/shared/SessionOtpVerificationModal';
 
 export default function CoachActivityScreen() {
   const router = useRouter();
@@ -15,6 +16,9 @@ export default function CoachActivityScreen() {
   const [activeTab, setActiveTab] = useState<'upcoming' | 'current' | 'completed'>(
     (tab === 'current' || tab === 'completed' || tab === 'upcoming') ? (tab as any) : 'upcoming'
   );
+
+  // State for OTP Verification Modal
+  const [selectedSessionForOtp, setSelectedSessionForOtp] = useState<any | null>(null);
 
   useEffect(() => {
     if (tab && (tab === 'current' || tab === 'upcoming' || tab === 'completed')) {
@@ -414,8 +418,25 @@ export default function CoachActivityScreen() {
                 </TouchableOpacity>
               </View>
             ) : (
-              <View className="flex-row justify-end mt-1">
-                <View className="w-36">
+              <View className="flex-row justify-end mt-1 gap-2">
+                <TouchableOpacity
+                  onPress={() => setSelectedSessionForOtp({
+                    id: booking.id,
+                    studentName: booking.name,
+                    sport: booking.sport,
+                    date: booking.date,
+                    time: booking.time,
+                    type: booking.name.includes(',') || booking.subtitle.includes('Group') ? 'group' : 'individual'
+                  })}
+                  className="px-3 py-2 rounded-xl bg-orange-50 border border-orange-200 flex-row items-center justify-center active:opacity-80"
+                >
+                  <Ionicons name="key-outline" size={14} color="#FF5100" className="mr-1" />
+                  <Typography variant="caption" color="primary" weight="bold" className="text-xs font-outfit-bold">
+                    Verify OTP
+                  </Typography>
+                </TouchableOpacity>
+
+                <View className="w-32">
                   <Button 
                     title="View Details" 
                     size="sm"
@@ -439,6 +460,22 @@ export default function CoachActivityScreen() {
         )))}
 
       </ScrollView>
+
+      {/* INDIVIDUAL / GROUP SESSION OTP VERIFICATION MODAL */}
+      <SessionOtpVerificationModal
+        visible={!!selectedSessionForOtp}
+        session={selectedSessionForOtp}
+        onClose={() => setSelectedSessionForOtp(null)}
+        onSuccess={(res) => {
+          Alert.alert(
+            'Attendance Verified!',
+            res.mode === 'group'
+              ? `Group batch attendance verified (${res.verifiedCount} students). Session authorized!`
+              : 'Individual student OTP verified successfully!'
+          );
+          queryClient.invalidateQueries({ queryKey: ['coachSessions'] });
+        }}
+      />
     </SafeAreaView>
   );
 }

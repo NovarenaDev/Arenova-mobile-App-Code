@@ -10,7 +10,7 @@
   },
   "servers": [
     {
-      "url": "https://arenova-backend-production-3192.up.railway.app",
+      "url": "http://16.112.182.86",
       "description": "Production server (Railway)"
     }
   ],

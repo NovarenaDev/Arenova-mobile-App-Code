@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { View, ScrollView, TouchableOpacity, Modal } from 'react-native';
+import { View, ScrollView, TouchableOpacity, Modal, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Button } from '@/components/ui';
@@ -403,11 +403,36 @@ export default function CoachDashboard() {
     }
   ];
 
-  const banners = [
-    { id: '1', title: 'Welcome Coach!', desc: 'Register and start coaching kids in your local community.', color: 'bg-secondary' },
-    { id: '2', title: 'Boost Your Earnings', desc: 'Host group sessions this weekend to double your income.', color: 'bg-[#4B9C73]' },
-    { id: '3', title: 'New Feature Alert', desc: 'You can now set your availability by specific dates!', color: 'bg-[#F58220]', route: '/coach/schedule', buttonText: 'Set Availability' }
+  // Fetch Coach Banners from backend API
+  const { data: coachBannersResponse } = useQuery({
+    queryKey: ['coachAppBanners'],
+    queryFn: async () => {
+      try {
+        const res = await api.get('/coach-app/banners');
+        return res.data?.banners || res.data?.data || res.data;
+      } catch (e) {
+        return null;
+      }
+    }
+  });
+
+  const defaultBanners: Array<{ id: string; title: string; desc: string; color: string; route: string; buttonText: string; imageUrl?: string }> = [
+    { id: '1', title: 'Welcome Coach Partner!', desc: 'Complete KYC & Partner Agreement to start coaching students in your area.', color: 'bg-secondary', route: '/(coach)/onboarding', buttonText: 'KYC & Agreement', imageUrl: undefined },
+    { id: '2', title: 'Boost Group Session Earnings', desc: 'Host multi-student group batches this weekend to maximize your income.', color: 'bg-[#4B9C73]', route: '/(coach)/(coach-tabs)/schedule', buttonText: 'Manage Batches', imageUrl: undefined },
+    { id: '3', title: 'Verify Session OTPs Instantly', desc: 'Use individual or group batch OTP verification to confirm student attendance.', color: 'bg-[#F58220]', route: '/(coach)/(coach-tabs)/activity', buttonText: 'Verify OTP', imageUrl: undefined }
   ];
+
+  const serverBannersList = Array.isArray(coachBannersResponse) ? coachBannersResponse.map((b: any, idx: number) => ({
+    id: b._id || b.id || idx.toString(),
+    title: b.title || b.name || 'Coach Update',
+    desc: b.description || b.desc || b.subtitle || 'Check out new coaching opportunities.',
+    color: idx % 3 === 0 ? 'bg-secondary' : idx % 3 === 1 ? 'bg-[#4B9C73]' : 'bg-[#F58220]',
+    route: b.route || b.link || b.targetUrl || '/(coach)/(coach-tabs)/coach-dashboard',
+    buttonText: b.buttonText || b.ctaText || 'Learn More',
+    imageUrl: b.imageUrl || b.image
+  })) : [];
+
+  const banners = serverBannersList.length > 0 ? serverBannersList : defaultBanners;
 
   const [activeBannerIndex, setActiveBannerIndex] = React.useState(0);
   const bannerScrollRef = React.useRef<ScrollView>(null);
@@ -443,21 +468,28 @@ export default function CoachDashboard() {
             {banners.map((banner, index) => (
               <View 
                 key={banner.id} 
-                className={`${banner.color} pt-28 pb-16 rounded-b-3xl`}
+                className={`${banner.color} pt-28 pb-16 rounded-b-3xl relative overflow-hidden`}
                 style={{ width: require('react-native').Dimensions.get('window').width }}
               >
-                <View className="px-6 flex-row justify-between items-start">
+                {banner.imageUrl ? (
+                  <Image 
+                    source={{ uri: banner.imageUrl }} 
+                    style={{ position: 'absolute', width: '100%', height: '100%', opacity: 0.25 }}
+                    resizeMode="cover" 
+                  />
+                ) : null}
+                <View className="px-6 flex-row justify-between items-start z-10">
                   <View className="flex-1">
                     <Typography variant="h1" color="white" weight="bold" className="mb-2">
                       {banner.title}
                     </Typography>
-                    <Typography variant="body2" color="white" className="opacity-90">
+                    <Typography variant="body2" color="white" className="opacity-90 leading-5">
                       {banner.desc}
                     </Typography>
                     {banner.route && (
                       <TouchableOpacity 
                         onPress={() => router.push(banner.route as any)}
-                        className="mt-3 bg-white/20 self-start px-4 py-1.5 rounded-full"
+                        className="mt-3 bg-white/25 self-start px-4 py-1.5 rounded-full border border-white/30"
                       >
                         <Typography variant="caption" color="white" weight="bold">{banner.buttonText}</Typography>
                       </TouchableOpacity>
