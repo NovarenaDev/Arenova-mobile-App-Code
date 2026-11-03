@@ -192,14 +192,12 @@ export default function LocationsScreen() {
   const queryClient = useQueryClient();
   const { selectedLocationId, setSelectedLocationId } = useAuthStore();
 
-  // Screen Mode State ('list' | 'add' | 'edit')
   const [screenMode, setScreenMode] = useState<'list' | 'add' | 'edit'>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [mapModalVisible, setMapModalVisible] = useState(false);
   const [tempMapData, setTempMapData] = useState<any>(null);
   const [mapInitCoords, setMapInitCoords] = useState<{lat: number, lng: number} | null>(null);
 
-  // Form fields
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
@@ -207,12 +205,10 @@ export default function LocationsScreen() {
   const [longitude, setLongitude] = useState('');
   const [radius, setRadius] = useState('50');
 
-  // Form errors
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [listError, setListError] = useState<string | null>(null);
 
-  // Query locations
   const { data: locationsResponse, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['coachLocations'],
     queryFn: async () => {
@@ -223,7 +219,6 @@ export default function LocationsScreen() {
 
   const locations: LocationItem[] = locationsResponse?.data || [];
 
-  // Mutations
   const createMutation = useMutation({
     mutationFn: async (payload: any) => {
       const res = await api.post('/coach-app/locations', payload);
@@ -403,7 +398,6 @@ export default function LocationsScreen() {
     }
   };
 
-  // RENDERING MODE: LIST OF LOCATIONS
   if (screenMode === 'list') {
     return (
       <SafeAreaView className="flex-1 bg-[#EEF3F9]" edges={['top']}>
@@ -535,7 +529,6 @@ export default function LocationsScreen() {
     );
   }
 
-  // RENDERING MODE: ADD/EDIT FORM SCREEN
   return (
     <SafeAreaView className="flex-1 bg-white">
       {/* Form Header */}

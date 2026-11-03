@@ -21,7 +21,6 @@ export default function SelectSportScreen() {
     { id: '6', name: 'Fitness' },
   ];
 
-  // Fetch active sports list from API
   const { data: sportsResponse, isLoading } = useQuery({
     queryKey: ['activeSports'],
     queryFn: async () => {

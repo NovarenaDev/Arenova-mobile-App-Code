@@ -13,7 +13,7 @@ export default function IndividualDashboard() {
   const { user } = useAuthStore();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('tabPress' as any, () => {
@@ -24,7 +24,6 @@ export default function IndividualDashboard() {
     return unsubscribe;
   }, [navigation]);
 
-  // Fetch recommended coaches
   const { data: coachesResponse, isLoading: isLoadingCoaches } = useQuery({
     queryKey: ['featuredCoaches'],
     queryFn: async () => {
@@ -33,7 +32,6 @@ export default function IndividualDashboard() {
     }
   });
 
-  // Fetch user bookings
   const { data: bookingsResponse, isLoading: isLoadingBookings } = useQuery({
     queryKey: ['playerBookings'],
     queryFn: async () => {
@@ -46,7 +44,6 @@ export default function IndividualDashboard() {
   const allBookings = bookingsResponse?.data || [];
   const hasBookings = allBookings.length > 0;
 
-  // Fetch User/Player Banners from backend API
   const { data: userBannersResponse } = useQuery({
     queryKey: ['usersBanners'],
     queryFn: async () => {
@@ -103,7 +100,7 @@ export default function IndividualDashboard() {
   const playerBanners = serverPlayerBanners.length > 0 ? serverPlayerBanners : defaultPlayerBanners;
 
   const [activeBannerIndex, setActiveBannerIndex] = React.useState(0);
-  const bannerScrollRef = React.useRef<ScrollView>(null);
+  const bannerScrollRef = React.useRef<React.ComponentRef<typeof ScrollView>>(null);
 
   useEffect(() => {
     const timer = setInterval(() => {

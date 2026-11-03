@@ -15,14 +15,13 @@ export default function PaymentScreen() {
   const { user } = useAuthStore();
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Razorpay Modal States
   const [isRazorpayModalVisible, setIsRazorpayModalVisible] = useState(false);
   const [razorpayOrder, setRazorpayOrder] = useState<{
     orderId: string;
     amount: number;
     keyId: string;
+    currency?: string;
   } | null>(null);
-  const [isBridgedParent, setIsBridgedParent] = useState(false);
 
   const { 
     slotId, 
@@ -48,9 +47,8 @@ export default function PaymentScreen() {
     totalAmount?: string;
   }>();
 
-  const sessionFee = Number(price || 400);
-  const platformFee = 50;
-  const computedTotal = Number(totalAmount) || (sessionFee + platformFee);
+  const sessionFee = Number(totalAmount || price || 400);
+  const computedTotal = sessionFee;
 
   const handlePayment = async () => {
     if (!slotId) {
@@ -59,47 +57,29 @@ export default function PaymentScreen() {
     }
 
     setIsProcessing(true);
-    let bridgedRole = false;
 
     try {
-      // 1. Check if user is parent role. If so, bridge to 'player' on backend
-      const isParent = user?.role === 'parent';
-      if (isParent) {
-        await api.put('/users/me', { role: 'player' }).catch(() => {});
-        bridgedRole = true;
-        setIsBridgedParent(true);
-      }
-
-      // 2. Step 5.1: Create Payment Order on backend
       const orderPayload: any = { slotId };
       if (childId) {
         orderPayload.childId = childId;
       }
 
-      let orderRes;
-      try {
-        orderRes = await api.post('/bookings/create-order', orderPayload);
-      } catch (orderErr: any) {
-        orderRes = await api.post('/bookings/create-order', { slotId });
-      }
-
+      const orderRes = await api.post('/bookings/create-order', orderPayload);
       const orderData = orderRes.data?.data || orderRes.data;
       const orderId = orderData.orderId || orderData.id || `order_${Date.now()}`;
-      const amountPaise = orderData.amount || Math.round(computedTotal * 100);
-      const keyId = orderData.keyId || orderData.razorpayKeyId || RAZORPAY_KEY_ID;
+      const amountPaise = orderData.amountInPaise || orderData.amount || Math.round(computedTotal * 100);
+      const keyId = orderData.gatewayKeyId || orderData.keyId || RAZORPAY_KEY_ID;
+      const currency = orderData.currency || 'INR';
 
       setRazorpayOrder({
         orderId,
         amount: amountPaise,
-        keyId
+        keyId,
+        currency
       });
       setIsRazorpayModalVisible(true);
       setIsProcessing(false);
     } catch (err: any) {
-      if (bridgedRole) {
-        await api.put('/users/me', { role: 'parent' }).catch(() => {});
-        setIsBridgedParent(false);
-      }
       setIsProcessing(false);
       const serverMsg = err.response?.data?.message || err.message || 'Could not initialize payment order.';
       Alert.alert('Payment Order Error', serverMsg);
@@ -115,29 +95,20 @@ export default function PaymentScreen() {
         setIsProcessing(true);
 
         const verifyPayload: any = {
+          slotId: slotId,
           paymentOrderId: data.razorpay_order_id || razorpayOrder?.orderId,
           paymentTransactionId: data.razorpay_payment_id,
           paymentSignature: data.razorpay_signature,
-          slotId: slotId
         };
         if (childId) {
           verifyPayload.childId = childId;
         }
 
-        try {
-          await api.post('/bookings/verify-payment', verifyPayload);
-        } catch (verifyErr: any) {
-          delete verifyPayload.childId;
-          await api.post('/bookings/verify-payment', verifyPayload);
-        }
+        const verifyRes = await api.post('/bookings/verify-payment', verifyPayload);
+        const bookingData = verifyRes.data?.data || verifyRes.data;
+        const bookingId = bookingData?._id || bookingData?.id || '';
+        const attendanceOtp = bookingData?.attendanceOtp ? String(bookingData.attendanceOtp) : '';
 
-        // Restore parent role if bridged
-        if (isBridgedParent) {
-          await api.put('/users/me', { role: 'parent' }).catch(() => {});
-          setIsBridgedParent(false);
-        }
-
-        // Invalidate all booking queries so coach and user see the confirmed session
         queryClient.invalidateQueries({ queryKey: ['myBookings'] });
         queryClient.invalidateQueries({ queryKey: ['playerBookings'] });
         queryClient.invalidateQueries({ queryKey: ['parentBookings'] });
@@ -148,6 +119,8 @@ export default function PaymentScreen() {
         router.push({
           pathname: '/booking-confirmed',
           params: {
+            bookingId,
+            attendanceOtp,
             coachName: coachName || 'Coach',
             studentName: studentName || 'Attendee',
             sport: coachSport || 'Sports',
@@ -159,27 +132,17 @@ export default function PaymentScreen() {
         });
       } else if (data.status === 'cancelled') {
         setIsRazorpayModalVisible(false);
-        if (isBridgedParent) {
-          await api.put('/users/me', { role: 'parent' }).catch(() => {});
-          setIsBridgedParent(false);
-        }
         Alert.alert('Payment Cancelled', 'You cancelled the payment transaction.');
       } else if (data.status === 'failed') {
         setIsRazorpayModalVisible(false);
-        if (isBridgedParent) {
-          await api.put('/users/me', { role: 'parent' }).catch(() => {});
-          setIsBridgedParent(false);
-        }
         const errorDesc = data.error?.description || 'Transaction failed.';
         Alert.alert('Payment Failed', errorDesc);
       }
     } catch (err: any) {
       setIsRazorpayModalVisible(false);
-      if (isBridgedParent) {
-        await api.put('/users/me', { role: 'parent' }).catch(() => {});
-        setIsBridgedParent(false);
-      }
-      Alert.alert('Payment Error', 'An error occurred during payment processing.');
+      setIsProcessing(false);
+      const errorMsg = err?.response?.data?.message || err?.message || 'An error occurred during payment processing.';
+      Alert.alert('Payment Error', errorMsg);
     }
   };
 
@@ -350,14 +313,10 @@ export default function PaymentScreen() {
           </Typography>
           <View className="flex-row justify-between items-center mb-3">
             <Typography variant="body2" color="text" className="font-outfit">Coaching Session</Typography>
-            <Typography variant="body2" color="secondary" weight="semibold" className="font-outfit-semibold">₹{sessionFee}</Typography>
-          </View>
-          <View className="flex-row justify-between items-center mb-3">
-            <Typography variant="body2" color="text" className="font-outfit">Platform Fee</Typography>
-            <Typography variant="body2" color="secondary" weight="semibold" className="font-outfit-semibold">₹{platformFee}</Typography>
+            <Typography variant="body2" color="secondary" weight="semibold" className="font-outfit-semibold">₹{computedTotal}</Typography>
           </View>
           <View className="flex-row justify-between items-center pt-3 border-t border-gray-100 mt-2">
-            <Typography variant="subtitle1" color="secondary" weight="bold" className="font-outfit-bold">Total</Typography>
+            <Typography variant="subtitle1" color="secondary" weight="bold" className="font-outfit-bold">Total Amount</Typography>
             <Typography variant="subtitle1" color="primary" weight="bold" className="font-outfit-bold">₹{computedTotal}</Typography>
           </View>
         </View>
@@ -379,10 +338,6 @@ export default function PaymentScreen() {
         animationType="slide"
         onRequestClose={() => {
           setIsRazorpayModalVisible(false);
-          if (isBridgedParent) {
-            api.put('/users/me', { role: 'parent' }).catch(() => {});
-            setIsBridgedParent(false);
-          }
         }}
       >
         <SafeAreaView className="flex-1 bg-[#EEF3F9]">
@@ -396,10 +351,6 @@ export default function PaymentScreen() {
             <TouchableOpacity 
               onPress={() => {
                 setIsRazorpayModalVisible(false);
-                if (isBridgedParent) {
-                  api.put('/users/me', { role: 'parent' }).catch(() => {});
-                  setIsBridgedParent(false);
-                }
               }}
               className="p-1"
             >

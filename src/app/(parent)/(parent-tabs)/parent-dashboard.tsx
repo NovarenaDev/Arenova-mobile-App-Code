@@ -20,7 +20,7 @@ export default function ParentDashboard() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const queryClient = useQueryClient();
   const { user, children: storedChildren, removeChild } = useAuthStore();
 
@@ -87,7 +87,6 @@ export default function ParentDashboard() {
   const rawServer = childrenResponse?.data || childrenResponse?.children || (Array.isArray(childrenResponse) ? childrenResponse : []);
   const serverChildren: Child[] = Array.isArray(rawServer) ? rawServer : [];
 
-  // Merge server children with persistent AuthStore children
   const childrenMap = new Map<string, Child>();
   (storedChildren || []).forEach(c => childrenMap.set(c._id || c.name, c));
   serverChildren.forEach(c => childrenMap.set(c._id || c.name, c));
@@ -96,7 +95,6 @@ export default function ParentDashboard() {
   const selectedChild = children.find(c => c._id === activeChildFilter);
   const selectedSport = selectedChild?.sport;
 
-  // Fetch recommended coaches (filtered by child sport if selected)
   const { data: coachesResponse, isLoading: isLoadingCoaches } = useQuery({
     queryKey: ['featuredCoaches', selectedSport],
     queryFn: async () => {
@@ -107,7 +105,6 @@ export default function ParentDashboard() {
     }
   });
 
-  // Fetch user bookings
   const { data: bookingsResponse, isLoading: isLoadingBookings } = useQuery({
     queryKey: ['playerBookings'],
     queryFn: async () => {
@@ -524,7 +521,6 @@ export default function ParentDashboard() {
 }
 
 function ParentBannerCarousel({ router }: { router: any }) {
-  // Fetch User/Parent Banners from backend API
   const { data: userBannersResponse } = useQuery({
     queryKey: ['usersBanners'],
     queryFn: async () => {
@@ -581,7 +577,7 @@ function ParentBannerCarousel({ router }: { router: any }) {
   const parentBanners = serverParentBanners.length > 0 ? serverParentBanners : defaultParentBanners;
 
   const [activeBannerIndex, setActiveBannerIndex] = React.useState(0);
-  const bannerScrollRef = React.useRef<ScrollView>(null);
+  const bannerScrollRef = React.useRef<React.ComponentRef<typeof ScrollView>>(null);
 
   useEffect(() => {
     const timer = setInterval(() => {

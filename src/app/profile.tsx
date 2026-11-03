@@ -11,7 +11,7 @@ import * as ImagePicker from 'expo-image-picker';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const router = useRouter();
   const navigation = useNavigation();
 
@@ -25,7 +25,6 @@ export default function ProfileScreen() {
   }, [navigation]);
   const { user, logout, setUser } = useAuthStore();
 
-  // Inline editing state
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(user?.name || '');
   const [phone, setPhone] = useState(user?.phone || '');
@@ -60,7 +59,7 @@ export default function ProfileScreen() {
   };
 
   const queryClient = useQueryClient();
-  const { data: profile, isLoading: isProfileLoading } = useQuery({
+  const { data: profile, isLoading: isCoachLoading } = useQuery({
     queryKey: ['coachProfile'],
     queryFn: async () => {
       if (user?.role !== 'coach') return null;
@@ -70,8 +69,20 @@ export default function ProfileScreen() {
     enabled: user?.role === 'coach',
   });
 
+  const { data: userProfile, isLoading: isUserLoading } = useQuery({
+    queryKey: ['myProfile'],
+    queryFn: async () => {
+      if (user?.role === 'coach') return null;
+      const res = await api.get('/users/me');
+      return res.data?.data || res.data;
+    },
+    enabled: user?.role !== 'coach',
+  });
+
+  const isProfileLoading = user?.role === 'coach' ? isCoachLoading : isUserLoading;
+
   useEffect(() => {
-    if (profile) {
+    if (profile && user?.role === 'coach') {
       setName(profile.name || '');
       setPhone(profile.phone || profile.phoneNumber || '');
       setExperience(profile.profile?.experience ? profile.profile.experience.toString() : '');
@@ -81,17 +92,39 @@ export default function ProfileScreen() {
       if (profile.avatar || profile.profile?.avatar) {
         setAvatarUri(profile.avatar || profile.profile?.avatar);
       }
+    } else if (userProfile && user?.role !== 'coach') {
+      const uName = userProfile.name || (userProfile.firstName ? `${userProfile.firstName} ${userProfile.lastName || ''}`.trim() : user?.name || '');
+      setName(uName);
+      setPhone(userProfile.phone || userProfile.phoneNumber || user?.phone || '');
+      setLocation(userProfile.address || userProfile.location || user?.location || '');
+      if (userProfile.avatar) {
+        setAvatarUri(userProfile.avatar);
+      }
     }
-  }, [profile]);
+  }, [profile, userProfile, user?.role]);
 
   const displayProfile = {
-    name: user?.role === 'coach' ? (profile?.name || user?.name || 'Coach Name') : (user?.name || (user?.role === 'parent' ? 'Parent Profile' : 'Player Profile')),
-    email: user?.role === 'coach' ? (profile?.email || user?.email || 'N/A') : (user?.email || 'N/A'),
-    phone: user?.role === 'coach' ? (profile?.phone || profile?.phoneNumber || user?.phone || '') : (user?.phone || ''),
-    location: user?.role === 'coach' ? (profile?.profile?.address?.city || user?.location || 'N/A') : (user?.location || 'N/A'),
-    experience: user?.role === 'coach' ? (profile?.profile?.experience ? `${profile.profile.experience} Years` : (user?.experience || 'N/A')) : (user?.experience || 'N/A'),
-    sports: user?.role === 'coach' ? (profile?.profile?.sports || []) : (user?.sports || []),
-    description: user?.role === 'coach' ? (profile?.profile?.description || profile?.profile?.bio || user?.description || 'N/A') : (user?.description || 'N/A'),
+    name: user?.role === 'coach' 
+      ? (profile?.name || user?.name || 'Coach Name') 
+      : (userProfile?.name || (userProfile?.firstName ? `${userProfile.firstName} ${userProfile.lastName || ''}`.trim() : user?.name || (user?.role === 'parent' ? 'Parent Profile' : 'Player Profile'))),
+    email: user?.role === 'coach' 
+      ? (profile?.email || user?.email || 'N/A') 
+      : (userProfile?.email || user?.email || 'N/A'),
+    phone: user?.role === 'coach' 
+      ? (profile?.phone || profile?.phoneNumber || user?.phone || '') 
+      : (userProfile?.phone || userProfile?.phoneNumber || user?.phone || ''),
+    location: user?.role === 'coach' 
+      ? (profile?.profile?.address?.city || user?.location || 'N/A') 
+      : (userProfile?.address || user?.location || 'N/A'),
+    experience: user?.role === 'coach' 
+      ? (profile?.profile?.experience ? `${profile.profile.experience} Years` : (user?.experience || 'N/A')) 
+      : (user?.experience || 'N/A'),
+    sports: user?.role === 'coach' 
+      ? (profile?.profile?.sports || []) 
+      : (userProfile?.sports || user?.sports || []),
+    description: user?.role === 'coach' 
+      ? (profile?.profile?.description || profile?.profile?.bio || user?.description || 'N/A') 
+      : (user?.description || 'N/A'),
   };
 
   const descriptionWordCount = description.trim() === '' ? 0 : description.trim().split(/\s+/).length;
@@ -143,13 +176,13 @@ export default function ProfileScreen() {
       setIsEditing(false);
       Alert.alert('Success', 'Profile updated successfully!');
       if (user) {
-        const resolvedName = user?.role === 'coach' ? name : 
-                             (data?.data?.firstName || data?.firstName ? `${data.data?.firstName || data.firstName} ${data.data?.lastName || data.lastName}`.trim() : name);
+        const resolvedName = name.trim();
         setUser({
           ...user,
           name: resolvedName,
           email: data?.data?.email || data?.email || user.email,
-          phone: data?.data?.phone || data?.phone || user.phone,
+          phone: phone.trim() || data?.data?.phone || user.phone,
+          location: location.trim() || user.location,
           avatar: variables.avatar || user.avatar,
         });
       }
@@ -181,25 +214,26 @@ export default function ProfileScreen() {
   const handleCancelEdit = () => {
     setIsEditing(false);
     setSubmitError(null);
-    setName(user?.name || '');
-    setPhone(user?.phone || '');
-    setExperience(user?.experience || '');
-    setLocation(user?.location || '');
-    setDescription(user?.description || '');
-    setSports(user?.sports?.join(', ') || '');
-    setIdProof(user?.idProof || '');
-    setAvatarUri(user?.avatar || null);
 
-    if (profile) {
-      setName(profile.name || '');
-      setPhone(profile.phone || profile.phoneNumber || '');
+    if (user?.role === 'coach' && profile) {
+      setName(profile.name || user?.name || '');
+      setPhone(profile.phone || profile.phoneNumber || user?.phone || '');
       setExperience(profile.profile?.experience ? profile.profile.experience.toString() : '');
-      setLocation(profile.profile?.address?.city || '');
-      setDescription(profile.profile?.description || profile.profile?.bio || '');
+      setLocation(profile.profile?.address?.city || user?.location || '');
+      setDescription(profile.profile?.description || profile.profile?.bio || user?.description || '');
       setSports(profile.profile?.sports?.join(', ') || '');
-      if (profile.avatar || profile.profile?.avatar) {
-        setAvatarUri(profile.avatar || profile.profile?.avatar);
-      }
+      setAvatarUri(profile.avatar || profile.profile?.avatar || user?.avatar || null);
+    } else if (userProfile) {
+      const uName = userProfile.name || (userProfile.firstName ? `${userProfile.firstName} ${userProfile.lastName || ''}`.trim() : user?.name || '');
+      setName(uName);
+      setPhone(userProfile.phone || userProfile.phoneNumber || user?.phone || '');
+      setLocation(userProfile.address || userProfile.location || user?.location || '');
+      setAvatarUri(userProfile.avatar || user?.avatar || null);
+    } else {
+      setName(user?.name || '');
+      setPhone(user?.phone || '');
+      setLocation(user?.location || '');
+      setAvatarUri(user?.avatar || null);
     }
   };
 
@@ -278,17 +312,21 @@ export default function ProfileScreen() {
       updateProfileMutation.mutate(payload);
     } else {
       const nameParts = name.trim().split(/\s+/);
-      const firstName = nameParts[0] || '';
-      const lastName = nameParts.slice(1).join(' ') || '.';
+      const firstName = nameParts[0] || name.trim();
+      const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '.';
       
       const payload: any = {
         firstName,
         lastName,
-        email: user?.email || '',
-        phone,
-        address: location,
-        role: user?.role === 'parent' ? 'parent' : 'user'
+        name: name.trim(),
+        phone: phone.trim(),
+        address: location.trim(),
+        role: user?.role === 'parent' ? 'parent' : 'player'
       };
+
+      if (user?.email) {
+        payload.email = user.email;
+      }
 
       if (uploadedAvatarUrl || avatarUri) {
         payload.avatar = uploadedAvatarUrl || avatarUri;
@@ -299,6 +337,7 @@ export default function ProfileScreen() {
   };
 
   const standardMenuItems = [
+    { id: 'book_session', title: 'Book Another Session', icon: 'calendar-outline', route: null },
     { id: 'tournaments', title: 'My Tournament Registrations', icon: 'trophy-outline', route: '/my-tournaments' },
     { id: 'referral', title: 'Refer & Share App', icon: 'share-social-outline', route: null },
     { id: 'settings', title: 'Settings & Preferences', icon: 'settings-outline', route: '/settings' },
@@ -306,6 +345,7 @@ export default function ProfileScreen() {
   ];
 
   const parentMenuItems = [
+    { id: 'book_session', title: 'Book Another Session', icon: 'calendar-outline', route: null },
     { id: 'family', title: 'My Family Members', icon: 'people-outline', route: '/(parent)/family-tree' },
     { id: 'tournaments', title: 'My Tournament Registrations', icon: 'trophy-outline', route: '/my-tournaments' },
     { id: 'referral', title: 'Refer & Share App', icon: 'share-social-outline', route: null },
@@ -325,55 +365,70 @@ export default function ProfileScreen() {
 
   const getMenuDetails = (id: string) => {
     switch (id) {
+      case 'book_session':
+        return {
+          title: "Book Another Session",
+          desc: "Explore top certified coaches, reserve training slots, and elevate skills",
+          color: "#FF5100", // Arenova Orange
+          bgColor: "bg-orange-50 border-orange-100"
+        };
       case 'tournaments':
         return {
           title: "My Tournament Registrations",
           desc: "View your registered tournaments, schedules, and payment status",
           color: "#FF5100", // Arenova Orange
-          bgColor: "bg-orange-50 border-orange-100/50"
+          bgColor: "bg-orange-50 border-orange-100"
         };
       case 'wallet':
         return {
           title: "Wallet & Withdrawals",
           desc: "Manage balance, coaching earnings, and transfer payouts",
           color: "#10B981", // Emerald
-          bgColor: "bg-emerald-50 border-emerald-100/50"
+          bgColor: "bg-emerald-50 border-emerald-100"
         };
       case 'locations':
         return {
           title: "Coaching Locations",
           desc: "Configure your training arenas and map boundaries",
           color: "#F58220", // Orange
-          bgColor: "bg-orange-50 border-orange-100/50"
+          bgColor: "bg-orange-50 border-orange-100"
         };
       case 'family':
         return {
           title: "My Family Members",
           desc: "Register child profiles, update info, and manage family accounts",
           color: "#0D9488", // Teal
-          bgColor: "bg-teal-50 border-teal-100/50"
+          bgColor: "bg-teal-50 border-teal-100"
         };
       case 'settings':
         return {
           title: "Settings & Preferences",
           desc: "Manage help center support and legal documents",
           color: "#0F2C59", // Navy
-          bgColor: "bg-blue-50 border-blue-100/50"
+          bgColor: "bg-blue-50 border-blue-100"
         };
       case 'referral':
         return {
           title: "Refer & Share App",
           desc: "Invite your friends to Arenova and share your referral code",
           color: "#8B5CF6", // Purple
-          bgColor: "bg-purple-50 border-purple-100/50"
+          bgColor: "bg-purple-50 border-purple-100"
         };
       default:
         return {
           title: "Sign Out",
           desc: "Securely log out of your session on this device",
           color: "#EF4444", // Red
-          bgColor: "bg-red-50 border-red-100/50"
+          bgColor: "bg-red-50 border-red-100"
         };
+    }
+  };
+
+  const handleBookSession = () => {
+    if (user?.role === 'parent') {
+      router.push('/(parent)/select-sport');
+    } else {
+      router.push('/(individual)/select-sport');
     }
   };
 
@@ -400,7 +455,7 @@ export default function ProfileScreen() {
     }
 
     const resolvedName = displayProfile.name;
-    if (!resolvedName || resolvedName.trim() === '' || resolvedName === 'Coach Name' || resolvedName === 'User Profile') {
+    if (!resolvedName || resolvedName.trim() === '' || resolvedName === 'Coach Name' || resolvedName === 'User Profile' || resolvedName === 'Parent Profile' || resolvedName === 'Player Profile') {
       return <Ionicons name="person-circle-outline" size={68} color="white" />;
     }
 
@@ -466,14 +521,14 @@ export default function ProfileScreen() {
         </View>
 
         <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" scrollEventThrottle={16} decelerationRate="normal" className="flex-1 px-4 pt-4" contentContainerStyle={{ flexGrow: 1, paddingBottom: Math.max(insets.bottom + 40, 60) }}>
-          {user?.role === 'coach' && isProfileLoading ? (
+          {isProfileLoading ? (
             <ActivityIndicator size="large" color="#FF5100" style={{ marginTop: 40 }} />
           ) : (
             <>
               {/* On-Screen Error Banner */}
               {submitError && (
                 <View className="mb-4 bg-red-50 border border-red-200 rounded-2xl p-4 flex-row items-start shadow-sm">
-                  <Ionicons name="alert-circle" size={20} color="#EF4444" className="mr-2.5 mt-0.5" />
+                  <Ionicons name="alert-circle" size={20} color="#EF4444" style={{ marginRight: 10, marginTop: 2 }} />
                   <View className="flex-1">
                     <Typography variant="subtitle2" weight="bold" className="font-outfit-bold text-red-800">
                       Update Failed
@@ -523,7 +578,7 @@ export default function ProfileScreen() {
                         {displayProfile.phone}
                       </Typography>
                       {displayProfile.phone ? (
-                        <Ionicons name="checkmark-circle" size={14} color="#10B981" className="ml-1.5" />
+                        <Ionicons name="checkmark-circle" size={14} color="#10B981" style={{ marginLeft: 6 }} />
                       ) : null}
                     </View>
                   </View>
@@ -546,7 +601,7 @@ export default function ProfileScreen() {
                   <View className="flex-row pt-4 mt-4 border-t border-white/10">
                     <View className="flex-1 items-center border-r border-white/10">
                       <View className="flex-row items-center mb-0.5">
-                        <Ionicons name="star" size={14} color="#F59E0B" className="mr-1" />
+                        <Ionicons name="star" size={14} color="#F59E0B" style={{ marginRight: 4 }} />
                         <Typography variant="subtitle1" color="white" weight="bold" className="font-outfit-bold">
                           {profile?.profile?.rating !== undefined ? profile.profile.rating.toFixed(1) : '0.0'}
                         </Typography>
@@ -765,6 +820,39 @@ export default function ProfileScreen() {
                 </View>
               )}
 
+              {/* Book Another Session Quick Action Banner for Players & Parents */}
+              {user?.role !== 'coach' && !isEditing && (
+                <View className="bg-white rounded-3xl p-5 mb-5 shadow-sm border border-gray-100">
+                  <View className="flex-row items-center">
+                    <View className="w-12 h-12 rounded-2xl bg-orange-50 border border-orange-100 items-center justify-center mr-3">
+                      <Ionicons name="calendar" size={24} color="#FF5100" />
+                    </View>
+                    <View className="flex-1">
+                      <Typography variant="subtitle1" color="secondary" weight="bold" className="font-outfit-bold">
+                        Book Another Session
+                      </Typography>
+                      <Typography variant="caption" color="muted" className="mt-0.5 font-outfit leading-4">
+                        {user?.role === 'parent'
+                          ? 'Find certified coaches and book new coaching slots for your kids.'
+                          : 'Find top certified coaches and reserve your next training session.'}
+                      </Typography>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    onPress={handleBookSession}
+                    activeOpacity={0.8}
+                    className="mt-4 w-full bg-primary py-3.5 rounded-2xl flex-row items-center justify-center shadow-sm"
+                  >
+                    <Ionicons name="flash-outline" size={18} color="white" style={{ marginRight: 8 }} />
+                    <Typography variant="subtitle2" color="white" weight="bold" className="font-outfit-bold">
+                      Book Session Now
+                    </Typography>
+                    <Ionicons name="arrow-forward" size={16} color="white" style={{ marginLeft: 6 }} />
+                  </TouchableOpacity>
+                </View>
+              )}
+
               {/* Save Changes Buttons */}
               {isEditing && (
                 <View className="mb-6 flex-row gap-3">
@@ -800,6 +888,8 @@ export default function ProfileScreen() {
                       setIsLogoutModalVisible(true);
                     } else if (item.id === 'referral') {
                       setIsReferralModalVisible(true);
+                    } else if (item.id === 'book_session') {
+                      handleBookSession();
                     } else if (item.route) {
                       router.push(item.route as any);
                     }
@@ -877,9 +967,10 @@ export default function ProfileScreen() {
               </View>
               <TouchableOpacity 
                 onPress={handleCopyReferralCode}
-                className="bg-white px-4 py-2 rounded-full border border-purple-200 active:bg-purple-50 flex-row items-center"
+                activeOpacity={0.7}
+                className="bg-white px-4 py-2 rounded-full border border-purple-200 flex-row items-center"
               >
-                <Ionicons name="copy-outline" size={14} color="#8B5CF6" className="mr-1.5" />
+                <Ionicons name="copy-outline" size={14} color="#8B5CF6" style={{ marginRight: 6 }} />
                 <Typography variant="caption" color="secondary" weight="bold" className="font-outfit-bold text-purple-600 text-xs">Copy</Typography>
               </TouchableOpacity>
             </View>
@@ -888,9 +979,10 @@ export default function ProfileScreen() {
             <View className="space-y-3">
               <TouchableOpacity 
                 onPress={handleShareWhatsApp}
-                className="w-full bg-[#25D366] h-14 rounded-full flex-row items-center justify-center active:opacity-90"
+                activeOpacity={0.8}
+                className="w-full bg-[#25D366] h-14 rounded-full flex-row items-center justify-center"
               >
-                <Ionicons name="logo-whatsapp" size={20} color="white" className="mr-2" />
+                <Ionicons name="logo-whatsapp" size={20} color="white" style={{ marginRight: 8 }} />
                 <Typography color="white" weight="bold" className="font-outfit-bold">
                   Share via WhatsApp
                 </Typography>
@@ -898,9 +990,10 @@ export default function ProfileScreen() {
 
               <TouchableOpacity 
                 onPress={handleShareReferral}
-                className="w-full bg-secondary h-14 rounded-full flex-row items-center justify-center active:opacity-90 border border-secondary"
+                activeOpacity={0.8}
+                className="w-full bg-secondary h-14 rounded-full flex-row items-center justify-center border border-secondary"
               >
-                <Ionicons name="share-social-outline" size={20} color="white" className="mr-2" />
+                <Ionicons name="share-social-outline" size={20} color="white" style={{ marginRight: 8 }} />
                 <Typography color="white" weight="bold" className="font-outfit-bold">
                   Other Share Options
                 </Typography>

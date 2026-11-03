@@ -2,8 +2,8 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { useAuthStore } from '../store';
 
-// We'll use a mocked base URL or environment variable later
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://16.112.182.86/api';
+// Default base URL pointing to live HTTPS API domain
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api.getarenova.com/api';
 
 export const RAZORPAY_KEY_ID = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_TYbWhPnXGMgB0p';
 
@@ -25,6 +25,9 @@ api.interceptors.request.use(
       } else {
         config.headers.Authorization = `Bearer ${token}`;
       }
+    }
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
     }
     return config;
   },

@@ -42,7 +42,6 @@ export default function AddChildScreen() {
     ? [coachSport, ...baseSports.filter(s => s.toLowerCase() !== coachSport.toLowerCase())]
     : baseSports;
 
-  // POST /api/users/me/children (Add child)
   const createChildMutation = useMutation({
     mutationFn: async (payload: { name: string; age: number; sport?: string; school?: string }) => {
       const res = await api.post('/users/me/children', payload);
@@ -58,12 +57,9 @@ export default function AddChildScreen() {
         school: school.trim() || undefined
       };
 
-      // Persist in AuthStore & SecureStore
       addChild(createdChild);
-
       queryClient.invalidateQueries({ queryKey: ['children'] });
 
-      // If in booking flow, immediately assign this child to the session
       if (params.slotId) {
         Alert.alert('Child Added', `${name.trim()} has been added and assigned to this session.`);
         router.replace({
@@ -84,7 +80,6 @@ export default function AddChildScreen() {
     }
   });
 
-  // PUT /api/users/me/children/{childId} (Update child)
   const updateChildMutation = useMutation({
     mutationFn: async (payload: { name: string; age: number; sport?: string; school?: string }) => {
       const res = await api.put(`/users/me/children/${childId}`, payload);
@@ -107,7 +102,6 @@ export default function AddChildScreen() {
       router.back();
     },
     onError: (err: any) => {
-      // Fallback if backend returns 404 for mock ID
       const updatedChild = {
         _id: childId,
         id: childId,
@@ -123,7 +117,6 @@ export default function AddChildScreen() {
     }
   });
 
-  // DELETE /api/users/me/children/{childId} (Remove child)
   const deleteChildMutation = useMutation({
     mutationFn: async () => {
       const res = await api.delete(`/users/me/children/${childId}`);
@@ -136,7 +129,6 @@ export default function AddChildScreen() {
       router.back();
     },
     onError: (err: any) => {
-      // Fallback for local mock deletion
       removeChild(childId);
       queryClient.invalidateQueries({ queryKey: ['children'] });
       Alert.alert('Profile Removed', 'Child profile has been removed.');

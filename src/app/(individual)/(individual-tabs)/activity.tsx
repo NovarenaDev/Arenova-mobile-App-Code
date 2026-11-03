@@ -12,7 +12,6 @@ export default function BookingsScreen() {
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<'upcoming' | 'completed'>('upcoming');
 
-  // Fetch bookings list
   const { data: bookingsResponse, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['playerBookings'],
     queryFn: async () => {
@@ -23,7 +22,6 @@ export default function BookingsScreen() {
 
   const allBookings = bookingsResponse?.data || [];
 
-  // Filter bookings based on status
   const upcomingBookings = allBookings.filter((b: any) => 
     b.status === 'requested' || 
     b.status === 'accepted' || 
@@ -147,19 +145,34 @@ export default function BookingsScreen() {
                   </View>
                 </View>
 
-                <View className="flex-row justify-between items-center mb-4">
+                <View className="flex-row justify-between items-center mb-3">
                   <View className="flex-row items-center">
                     <Ionicons name="calendar-outline" size={16} color="#6B7280" className="mr-2" />
-                    <Typography variant="body2" color="text" className="font-outfit">{booking.date}</Typography>
+                    <Typography variant="body2" color="text" className="font-outfit">
+                      {booking.slot?.date || booking.date || (booking.createdAt ? new Date(booking.createdAt).toLocaleDateString() : 'Scheduled')}
+                    </Typography>
                   </View>
                   <View className="flex-row items-center">
                     <Ionicons name="time-outline" size={16} color="#6B7280" className="mr-2" />
-                    <Typography variant="body2" color="text" className="font-outfit">{booking.time}</Typography>
+                    <Typography variant="body2" color="text" className="font-outfit">
+                      {booking.slot?.startTime ? `${booking.slot.startTime} - ${booking.slot.endTime}` : (booking.time || booking.startTime || 'Scheduled Time')}
+                    </Typography>
                   </View>
                 </View>
 
-                <View className="flex-row justify-end mt-1">
-                  <View className="w-36">
+                <View className="flex-row justify-between items-center mt-1 pt-2 border-t border-gray-50">
+                  {booking.attendanceOtp && (booking.status === 'confirmed' || booking.status === 'accepted') ? (
+                    <View className="bg-orange-50 px-3 py-1.5 rounded-xl border border-orange-200 flex-row items-center">
+                      <Ionicons name="key-outline" size={13} color="#FF5100" className="mr-1.5" />
+                      <Typography variant="caption" className="text-orange-900 font-bold font-outfit-bold text-xs tracking-wider">
+                        OTP: {booking.attendanceOtp}
+                      </Typography>
+                    </View>
+                  ) : (
+                    <View />
+                  )}
+
+                  <View className="w-32">
                     <Button 
                       title="View Details" 
                       variant="outline" 

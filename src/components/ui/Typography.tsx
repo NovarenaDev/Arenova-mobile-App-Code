@@ -55,14 +55,12 @@ export const Typography: React.FC<TypographyProps> = ({
   const variantClass = getVariantClasses(variant);
   const colorClass = getColorClasses(color);
   
-  // Custom font weight overrides the variant's default
   let weightClass = 'font-outfit';
   if (weight === 'normal') weightClass = 'font-outfit';
   else if (weight === 'medium') weightClass = 'font-outfit-medium';
   else if (weight === 'semibold') weightClass = 'font-outfit-semibold';
   else if (weight === 'bold') weightClass = 'font-outfit-bold';
   else {
-    // Determine from variant class if no explicit weight was provided
     if (variantClass.includes('font-bold')) weightClass = 'font-outfit-bold';
     else if (variantClass.includes('font-semibold')) weightClass = 'font-outfit-semibold';
     else if (variantClass.includes('font-medium')) weightClass = 'font-outfit-medium';

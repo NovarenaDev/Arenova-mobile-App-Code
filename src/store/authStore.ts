@@ -12,6 +12,7 @@ interface User {
   role: UserRole;
   isRegistered: boolean; // false if only OTP verified but profile not complete
   password?: string;
+  hasPassword?: boolean;
   sports?: string[];
   location?: string;
   achievements?: string;

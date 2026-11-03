@@ -39,6 +39,22 @@ export default function ScheduleScreen() {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingSlotId, setEditingSlotId] = useState<string | null>(null);
   
+  const { data: profileResponse } = useQuery({
+    queryKey: ['coachProfile'],
+    queryFn: async () => {
+      const res = await api.get('/coaches/my/profile');
+      return res.data?.data || res.data;
+    }
+  });
+
+  const { data: locationsResponse } = useQuery({
+    queryKey: ['coachLocations'],
+    queryFn: async () => {
+      const res = await api.get('/coach-app/locations');
+      return res.data?.data || res.data || [];
+    }
+  });
+
   // Form States
   const [newTitle, setNewTitle] = useState('');
   const [locationName, setLocationName] = useState('');
@@ -134,7 +150,6 @@ export default function ScheduleScreen() {
     }
   };
 
-  // Explicit parameters passed in mutationFn to completely prevent React stale closures
   const createSlotMutation = useMutation({
     mutationFn: async (payload: {
       editingId: string | null;
@@ -148,42 +163,62 @@ export default function ScheduleScreen() {
       startTime: Date;
       endTime: Date;
     }) => {
-      // If we are editing, delete the old schedule first (cancellation of the slot)
       if (payload.editingId) {
-        const delRes = await api.delete(`/coach-app/schedules/${payload.editingId}`);
-        if (delRes.data && delRes.data.success === false) {
-          throw new Error(delRes.data.message || 'Failed to cancel the existing schedule');
-        }
+        await api.delete(`/coach-app/schedules/${payload.editingId}`).catch(() => {});
       }
 
-      // 1. Create Location
-      const locResponse = await api.post('/coach-app/locations', {
-        name: payload.locationName || "Default Location",
-        city: payload.locationCity || "City",
-        address: payload.locationAddress || "Address",
-        latitude: 0,
-        longitude: 0
-      });
-      const locationId = locResponse.data?.data?._id || locResponse.data?.data?.id || locResponse.data?._id || locResponse.data?.id;
+      let locationId = '';
+      const existingLocs = locationsResponse || [];
+      const matchingLoc = existingLocs.find((l: any) => l.name?.toLowerCase() === payload.locationName?.toLowerCase());
+
+      if (matchingLoc) {
+        locationId = matchingLoc._id || matchingLoc.id;
+      } else {
+        const locResponse = await api.post('/coach-app/locations', {
+          name: payload.locationName || "Sports Facility",
+          city: payload.locationCity || "City",
+          address: payload.locationAddress || "Address",
+          latitude: 17.385,
+          longitude: 78.4867
+        });
+        locationId = locResponse.data?.data?._id || locResponse.data?.data?.id || locResponse.data?._id || locResponse.data?.id;
+      }
 
       if (!locationId) {
-        throw new Error(`Could not resolve locationId`);
+        throw new Error('Could not resolve location reference.');
       }
 
-      // 2. Create Schedule
-      const schedPayload = {
-        locationId,
-        title: payload.title,
-        startDate: payload.startDate, // "YYYY-MM-DD"
-        endDate: payload.endDate || payload.startDate,
-        daysOfWeek: ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"], // Simplified
-        startTime: formatTime24(payload.startTime),
-        endTime: formatTime24(payload.endTime),
-        capacity: parseInt(payload.capacity) || 1
-      };
-      
-      const schedResponse = await api.post('/coach-app/schedules', schedPayload);
-      return schedResponse.data;
+      const sport = profileResponse?.sports?.[0] || 'Badminton';
+      const cap = parseInt(payload.capacity) || 1;
+      const isSingleSlot = !payload.endDate || payload.startDate === payload.endDate;
+
+      if (isSingleSlot) {
+        const sessionPayload = {
+          locationId,
+          title: payload.title,
+          date: payload.startDate,
+          startTime: formatTime24(payload.startTime),
+          endTime: formatTime24(payload.endTime),
+          capacity: cap,
+          sport
+        };
+        const res = await api.post('/coach-app/sessions', sessionPayload);
+        return res.data;
+      } else {
+        const schedPayload = {
+          locationId,
+          title: payload.title,
+          startDate: payload.startDate,
+          endDate: payload.endDate,
+          daysOfWeek: ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"],
+          startTime: formatTime24(payload.startTime),
+          endTime: formatTime24(payload.endTime),
+          capacity: cap,
+          sport
+        };
+        const schedResponse = await api.post('/coach-app/schedules', schedPayload);
+        return schedResponse.data;
+      }
     },
     onSuccess: () => {
       refetchSchedules();
@@ -586,6 +621,16 @@ export default function ScheduleScreen() {
                       error={formErrors.locationAddress}
                     />
                   </View>
+                </View>
+
+                {/* Approved Price Info Banner */}
+                <View className="mb-4 bg-orange-50 border border-orange-200 rounded-xl p-3 flex-row items-center">
+                  <Ionicons name="pricetag-outline" size={18} color="#FF5100" className="mr-2" />
+                  <Typography variant="caption" className="font-outfit text-orange-950 flex-1">
+                    {parseInt(capacity) > 1
+                      ? `Approved Group Price: ₹${profileResponse?.groupPricePerPerson || 300} / person`
+                      : `Approved Individual Price: ₹${profileResponse?.individualPrice || 400}`}
+                  </Typography>
                 </View>
 
                 <View className="flex-row gap-4 mb-4">

@@ -19,7 +19,6 @@ export default function CommunityScreen() {
   const [postMediaUrl, setPostMediaUrl] = useState('');
   const [selectedCommunityId, setSelectedCommunityId] = useState<string | null>(null);
 
-  // Fetch Community Posts
   const { data: postsData, isLoading: isLoadingPosts, refetch: refetchPosts, isRefetching: isRefetchingPosts } = useQuery({
     queryKey: ['communityPosts'],
     queryFn: async () => {
@@ -34,7 +33,6 @@ export default function CommunityScreen() {
     enabled: activeTab === 'feed'
   });
 
-  // Fetch Public Coaching Communities
   const { data: communitiesData, isLoading: isLoadingCommunities, refetch: refetchCommunities } = useQuery({
     queryKey: ['publicCommunities'],
     queryFn: async () => {
@@ -49,7 +47,6 @@ export default function CommunityScreen() {
     enabled: activeTab === 'programs'
   });
 
-  // Fetch Single Community details
   const { data: communityDetail, isLoading: isLoadingDetail } = useQuery({
     queryKey: ['publicCommunityDetail', selectedCommunityId],
     queryFn: async () => {
@@ -65,7 +62,6 @@ export default function CommunityScreen() {
     enabled: !!selectedCommunityId
   });
 
-  // Create Post mutation
   const createPostMutation = useMutation({
     mutationFn: async (payload: { text: string; mediaUrl?: string }) => {
       const res = await api.post('/community', payload);
@@ -83,7 +79,6 @@ export default function CommunityScreen() {
     }
   });
 
-  // Like Post mutation
   const likePostMutation = useMutation({
     mutationFn: async (postId: string) => {
       const res = await api.put(`/community/${postId}/like`);
@@ -94,7 +89,6 @@ export default function CommunityScreen() {
     }
   });
 
-  // Delete Post mutation
   const deletePostMutation = useMutation({
     mutationFn: async (postId: string) => {
       const res = await api.delete(`/community/${postId}`);

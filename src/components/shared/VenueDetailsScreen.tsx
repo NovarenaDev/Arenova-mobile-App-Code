@@ -12,7 +12,6 @@ export default function VenueDetailsScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
 
-  // Fetch venue detail by ID
   const { data: venueResponse, isLoading, error } = useQuery({
     queryKey: ['venueDetail', id],
     queryFn: async () => {

@@ -38,28 +38,28 @@ export default function CoachTabLayout() {
         name="coach-dashboard" 
         options={{ 
           title: 'Home',
-          tabBarIcon: ({ color }) => <Ionicons name="home-outline" size={24} color={color} />
+          tabBarIcon: ({ color }) => <Ionicons name="home-outline" size={24} color={typeof color === 'string' ? color : undefined} />
         }} 
       />
       <Tabs.Screen 
         name="schedule" 
         options={{ 
           title: 'Availability',
-          tabBarIcon: ({ color }) => <Ionicons name="time-outline" size={24} color={color} />
+          tabBarIcon: ({ color }) => <Ionicons name="time-outline" size={24} color={typeof color === 'string' ? color : undefined} />
         }} 
       />
       <Tabs.Screen 
         name="activity" 
         options={{ 
           title: 'Activity',
-          tabBarIcon: ({ color }) => <Ionicons name="list-outline" size={24} color={color} />
+          tabBarIcon: ({ color }) => <Ionicons name="list-outline" size={24} color={typeof color === 'string' ? color : undefined} />
         }} 
       />
       <Tabs.Screen 
         name="profile"
         options={{ 
           title: 'Profile',
-          tabBarIcon: ({ color }) => <Ionicons name="person-outline" size={24} color={color} />
+          tabBarIcon: ({ color }) => <Ionicons name="person-outline" size={24} color={typeof color === 'string' ? color : undefined} />
         }} 
       />
     </Tabs>

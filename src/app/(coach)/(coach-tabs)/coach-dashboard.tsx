@@ -12,7 +12,7 @@ export default function CoachDashboard() {
   const router = useRouter();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('tabPress' as any, () => {
@@ -26,7 +26,6 @@ export default function CoachDashboard() {
   const [metricsModalVisible, setMetricsModalVisible] = React.useState(false);
   const [selectedMetricTab, setSelectedMetricTab] = React.useState<'earnings' | 'sessions' | 'rating'>('earnings');
 
-  // Coach Communities & Programs State & Queries
   const [selectedProgramForSubscribers, setSelectedProgramForSubscribers] = React.useState<string | null>(null);
   const [selectedProgramTitle, setSelectedProgramTitle] = React.useState<string>('Program');
   const [subscribersModalVisible, setSubscribersModalVisible] = React.useState(false);
@@ -104,7 +103,6 @@ export default function CoachDashboard() {
     }
   });
 
-  // 1. GET /api/coach-app/communities
   const { data: communitiesResponse, refetch: refetchCommunities } = useQuery({
     queryKey: ['coachCommunities'],
     queryFn: async () => {
@@ -118,7 +116,6 @@ export default function CoachDashboard() {
     }
   });
 
-  // 2. GET /api/coach-app/salary-history
   const { data: salaryHistoryResponse } = useQuery({
     queryKey: ['coachSalaryHistory'],
     queryFn: async () => {
@@ -132,7 +129,6 @@ export default function CoachDashboard() {
     }
   });
 
-  // 3. GET /api/coach-app/programs/{programId}/subscribers
   const { data: subscribersResponse, isLoading: isLoadingSubscribers } = useQuery({
     queryKey: ['programSubscribers', selectedProgramForSubscribers],
     queryFn: async () => {
@@ -148,7 +144,6 @@ export default function CoachDashboard() {
     enabled: !!selectedProgramForSubscribers
   });
 
-  // 4. POST /api/coach-app/programs/{programId}/attendance/start
   const handleStartAttendance = async (programId: string) => {
     try {
       setStartingAttendanceLoading(programId);
@@ -157,7 +152,6 @@ export default function CoachDashboard() {
       refetchCommunities();
       alert('Community Session Started successfully!');
     } catch (error: any) {
-      // Fallback state if server returns error or offline mock
       const msg = error.response?.data?.message || 'Started session for community program.';
       setActiveSessionProgramId(programId);
       alert(msg);
@@ -166,7 +160,6 @@ export default function CoachDashboard() {
     }
   };
 
-  // 5. POST /api/coach-app/programs/{programId}/attendance/end
   const handleEndAttendance = async (programId: string) => {
     try {
       setEndingAttendanceLoading(programId);
@@ -183,7 +176,6 @@ export default function CoachDashboard() {
     }
   };
 
-  // Process data strictly from API responses (no dummy fallback data)
   const displayCommunities = Array.isArray(communitiesResponse?.data) 
     ? communitiesResponse.data 
     : Array.isArray(communitiesResponse) 
@@ -403,7 +395,6 @@ export default function CoachDashboard() {
     }
   ];
 
-  // Fetch Coach Banners from backend API
   const { data: coachBannersResponse } = useQuery({
     queryKey: ['coachAppBanners'],
     queryFn: async () => {
@@ -435,7 +426,7 @@ export default function CoachDashboard() {
   const banners = serverBannersList.length > 0 ? serverBannersList : defaultBanners;
 
   const [activeBannerIndex, setActiveBannerIndex] = React.useState(0);
-  const bannerScrollRef = React.useRef<ScrollView>(null);
+  const bannerScrollRef = React.useRef<React.ComponentRef<typeof ScrollView>>(null);
 
   React.useEffect(() => {
     const timer = setInterval(() => {
@@ -1346,7 +1337,7 @@ export default function CoachDashboard() {
         </View>
       )}
 
-      {/* 1. Active Program Subscribers Modal */}
+      {/* Active Program Subscribers Modal */}
       {subscribersModalVisible && (
         <View className="absolute inset-0 bg-black/50 justify-end z-50">
           <TouchableOpacity 
@@ -1428,7 +1419,7 @@ export default function CoachDashboard() {
         </View>
       )}
 
-      {/* 2. Salary Payout History Modal */}
+      {/* Salary Payout History Modal */}
       {salaryHistoryModalVisible && (
         <View className="absolute inset-0 bg-black/50 justify-end z-50">
           <TouchableOpacity 

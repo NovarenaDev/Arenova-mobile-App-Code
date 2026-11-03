@@ -11,6 +11,8 @@ export default function BookingConfirmedScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
   const { 
+    bookingId,
+    attendanceOtp,
     coachName, 
     studentName, 
     sport, 
@@ -19,6 +21,8 @@ export default function BookingConfirmedScreen() {
     amount, 
     txnId 
   } = useLocalSearchParams<{
+    bookingId?: string;
+    attendanceOtp?: string;
     coachName?: string;
     studentName?: string;
     sport?: string;
@@ -33,7 +37,7 @@ export default function BookingConfirmedScreen() {
   const displaySport = sport || 'Sports';
   const displayDate = date || 'Confirmed Date';
   const displayTime = time || 'Scheduled Slot';
-  const displayAmount = amount || '550';
+  const displayAmount = amount || '400';
   const displayTxnId = txnId || ("TXN" + Math.random().toString(36).substring(2, 10).toUpperCase());
 
   return (
@@ -136,6 +140,21 @@ export default function BookingConfirmedScreen() {
           </View>
         </View>
 
+        {/* Attendance OTP Card */}
+        {attendanceOtp ? (
+          <View className="bg-[#FFF2EB] rounded-2xl p-5 mb-4 border border-[#FFD4C2] items-center">
+            <Typography variant="caption" color="primary" weight="bold" className="uppercase tracking-wider mb-1">
+              Attendance Code
+            </Typography>
+            <Typography variant="h1" color="primary" weight="bold" className="text-3xl tracking-widest my-1">
+              {attendanceOtp}
+            </Typography>
+            <Typography variant="caption" color="muted" align="center" className="mt-1">
+              Share this code with your coach at the session.
+            </Typography>
+          </View>
+        ) : null}
+
         {/* Payment Success Card */}
         <View className="bg-white rounded-2xl p-5 mb-8 shadow-sm border border-gray-100">
           <View className="flex-row items-center mb-6">
@@ -175,10 +194,22 @@ export default function BookingConfirmedScreen() {
         </View>
 
         <View className="space-y-4 pb-10">
+          {bookingId ? (
+            <View className="mb-3">
+              <Button 
+                title="View Booking Details" 
+                onPress={() => router.push({
+                  pathname: '/session-summary',
+                  params: { id: bookingId, status: 'confirmed' }
+                })}
+              />
+            </View>
+          ) : null}
           {user?.role === 'parent' && (
-            <View className="mb-4">
+            <View className="mb-3">
               <Button 
                 title="Book Another Session" 
+                variant="outline"
                 onPress={() => router.push('/(parent)/family-tree')}
               />
             </View>

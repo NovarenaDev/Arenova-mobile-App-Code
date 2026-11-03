@@ -33,7 +33,6 @@ export default function SelectDateScreen() {
 
   const today = new Date().toISOString().split('T')[0];
 
-  // Fetch coach details
   const { data: coachResponse, isLoading: isLoadingCoach } = useQuery({
     queryKey: ['coachProfile', coachId],
     queryFn: async () => {
@@ -48,7 +47,6 @@ export default function SelectDateScreen() {
   const coachName = coach?.name || `${coach?.firstName || ''} ${coach?.lastName || ''}`.trim() || 'Coach';
   const coachSport = coach?.sport || coach?.sports?.[0] || 'Sports';
 
-  // Fetch available slots for the selected date
   const { data: slotsResponse, isLoading: isLoadingSlots } = useQuery({
     queryKey: ['coachSlots', coachId, selectedDate],
     queryFn: async () => {
@@ -77,8 +75,6 @@ export default function SelectDateScreen() {
     const slotPrice = (selectedSlot?.pricePerPerson ?? selectedSlot?.price ?? 500).toString();
     const timeFormatted = `${selectedSlot?.startTime} - ${selectedSlot?.endTime}`;
     
-    // If user is a Parent, direct them to select a child profile.
-    // If user is an Individual / Player, skip child selection and proceed directly to Session Summary.
     if (user?.role === 'parent') {
       router.push({
         pathname: '/select-player',
@@ -166,7 +162,7 @@ export default function SelectDateScreen() {
             minDate={today}
             onDayPress={(day: any) => {
               setSelectedDate(day.dateString);
-              setSelectedSlotId(null); // Clear selected slot when date changes
+              setSelectedSlotId(null);
             }}
             markedDates={{
               [selectedDate]: { selected: true, selectedColor: '#FF5100' }

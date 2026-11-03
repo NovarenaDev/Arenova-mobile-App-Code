@@ -12,7 +12,6 @@ export default function MyTournamentsScreen() {
   const insets = useSafeAreaInsets();
   const [selectedRegistrationId, setSelectedRegistrationId] = useState<string | null>(null);
 
-  // Fetch my tournament registrations
   const { data: registrationsResponse, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['myTournamentRegistrations'],
     queryFn: async () => {
@@ -21,7 +20,6 @@ export default function MyTournamentsScreen() {
     }
   });
 
-  // Fetch selected registration detail by ID
   const { data: detailResponse, isLoading: isLoadingDetail } = useQuery({
     queryKey: ['tournamentRegistrationDetail', selectedRegistrationId],
     queryFn: async () => {

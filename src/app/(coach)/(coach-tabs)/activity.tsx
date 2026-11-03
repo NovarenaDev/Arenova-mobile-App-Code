@@ -17,7 +17,6 @@ export default function CoachActivityScreen() {
     (tab === 'current' || tab === 'completed' || tab === 'upcoming') ? (tab as any) : 'upcoming'
   );
 
-  // State for OTP Verification Modal
   const [selectedSessionForOtp, setSelectedSessionForOtp] = useState<any | null>(null);
 
   useEffect(() => {
@@ -222,7 +221,6 @@ export default function CoachActivityScreen() {
     return 'requested';
   };
 
-  // Segregate sessions into 3 tabs: Upcoming (requested + accepted), Current (ongoing), Completed
   const upcomingBookings = dedupe(
     allSessions
       .filter((s: any) => {
@@ -466,12 +464,10 @@ export default function CoachActivityScreen() {
         visible={!!selectedSessionForOtp}
         session={selectedSessionForOtp}
         onClose={() => setSelectedSessionForOtp(null)}
-        onSuccess={(res) => {
+        onSuccess={() => {
           Alert.alert(
             'Attendance Verified!',
-            res.mode === 'group'
-              ? `Group batch attendance verified (${res.verifiedCount} students). Session authorized!`
-              : 'Individual student OTP verified successfully!'
+            'Session attendance verified successfully! The session is now active.'
           );
           queryClient.invalidateQueries({ queryKey: ['coachSessions'] });
         }}

@@ -33,9 +33,6 @@ export const Card: React.FC<CardProps> = ({
       default: return 'shadow-sm';
     }
   };
-
-  // Note on shadows in React Native: NativeWind handles `shadow-*` utility classes 
-  // by mapping them to platform-specific shadow styles (elevation on Android, shadow* on iOS).
   
   return (
     <View

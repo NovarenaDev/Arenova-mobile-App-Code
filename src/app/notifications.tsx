@@ -272,7 +272,7 @@ export default function NotificationsScreen() {
           refreshControl={
             <RefreshControl 
               refreshing={isRefetching && !isFetchingNextPage} 
-              onRefresh={refetch} 
+              onRefresh={() => { refetch(); }} 
               colors={['#FF5100']}
             />
           }
@@ -287,7 +287,7 @@ export default function NotificationsScreen() {
               <View className="py-4 items-center">
                 <ActivityIndicator size="small" color="#FF5100" />
               </View>
-            ) : null
+            ) : undefined
           }
           ListEmptyComponent={renderEmptyComponent}
         />

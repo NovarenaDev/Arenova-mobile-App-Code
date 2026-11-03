@@ -38,28 +38,28 @@ export default function ParentTabLayout() {
         name="parent-dashboard"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => <Ionicons name="home-outline" size={24} color={color} />
+          tabBarIcon: ({ color }) => <Ionicons name="home-outline" size={24} color={typeof color === 'string' ? color : undefined} />
         }}
       />
       <Tabs.Screen
         name="activity"
         options={{
           title: 'Bookings',
-          tabBarIcon: ({ color }) => <Ionicons name="calendar-outline" size={24} color={color} />
+          tabBarIcon: ({ color }) => <Ionicons name="calendar-outline" size={24} color={typeof color === 'string' ? color : undefined} />
         }}
       />
       <Tabs.Screen 
         name="tournaments" 
         options={{ 
           title: 'Tournaments',
-          tabBarIcon: ({ color }) => <Ionicons name="trophy-outline" size={24} color={color} />
+          tabBarIcon: ({ color }) => <Ionicons name="trophy-outline" size={24} color={typeof color === 'string' ? color : undefined} />
         }} 
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color }) => <Ionicons name="person-outline" size={24} color={color} />
+          tabBarIcon: ({ color }) => <Ionicons name="person-outline" size={24} color={typeof color === 'string' ? color : undefined} />
         }}
       />
     </Tabs>

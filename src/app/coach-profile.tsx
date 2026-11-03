@@ -27,30 +27,24 @@ interface CoachProfile {
 
 export default function PublicCoachProfileScreen() {
   const insets = useSafeAreaInsets();
-  console.log('[DEBUG coach-profile] 1. entering component');
   const router = useRouter();
-  console.log('[DEBUG coach-profile] 2. after useRouter');
   const { id, coachId } = useLocalSearchParams<{ id?: string; coachId?: string }>();
   const targetCoachId = id || coachId;
-  console.log('[DEBUG coach-profile] 3. targetCoachId:', targetCoachId);
 
   // Fetch coach details
   const { data: coachResponse, isLoading } = useQuery({
     queryKey: ['coachProfile', targetCoachId],
     queryFn: async () => {
-      console.log('[DEBUG coach-profile] queryFn executing for', targetCoachId);
       if (!targetCoachId) return null;
       const res = await api.get(`/coaches/${targetCoachId}`);
       return res.data;
     },
     enabled: !!targetCoachId
   });
-  console.log('[DEBUG coach-profile] 4. after useQuery, isLoading:', isLoading);
 
   const coach: CoachProfile | null = coachResponse?.data || null;
 
   if (isLoading) {
-    console.log('[DEBUG coach-profile] 5. returning loading view');
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: '#EEF3F9' }} edges={['top']}>
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>

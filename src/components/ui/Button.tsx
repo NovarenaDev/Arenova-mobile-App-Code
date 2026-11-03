@@ -41,7 +41,7 @@ export const Button: React.FC<ButtonProps> = ({
         base += 'py-2 px-4 ';
         break;
       case 'md':
-        base += 'py-4 px-6 '; // Slightly thicker for modern pill look
+        base += 'py-4 px-6 ';
         break;
       case 'lg':
         base += 'py-5 px-8 ';

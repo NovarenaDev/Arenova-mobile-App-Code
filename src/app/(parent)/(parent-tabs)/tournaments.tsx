@@ -14,7 +14,6 @@ export default function ParentTournamentsScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSport, setSelectedSport] = useState('All');
 
-  // Fetch dropdown options for tournaments
   const { data: optionsData } = useQuery({
     queryKey: ['novareTournamentOptions'],
     queryFn: async () => {
@@ -27,7 +26,6 @@ export default function ParentTournamentsScreen() {
     }
   });
 
-  // Fetch public tournaments
   const { data: tournamentsData, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['novareTournaments', selectedSport],
     queryFn: async () => {

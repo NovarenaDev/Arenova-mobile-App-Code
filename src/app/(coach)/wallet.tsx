@@ -32,7 +32,7 @@ export default function WalletScreen() {
   const [ifscCode, setIfscCode] = useState('');
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // 1. Fetch Wallet Summary
+  // Fetch Wallet Summary
   const { data: summaryResponse, isLoading: isSummaryLoading, refetch: refetchSummary } = useQuery({
     queryKey: ['walletSummary'],
     queryFn: async () => {
@@ -41,14 +41,14 @@ export default function WalletScreen() {
     }
   });
 
-  // Extract metrics from summary response with broad support for wrapped backend payloads
   const summaryData = summaryResponse?.data || summaryResponse;
-  const balance = summaryData?.currentBalance ?? summaryData?.balance ?? summaryData?.availableBalance ?? 0;
+  const availableBalance = summaryData?.availableBalance ?? summaryData?.currentBalance ?? summaryData?.balance ?? 0;
+  const pendingBalance = summaryData?.pendingBalance ?? 0;
   const totalEarnings = summaryData?.totalEarnings ?? summaryData?.earnings ?? 0;
   const totalWithdrawn = summaryData?.totalWithdrawn ?? summaryData?.withdrawn ?? 0;
-  const pendingWithdrawals = summaryData?.pendingWithdrawals ?? summaryData?.pending ?? 0;
+  const pendingWithdrawalsCount = summaryData?.pendingWithdrawals ?? summaryData?.pending ?? 0;
 
-  // 2. Fetch Wallet Transactions
+  // Fetch Wallet Transactions
   const { data: transactionsResponse, isLoading: isTransactionsLoading, refetch: refetchTransactions } = useQuery({
     queryKey: ['walletTransactions'],
     queryFn: async () => {
@@ -57,7 +57,7 @@ export default function WalletScreen() {
     }
   });
 
-  // 3. Fetch Payout/Withdrawal History to merge into ledger
+  // Fetch Payout/Withdrawal History
   const { data: withdrawalsResponse, isLoading: isWithdrawalsLoading, refetch: refetchWithdrawals } = useQuery({
     queryKey: ['walletWithdrawals'],
     queryFn: async () => {
@@ -66,7 +66,6 @@ export default function WalletScreen() {
     }
   });
 
-  // Combine and format transactions/withdrawals for UI display
   const rawTxList = transactionsResponse?.data || transactionsResponse?.transactions || (Array.isArray(transactionsResponse) ? transactionsResponse : []);
   const rawWithdrawalsList = withdrawalsResponse?.data || withdrawalsResponse?.withdrawals || (Array.isArray(withdrawalsResponse) ? withdrawalsResponse : []);
 
@@ -76,7 +75,6 @@ export default function WalletScreen() {
     return isNaN(date.getTime()) ? dateStr : date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
-  // Map transactions
   const mappedTx: Transaction[] = rawTxList.map((tx: any) => {
     const isCredit = tx.type === 'booking_credit' || tx.type === 'refund' || tx.amount > 0;
     let title = 'Session Earnings';
@@ -97,7 +95,6 @@ export default function WalletScreen() {
     };
   });
 
-  // Map withdrawals that might not be in transactions yet
   const mappedWithdrawals: Transaction[] = rawWithdrawalsList.map((w: any) => {
     return {
       id: w._id || w.id || Math.random().toString(),
@@ -110,11 +107,9 @@ export default function WalletScreen() {
     };
   });
 
-  // Merge lists, filtering duplicates, and sorting by date (descending)
   const combinedMap = new Map<string, Transaction>();
   mappedTx.forEach(t => combinedMap.set(t.id, t));
   mappedWithdrawals.forEach(w => {
-    // If transaction exists already, update status if withdrawal lists has more recent state
     const existing = combinedMap.get(w.id);
     if (!existing) {
       combinedMap.set(w.id, w);
@@ -127,7 +122,7 @@ export default function WalletScreen() {
     return new Date(b.date).getTime() - new Date(a.date).getTime();
   });
 
-  // 4. Request Withdrawal API Call
+  // Request Withdrawal
   const requestWithdrawalMutation = useMutation({
     mutationFn: async (withdrawAmount: number) => {
       const res = await api.post('/wallet/withdraw', {
@@ -136,7 +131,6 @@ export default function WalletScreen() {
       return res.data;
     },
     onSuccess: () => {
-      // Invalidate queries to refresh data dynamically from backend
       queryClient.invalidateQueries({ queryKey: ['walletSummary'] });
       queryClient.invalidateQueries({ queryKey: ['walletTransactions'] });
       queryClient.invalidateQueries({ queryKey: ['walletWithdrawals'] });
@@ -168,7 +162,7 @@ export default function WalletScreen() {
       setSubmitError('Please enter a valid withdrawal amount.');
       return;
     }
-    if (withdrawAmount > balance) {
+    if (withdrawAmount > availableBalance) {
       setSubmitError('Withdrawal amount exceeds your available balance.');
       return;
     }
@@ -232,7 +226,7 @@ export default function WalletScreen() {
               <View className="bg-[#EBF7F0] border border-[#D5EFE0] p-5 rounded-2xl mb-4 flex-row justify-between items-center">
                 <View>
                   <Typography variant="caption" className="text-[#2b7a43] font-bold mb-1">Available to Withdraw</Typography>
-                  <Typography variant="h1" className="text-[#1e582e] text-3xl font-bold">₹{balance}</Typography>
+                  <Typography variant="h1" className="text-[#1e582e] text-3xl font-bold">₹{availableBalance}</Typography>
                 </View>
                 <View className="w-12 h-12 rounded-full bg-[#D5EFE0] items-center justify-center">
                   <Ionicons name="wallet" size={24} color="#2b7a43" />
@@ -241,8 +235,8 @@ export default function WalletScreen() {
 
               <View className="flex-row justify-between gap-3">
                 <View className="flex-1 bg-amber-50 border border-amber-100 p-3.5 rounded-xl">
-                  <Typography variant="caption" color="secondary" weight="semibold" className="mb-0.5 text-amber-800 text-[10px]">Pending Clearance</Typography>
-                  <Typography variant="subtitle1" className="text-amber-900 font-bold">₹{pendingWithdrawals}</Typography>
+                  <Typography variant="caption" color="secondary" weight="semibold" className="mb-0.5 text-amber-800 text-[10px]">Pending Balance (Held)</Typography>
+                  <Typography variant="subtitle1" className="text-amber-900 font-bold">₹{pendingBalance}</Typography>
                 </View>
                 <View className="flex-1 bg-blue-50 border border-blue-100 p-3.5 rounded-xl">
                   <Typography variant="caption" color="secondary" weight="semibold" className="mb-0.5 text-blue-800 text-[10px]">Lifetime Earnings</Typography>

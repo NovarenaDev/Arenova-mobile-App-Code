@@ -21,7 +21,6 @@ export default function TournamentDetailsScreen() {
   const [isRegisterModalVisible, setIsRegisterModalVisible] = useState(false);
   const [registerError, setRegisterError] = useState<string | null>(null);
 
-  // Fetch tournament details by ID
   const { data: tournamentResponse, isLoading, error } = useQuery({
     queryKey: ['novareTournament', id],
     queryFn: async () => {
@@ -34,7 +33,6 @@ export default function TournamentDetailsScreen() {
 
   const tournament = tournamentResponse;
 
-  // Fetch parent's children if role === 'parent'
   const { data: childrenResponse } = useQuery({
     queryKey: ['children'],
     queryFn: async () => {
@@ -47,7 +45,6 @@ export default function TournamentDetailsScreen() {
   const serverChildren = childrenResponse?.data || childrenResponse?.children || [];
   const childrenList = Array.isArray(serverChildren) && serverChildren.length > 0 ? serverChildren : storedChildren || [];
 
-  // Mutation to verify payment for registration
   const verifyPaymentMutation = useMutation({
     mutationFn: async ({ registrationId, transactionId }: { registrationId: string; transactionId: string }) => {
       const res = await api.post(`/novare/registrations/${registrationId}/verify-payment`, {
@@ -62,7 +59,6 @@ export default function TournamentDetailsScreen() {
     }
   });
 
-  // Mutation to register for tournament
   const registerMutation = useMutation({
     mutationFn: async (payload: any) => {
       const res = await api.post(`/novare/tournaments/${id}/register`, payload);
@@ -80,7 +76,6 @@ export default function TournamentDetailsScreen() {
             transactionId: `TXN_${Date.now()}`
           });
         } catch (e) {
-          // auto-verifies if server does not require extra call
         }
       }
 

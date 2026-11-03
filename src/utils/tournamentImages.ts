@@ -21,7 +21,7 @@ export const getTournamentBanner = (t: any): string => {
     if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
       return rawUrl;
     }
-    const backendOrigin = 'http://16.112.182.86';
+    const backendOrigin = 'https://api.getarenova.com';
     return `${backendOrigin}${rawUrl.startsWith('/') ? '' : '/'}${rawUrl}`;
   }
 

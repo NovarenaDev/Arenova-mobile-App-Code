@@ -19,7 +19,6 @@ export default function VenuesScreen() {
   const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Fetch active venues
   const { data: venuesData, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['activeVenues'],
     queryFn: async () => {

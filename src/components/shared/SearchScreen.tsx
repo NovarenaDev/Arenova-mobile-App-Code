@@ -30,7 +30,6 @@ export default function FindCoachScreen() {
   const [activeFilter, setActiveFilter] = useState(sport || 'All');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Sync activeFilter if sport param changes
   React.useEffect(() => {
     if (sport) {
       setActiveFilter(sport);
@@ -39,7 +38,6 @@ export default function FindCoachScreen() {
 
   const filters = ['All', 'Badminton', 'Tennis', 'Football', 'Swimming', 'Yoga', 'Fitness'];
 
-  // Query coaches list
   const { data: coachesResponse, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['coaches', activeFilter],
     queryFn: async () => {
@@ -54,7 +52,6 @@ export default function FindCoachScreen() {
 
   const coaches: CoachItem[] = coachesResponse?.data || [];
 
-  // Filter coaches locally by query
   const filteredCoaches = coaches.filter(coach => {
     const coachName = coach.name || `${coach.firstName || ''} ${coach.lastName || ''}`.trim() || 'Coach';
     const coachSport = coach.sport || coach.sports?.[0] || '';

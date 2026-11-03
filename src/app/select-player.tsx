@@ -88,8 +88,7 @@ export default function SelectPlayerScreen() {
   const perPersonFee = Number(searchParams.price || 400);
   const attendeeCount = selectedPlayerIds.length;
   const subtotal = attendeeCount * perPersonFee;
-  const platformFee = 50;
-  const totalAmount = subtotal > 0 ? subtotal + platformFee : 0;
+  const totalAmount = subtotal;
 
   const handleContinue = () => {
     if (selectedPlayerIds.length === 0) {
@@ -109,7 +108,6 @@ export default function SelectPlayerScreen() {
         studentName: attendeeNames,
         attendeeCount: attendeeCount.toString(),
         sessionFee: subtotal.toString(),
-        platformFee: platformFee.toString(),
         totalAmount: totalAmount.toString(),
         price: subtotal.toString()
       }
@@ -223,17 +221,9 @@ export default function SelectPlayerScreen() {
                 ₹{subtotal}
               </Typography>
             </View>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-              <Typography variant="body2" color="text" className="font-outfit">
-                Platform Fee
-              </Typography>
-              <Typography variant="body2" color="secondary" weight="semibold" className="font-outfit-semibold">
-                ₹{platformFee}
-              </Typography>
-            </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingTop: 8, borderTopWidth: 1, borderTopColor: '#f3f4f6' }}>
               <Typography variant="subtitle2" color="secondary" weight="bold" className="font-outfit-bold">
-                Total
+                Total Amount
               </Typography>
               <Typography variant="subtitle2" color="primary" weight="bold" className="font-outfit-bold">
                 ₹{totalAmount}

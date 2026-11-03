@@ -10,6 +10,14 @@ import { api } from '@/services/api';
 import { PhoneAuthProvider, signInWithCredential } from 'firebase/auth';
 import { auth } from '@/services/firebase';
 
+const formatPhoneForApi = (rawPhone: string): string => {
+  const digits = (rawPhone || '').trim().replace(/[^0-9]/g, '');
+  if (digits.length === 12 && digits.startsWith('91')) {
+    return digits.slice(2);
+  }
+  return digits;
+};
+
 export default function OTPScreen() {
   const insets = useSafeAreaInsets();
   const { role, action, name, phone, email, idProof, verificationId } = useLocalSearchParams<{ 
@@ -29,13 +37,36 @@ export default function OTPScreen() {
 
   const [isFirebaseLoading, setIsFirebaseLoading] = useState(false);
 
-  const verifyMutation = useMutation({
-    mutationFn: async (firebaseIdToken: string) => {
-      const endpoint = role === 'coach' ? '/auth/coach/verify-firebase' : '/auth/verify-firebase'; // Assuming similar for player
-      const payload = {
-        firebaseIdToken: firebaseIdToken
-      };
-      const response = await api.post(endpoint, payload);
+  const verifyMutation = useMutation<any, any, string | void>({
+    mutationFn: async (firebaseIdToken?: string | void) => {
+      let response;
+      if (action === 'verify-email' || (!phone && !!email)) {
+        const endpoint = role === 'coach' ? '/auth/coach/verify-email-otp' : '/auth/verify-email-otp';
+        response = await api.post(endpoint, {
+          email: (email || '').trim().toLowerCase(),
+          otp: otp.trim()
+        });
+      } else {
+        const endpoint = role === 'coach' ? '/auth/coach/verify-otp' : '/auth/verify-otp';
+        const cleanPhone = formatPhoneForApi(phone || '');
+        const cleanOtp = otp.trim();
+        const purpose = action === 'register' ? 'register' : 'login';
+
+        const payload: any = {
+          phone: String(cleanPhone),
+          otp: String(cleanOtp),
+          purpose
+        };
+
+        if (action === 'register' && role !== 'coach') {
+          const nameParts = (name || '').trim().split(/\s+/);
+          payload.firstName = nameParts[0] || 'User';
+          payload.lastName = nameParts.slice(1).join(' ') || '.';
+          payload.role = role === 'individual' ? 'player' : 'parent';
+        }
+
+        response = await api.post(endpoint, payload);
+      }
       return response.data;
     },
     onSuccess: async (data) => {
@@ -44,7 +75,6 @@ export default function OTPScreen() {
       }
       
       const realToken = data.token || data.jwt || data.access_token || (data.data && data.data.token);
-      // Save user session
       setToken(realToken);
       
       const userObj = data.user || data.data?.user;
@@ -52,7 +82,6 @@ export default function OTPScreen() {
 
       if (role === 'coach') {
         try {
-          // Fetch coach profile dynamically to verify accurate kyc status
           const profileRes = await api.get('/coaches/my/profile');
           const profileObj = profileRes.data?.data || profileRes.data;
           const kycStatus = profileObj?.kyc || profileObj?.profile?.kyc || profileObj?.status || userObj?.kyc || 'pending';
@@ -78,7 +107,6 @@ export default function OTPScreen() {
         isEmailVerified: userObj?.emailVerified || userObj?.isEmailVerified || false
       });
 
-      // Navigate based on flow
       if (action === 'register') {
         if (role === 'coach') {
           router.push({ pathname: '/(coach)/onboarding', params: { role, phone } });
@@ -107,24 +135,52 @@ export default function OTPScreen() {
     }
   });
 
+  const [isResending, setIsResending] = useState(false);
+
+  const handleResend = async () => {
+    setIsResending(true);
+    try {
+      if (action === 'verify-email' || (!phone && !!email)) {
+        const endpoint = role === 'coach' ? '/auth/coach/resend-email-otp' : '/auth/send-email-otp';
+        await api.post(endpoint, {
+          email: (email || '').trim().toLowerCase()
+        });
+      } else {
+        const endpoint = role === 'coach' ? '/auth/coach/send-otp' : '/auth/send-otp';
+        const cleanPhone = formatPhoneForApi(phone || '');
+        const purpose = action === 'register' ? 'register' : 'login';
+        await api.post(endpoint, {
+          phone: String(cleanPhone),
+          purpose
+        });
+      }
+      alert('Verification code resent successfully.');
+    } catch (err: any) {
+      alert(err?.response?.data?.message || 'Failed to resend code.');
+    } finally {
+      setIsResending(false);
+    }
+  };
+
   const handleVerifyOTP = async () => {
-    if (otp.length < 6 || !verificationId) return;
+    if (otp.length < 6) return;
     
+    if (!verificationId) {
+      verifyMutation.mutate();
+      return;
+    }
+
     try {
       setIsFirebaseLoading(true);
-      // 1. Create Firebase credential
       const credential = PhoneAuthProvider.credential(verificationId, otp);
-      // 2. Sign in with credential
       const result = await signInWithCredential(auth, credential);
-      // 3. Get Firebase ID Token
       const idToken = await result.user.getIdToken();
       setIsFirebaseLoading(false);
       
-      // 4. Send token to our Node backend
       verifyMutation.mutate(idToken);
     } catch (err: any) {
       setIsFirebaseLoading(false);
-      alert(err.message || 'Invalid OTP');
+      verifyMutation.mutate();
     }
   };
 
@@ -179,9 +235,13 @@ export default function OTPScreen() {
               />
             </View>
 
-            <TouchableOpacity className="mt-6 self-center">
+            <TouchableOpacity 
+              className="mt-6 self-center"
+              onPress={handleResend}
+              disabled={isResending}
+            >
               <Typography variant="body2" color="primary" weight="semibold">
-                Didn't receive the code? Resend
+                {isResending ? 'Resending code...' : "Didn't receive the code? Resend"}
               </Typography>
             </TouchableOpacity>
           </View>
