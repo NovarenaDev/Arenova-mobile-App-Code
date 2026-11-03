@@ -43,7 +43,15 @@
       "reactCompiler": true
     },
     "extra": {
-      "router": {}
-    }
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "9a4b8cd6-3a7b-4bbd-b014-2a6cddc4f75f"
+      }
+    },
+    "owner": "pavan0628"
   }
 }
