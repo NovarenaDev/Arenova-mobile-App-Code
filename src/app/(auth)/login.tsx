@@ -18,10 +18,10 @@ const formatPhoneForApi = (rawPhone: string): string => {
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
-  const { role } = useLocalSearchParams<{ role: string }>();
+  const { role, phone: paramPhone } = useLocalSearchParams<{ role: string; phone?: string }>();
   const [authMode, setAuthMode] = useState<'email' | 'phone'>('email');
   
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState(paramPhone || '');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -354,9 +354,9 @@ export default function LoginScreen() {
       const backendMessage = data?.message || data?.error;
 
       if (status === 404) {
-        setScreenError(backendMessage || (role === 'coach'
-          ? 'This mobile number has no registered coach account. Please register first.'
-          : 'This mobile number has no registered account. Please register first.'));
+        setScreenError(role === 'coach'
+          ? 'This mobile number is not registered as a coach yet. Please register your account first.'
+          : 'This mobile number is not registered yet. Please register your account first.');
       } else if (status === 403 || status === 401) {
         setScreenError(backendMessage || 'Account access restricted. Please check your account role or contact support.');
       } else {
@@ -393,9 +393,9 @@ export default function LoginScreen() {
       const backendMessage = data?.message || data?.error;
 
       if (status === 404) {
-        setScreenError(backendMessage || (role === 'coach'
-          ? 'This mobile number has no registered coach account. Please register first.'
-          : 'This mobile number has no registered account. Please register first.'));
+        setScreenError(role === 'coach'
+          ? 'This mobile number is not registered as a coach yet. Please register your account first.'
+          : 'This mobile number is not registered yet. Please register your account first.');
       } else if (status === 403 || status === 401) {
         setScreenError(backendMessage || 'Account access restricted. Please contact support.');
       } else {
@@ -525,13 +525,19 @@ export default function LoginScreen() {
                 </TouchableOpacity>
               </View>
 
-              {(screenError.toLowerCase().includes('register first') ||
+              {(screenError.toLowerCase().includes('register') ||
                 screenError.toLowerCase().includes('no account') ||
                 screenError.toLowerCase().includes('not found') ||
                 screenError.toLowerCase().includes('not registered') ||
                 screenError.toLowerCase().includes('does not exist')) && (
                 <TouchableOpacity
-                  onPress={() => router.push({ pathname: '/(auth)/register', params: { role } })}
+                  onPress={() => router.push({ 
+                    pathname: '/(auth)/register', 
+                    params: { 
+                      role, 
+                      phone: phoneNumber.trim() || undefined 
+                    } 
+                  })}
                   activeOpacity={0.85}
                   className="mt-3 py-2.5 px-4 bg-[#FF5100] rounded-xl flex-row items-center justify-center shadow-sm"
                 >

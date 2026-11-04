@@ -45,7 +45,7 @@ const formatPhoneForApi = (rawPhone: string): string => {
 
 export default function RegisterScreen() {
   const insets = useSafeAreaInsets();
-  const { role } = useLocalSearchParams<{ role: string }>();
+  const { role, phone: paramPhone } = useLocalSearchParams<{ role: string; phone?: string }>();
   
   const setToken = useAuthStore(state => state.setToken);
   const setUser = useAuthStore(state => state.setUser);
@@ -54,7 +54,7 @@ export default function RegisterScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState(paramPhone || '');
   const [location, setLocation] = useState('');
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [selectedSports, setSelectedSports] = useState<string[]>([]);
@@ -647,7 +647,13 @@ export default function RegisterScreen() {
                 screenError.toLowerCase().includes('already registered') ||
                 screenError.toLowerCase().includes('log in instead')) && (
                 <TouchableOpacity
-                  onPress={() => router.push({ pathname: '/(auth)/login', params: { role } })}
+                  onPress={() => router.push({ 
+                    pathname: '/(auth)/login', 
+                    params: { 
+                      role, 
+                      phone: phone.trim() || undefined 
+                    } 
+                  })}
                   activeOpacity={0.85}
                   className="mt-3 py-2.5 px-4 bg-[#FF5100] rounded-xl flex-row items-center justify-center shadow-sm"
                 >
