@@ -30,7 +30,7 @@ export const TextInput: React.FC<TextInputProps> = ({
       )}
       
       <View
-        className={`flex-row w-full px-5 bg-white border-2 rounded-3xl transition-colors ${
+        className={`flex-row w-full px-5 bg-white border-2 rounded-3xl ${
           props.multiline ? 'min-h-[100px] items-start py-4 rounded-2xl' : 'h-14 items-center rounded-full'
         } ${
           error ? 'border-red-500' : isFocused ? 'border-primary' : 'border-gray-200'

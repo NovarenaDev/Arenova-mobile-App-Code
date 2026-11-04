@@ -467,7 +467,7 @@ export default function LocationsScreen() {
                   key={loc._id || loc.id}
                   onPress={() => handleSelectLocation(loc._id || loc.id || '')}
                   activeOpacity={0.8}
-                  className={`bg-white rounded-2xl p-4 mb-4 shadow-sm border-2 flex-row items-center justify-between transition-all ${
+                  className={`bg-white rounded-2xl p-4 mb-4 shadow-sm border-2 flex-row items-center justify-between ${
                     isSelected ? 'border-primary' : 'border-transparent'
                   }`}
                 >

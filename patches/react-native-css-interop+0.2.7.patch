@@ -1,0 +1,56 @@
+diff --git a/node_modules/react-native-css-interop/dist/runtime/native/render-component.js b/node_modules/react-native-css-interop/dist/runtime/native/render-component.js
+index 88d2ec1..5d7c607 100644
+--- a/node_modules/react-native-css-interop/dist/runtime/native/render-component.js
++++ b/node_modules/react-native-css-interop/dist/runtime/native/render-component.js
+@@ -65,7 +65,7 @@ function renderComponent(baseComponent, state, props, possiblyAnimatedProps, var
+         state.variables = exports.UpgradeState.UPGRADED;
+         props = {
+             value: variables,
+-            children: (0, react_1.createElement)(component, props),
++            children: component ? (0, react_1.createElement)(component, props) : null,
+         };
+         component = styles_1.VariableContext.Provider;
+     }
+@@ -78,12 +78,20 @@ function renderComponent(baseComponent, state, props, possiblyAnimatedProps, var
+         state.containers = exports.UpgradeState.UPGRADED;
+         props = {
+             value: containers,
+-            children: (0, react_1.createElement)(component, props),
++            children: component ? (0, react_1.createElement)(component, props) : null,
+         };
+         component = globals_1.containerContext.Provider;
+     }
+     state.canUpgradeWarn = process.env.NODE_ENV !== "production";
+-    return (0, react_1.createElement)(component, props);
++    if (!component) {
++        return null;
++    }
++    try {
++        return (0, react_1.createElement)(component, props);
++    } catch (e) {
++        console.warn("CssInterop createElement fallback:", e?.message);
++        return null;
++    }
+ }
+ function AnimatedInterop({ component, props, style, }) {
+     const { useAnimatedStyle } = require("react-native-reanimated");
+@@ -103,9 +111,18 @@ function AnimatedInterop({ component, props, style, }) {
+         }
+         return flattenAnimatedProps(style) || {};
+     }, [style]);
+-    return (0, react_1.createElement)(component, { ...props, style: animatedStyle });
++    if (!component) return null;
++    try {
++        return (0, react_1.createElement)(component, { ...props, style: animatedStyle });
++    } catch (e) {
++        console.warn("AnimatedInterop createElement fallback:", e?.message);
++        return null;
++    }
+ }
+ function createAnimatedComponent(Component) {
++    if (!Component) {
++        return null;
++    }
+     if (animatedCache.has(Component)) {
+         return animatedCache.get(Component);
+     }

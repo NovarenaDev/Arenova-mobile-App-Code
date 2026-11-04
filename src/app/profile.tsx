@@ -16,8 +16,9 @@ export default function ProfileScreen() {
   const navigation = useNavigation();
 
   useEffect(() => {
+    if (!navigation || typeof navigation.addListener !== 'function') return;
     const unsubscribe = navigation.addListener('tabPress' as any, () => {
-      if (navigation.isFocused()) {
+      if (typeof navigation.isFocused === 'function' && navigation.isFocused()) {
         scrollRef.current?.scrollTo({ y: 0, animated: true });
       }
     });
@@ -66,7 +67,8 @@ export default function ProfileScreen() {
       const res = await api.get('/coaches/my/profile');
       return res.data?.data || res.data;
     },
-    enabled: user?.role === 'coach',
+    enabled: !!user && user?.role === 'coach',
+    retry: 1,
   });
 
   const { data: userProfile, isLoading: isUserLoading } = useQuery({
@@ -76,7 +78,8 @@ export default function ProfileScreen() {
       const res = await api.get('/users/me');
       return res.data?.data || res.data;
     },
-    enabled: user?.role !== 'coach',
+    enabled: !!user && user?.role !== 'coach',
+    retry: 1,
   });
 
   const isProfileLoading = user?.role === 'coach' ? isCoachLoading : isUserLoading;
@@ -88,20 +91,36 @@ export default function ProfileScreen() {
       setExperience(profile.profile?.experience ? profile.profile.experience.toString() : '');
       setLocation(profile.profile?.address?.city || '');
       setDescription(profile.profile?.description || profile.profile?.bio || '');
-      setSports(profile.profile?.sports?.join(', ') || '');
-      if (profile.avatar || profile.profile?.avatar) {
-        setAvatarUri(profile.avatar || profile.profile?.avatar);
+      const rawSports = profile.profile?.sports;
+      setSports(Array.isArray(rawSports) ? rawSports.join(', ') : (typeof rawSports === 'string' ? rawSports : ''));
+      const rawAv = profile.avatar || profile.profile?.avatar;
+      const avUrl = typeof rawAv === 'string' ? rawAv : rawAv?.url;
+      if (avUrl && typeof avUrl === 'string') {
+        setAvatarUri(avUrl);
       }
     } else if (userProfile && user?.role !== 'coach') {
       const uName = userProfile.name || (userProfile.firstName ? `${userProfile.firstName} ${userProfile.lastName || ''}`.trim() : user?.name || '');
-      setName(uName);
-      setPhone(userProfile.phone || userProfile.phoneNumber || user?.phone || '');
-      setLocation(userProfile.address || userProfile.location || user?.location || '');
-      if (userProfile.avatar) {
-        setAvatarUri(userProfile.avatar);
+      setName(typeof uName === 'string' ? uName : '');
+      const uPhone = userProfile.phone || userProfile.phoneNumber || user?.phone || '';
+      setPhone(typeof uPhone === 'string' ? uPhone : '');
+      const uLoc = userProfile.address || userProfile.location || user?.location || '';
+      setLocation(typeof uLoc === 'string' ? uLoc : '');
+      const rawAv = userProfile.avatar;
+      const avUrl = typeof rawAv === 'string' ? rawAv : rawAv?.url;
+      if (avUrl && typeof avUrl === 'string') {
+        setAvatarUri(avUrl);
       }
     }
   }, [profile, userProfile, user?.role]);
+
+  const rawSports = user?.role === 'coach' 
+    ? (profile?.profile?.sports || []) 
+    : (userProfile?.sports || user?.sports || []);
+  const resolvedSports: string[] = Array.isArray(rawSports)
+    ? rawSports.map((s: any) => typeof s === 'string' ? s : String(s?.name || s))
+    : typeof rawSports === 'string' && rawSports.trim()
+      ? rawSports.split(',').map((s: string) => s.trim()).filter(Boolean)
+      : [];
 
   const displayProfile = {
     name: user?.role === 'coach' 
@@ -119,20 +138,19 @@ export default function ProfileScreen() {
     experience: user?.role === 'coach' 
       ? (profile?.profile?.experience ? `${profile.profile.experience} Years` : (user?.experience || 'N/A')) 
       : (user?.experience || 'N/A'),
-    sports: user?.role === 'coach' 
-      ? (profile?.profile?.sports || []) 
-      : (userProfile?.sports || user?.sports || []),
+    sports: resolvedSports,
     description: user?.role === 'coach' 
       ? (profile?.profile?.description || profile?.profile?.bio || user?.description || 'N/A') 
       : (user?.description || 'N/A'),
   };
 
-  const descriptionWordCount = description.trim() === '' ? 0 : description.trim().split(/\s+/).length;
+  const descriptionWordCount = typeof description === 'string' && description.trim() !== '' ? description.trim().split(/\s+/).length : 0;
 
   const handleDescriptionChange = (text: string) => {
-    const words = text.trim() === '' ? [] : text.trim().split(/\s+/);
-    if (words.length <= 150 || text.length < description.length) {
-      setDescription(text);
+    const safeText = typeof text === 'string' ? text : '';
+    const words = safeText.trim() === '' ? [] : safeText.trim().split(/\s+/);
+    if (words.length <= 150 || safeText.length < (description?.length || 0)) {
+      setDescription(safeText);
     }
   };
 
@@ -432,8 +450,8 @@ export default function ProfileScreen() {
     }
   };
 
-  const getInitials = (fullName: string | undefined | null) => {
-    if (!fullName) return '';
+  const getInitials = (fullName: any) => {
+    if (!fullName || typeof fullName !== 'string') return '';
     const parts = fullName.trim().split(/\s+/).filter(Boolean);
     if (parts.length === 0) return '';
     if (parts.length === 1) {
@@ -443,19 +461,21 @@ export default function ProfileScreen() {
   };
 
   const renderAvatarContent = () => {
-    const activeAvatar = avatarUri || profile?.avatar || user?.avatar || profile?.profile?.avatar;
-    if (activeAvatar) {
+    const rawAvatar = avatarUri || profile?.avatar || user?.avatar || profile?.profile?.avatar || userProfile?.avatar;
+    const activeAvatar = typeof rawAvatar === 'string' ? rawAvatar.trim() : (rawAvatar?.url && typeof rawAvatar.url === 'string' ? rawAvatar.url.trim() : null);
+
+    if (activeAvatar && activeAvatar !== '' && !activeAvatar.startsWith('[object')) {
       return (
         <Image 
           source={{ uri: activeAvatar }} 
-          className="w-full h-full"
+          style={{ width: '100%', height: '100%' }}
           resizeMode="cover"
         />
       );
     }
 
-    const resolvedName = displayProfile.name;
-    if (!resolvedName || resolvedName.trim() === '' || resolvedName === 'Coach Name' || resolvedName === 'User Profile' || resolvedName === 'Parent Profile' || resolvedName === 'Player Profile') {
+    const resolvedName = typeof displayProfile.name === 'string' ? displayProfile.name.trim() : '';
+    if (!resolvedName || resolvedName === 'Coach Name' || resolvedName === 'User Profile' || resolvedName === 'Parent Profile' || resolvedName === 'Player Profile') {
       return <Ionicons name="person-circle-outline" size={68} color="white" />;
     }
 
@@ -471,7 +491,11 @@ export default function ProfileScreen() {
     );
   };
 
-  const referralCode = user?.id ? `${(profile?.name || user?.name || 'USER').split(' ')[0].toUpperCase()}${user.id.substring(Math.max(0, user.id.length - 4)).toUpperCase()}` : 'ARENOVA10';
+  const userIdStr = user?.id ? String(user.id) : ((user as any)?._id ? String((user as any)._id) : '');
+  const userNameStr = typeof displayProfile.name === 'string' && displayProfile.name.trim() ? displayProfile.name.trim() : 'USER';
+  const referralCode = userIdStr 
+    ? `${userNameStr.split(' ')[0].toUpperCase()}${userIdStr.slice(-4).toUpperCase()}` 
+    : 'ARENOVA10';
 
   const handleShareReferral = async () => {
     const shareMessage = `Hey! Join me on Arenova! Register as a player or parent using my referral code: ${referralCode} and get access to top-tier sports coaching. Download the app today!`;
@@ -504,8 +528,14 @@ export default function ProfileScreen() {
   };
 
   const handleCopyReferralCode = async () => {
-    Clipboard.setString(referralCode);
-    Alert.alert('Copied!', 'Referral code copied to clipboard.');
+    try {
+      if (Clipboard && typeof Clipboard.setString === 'function') {
+        Clipboard.setString(referralCode);
+      }
+      Alert.alert('Copied!', 'Referral code copied to clipboard.');
+    } catch {
+      Alert.alert('Referral Code', referralCode);
+    }
   };
 
   return (
@@ -521,7 +551,7 @@ export default function ProfileScreen() {
         </View>
 
         <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" scrollEventThrottle={16} decelerationRate="normal" className="flex-1 px-4 pt-4" contentContainerStyle={{ flexGrow: 1, paddingBottom: Math.max(insets.bottom + 40, 60) }}>
-          {isProfileLoading ? (
+          {isProfileLoading || (!user && !userProfile && !profile) ? (
             <ActivityIndicator size="large" color="#FF5100" style={{ marginTop: 40 }} />
           ) : (
             <>
@@ -603,7 +633,7 @@ export default function ProfileScreen() {
                       <View className="flex-row items-center mb-0.5">
                         <Ionicons name="star" size={14} color="#F59E0B" style={{ marginRight: 4 }} />
                         <Typography variant="subtitle1" color="white" weight="bold" className="font-outfit-bold">
-                          {profile?.profile?.rating !== undefined ? profile.profile.rating.toFixed(1) : '0.0'}
+                          {Number(profile?.profile?.rating || 0).toFixed(1)}
                         </Typography>
                       </View>
                       <Typography variant="caption" color="light" className="opacity-70 font-outfit">Rating ({profile?.profile?.totalRatings || 0})</Typography>

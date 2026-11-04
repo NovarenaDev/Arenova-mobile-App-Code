@@ -207,7 +207,7 @@ export default function SelectDateScreen() {
                       onPress={() => !isFull && setSelectedSlotId(slot._id || slot.id || null)}
                       activeOpacity={isFull ? 1 : 0.8}
                       disabled={isFull}
-                      className={`px-4 py-2.5 rounded-xl border-2 transition-all ${
+                      className={`px-4 py-2.5 rounded-xl border-2 ${
                         isFull
                           ? 'bg-gray-100 border-gray-200 opacity-50'
                           : isSelected 
