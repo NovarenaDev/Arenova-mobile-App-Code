@@ -1,5 +1,3 @@
-import SharedProfile from '../../profile';
+import ProfileScreen from '@/components/shared/ProfileScreen';
 
-export default function IndividualProfileScreen() {
-  return <SharedProfile />;
-}
+export default ProfileScreen;
