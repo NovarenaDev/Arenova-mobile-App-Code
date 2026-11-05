@@ -7,7 +7,9 @@ import { useRouter, useNavigation } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store';
-import { resolveSessionTime, resolveSessionDate, resolveSessionSport, resolveSessionLocation, resolveStudentName, formatSingleTime } from '@/utils/sessionFormatter';
+import { resolveSessionTime, resolveSessionDate, resolveSessionSport, resolveSessionTitle, resolveSessionLocation, resolveStudentName, formatSingleTime } from '@/utils/sessionFormatter';
+import { normalizeBanners, handleBannerNavigation } from '@/utils/bannerHelpers';
+import * as Location from 'expo-location';
 
 export default function CoachDashboard() {
   const router = useRouter();
@@ -30,12 +32,12 @@ export default function CoachDashboard() {
   const [selectedProgramForSubscribers, setSelectedProgramForSubscribers] = React.useState<string | null>(null);
   const [selectedProgramTitle, setSelectedProgramTitle] = React.useState<string>('Program');
   const [subscribersModalVisible, setSubscribersModalVisible] = React.useState(false);
-  const [salaryHistoryModalVisible, setSalaryHistoryModalVisible] = React.useState(false);
+  const [earningsHistoryModalVisible, setEarningsHistoryModalVisible] = React.useState(false);
   const [activeSessionProgramId, setActiveSessionProgramId] = React.useState<string | null>(null);
   const [startingAttendanceLoading, setStartingAttendanceLoading] = React.useState<string | null>(null);
   const [endingAttendanceLoading, setEndingAttendanceLoading] = React.useState<string | null>(null);
 
-  const { selectedLocationId } = useAuthStore();
+  const { selectedLocationId, user } = useAuthStore();
 
   const { data: locationsResponse } = useQuery({
     queryKey: ['coachLocations'],
@@ -58,11 +60,23 @@ export default function CoachDashboard() {
 
   const unreadCount = notificationsResponse?.unreadCount ?? 0;
 
-  const { data: dashboardData } = useQuery({
+  const { data: dashboardData, refetch: refetchDashboard } = useQuery({
     queryKey: ['coachDashboard'],
     queryFn: async () => {
       const res = await api.get('/coach-app/dashboard');
       return res.data;
+    }
+  });
+
+  const { data: walletSummaryResponse, refetch: refetchWalletSummary } = useQuery({
+    queryKey: ['walletSummary'],
+    queryFn: async () => {
+      try {
+        const res = await api.get('/wallet/summary');
+        return res.data;
+      } catch {
+        return null;
+      }
     }
   });
 
@@ -117,15 +131,19 @@ export default function CoachDashboard() {
     }
   });
 
-  const { data: salaryHistoryResponse } = useQuery({
-    queryKey: ['coachSalaryHistory'],
+  const { data: earningsHistoryResponse } = useQuery({
+    queryKey: ['coachEarningsHistory'],
     queryFn: async () => {
       try {
         const res = await api.get('/coach-app/salary-history');
         return res.data;
       } catch (e) {
-        console.log('Salary History API fetch error:', e);
-        return null;
+        try {
+          const res2 = await api.get('/coach-app/earnings-history');
+          return res2.data;
+        } catch {
+          return null;
+        }
       }
     }
   });
@@ -148,13 +166,25 @@ export default function CoachDashboard() {
   const handleStartAttendance = async (programId: string) => {
     try {
       setStartingAttendanceLoading(programId);
-      await api.post(`/coach-app/programs/${programId}/attendance/start`);
+
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        alert('GPS location permission is required to start community session attendance.');
+        return;
+      }
+
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const { latitude, longitude } = loc.coords;
+
+      await api.post(`/coach-app/programs/${programId}/attendance/start`, {
+        latitude,
+        longitude
+      });
       setActiveSessionProgramId(programId);
       refetchCommunities();
-      alert('Community Session Started successfully!');
+      alert('Community Session Started with GPS Check-in!');
     } catch (error: any) {
-      const msg = error.response?.data?.message || 'Started session for community program.';
-      setActiveSessionProgramId(programId);
+      const msg = error.response?.data?.message || 'Failed to start GPS attendance for community program.';
       alert(msg);
     } finally {
       setStartingAttendanceLoading(null);
@@ -164,13 +194,25 @@ export default function CoachDashboard() {
   const handleEndAttendance = async (programId: string) => {
     try {
       setEndingAttendanceLoading(programId);
-      await api.post(`/coach-app/programs/${programId}/attendance/end`);
+
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        alert('GPS location permission is required to end community session attendance.');
+        return;
+      }
+
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const { latitude, longitude } = loc.coords;
+
+      await api.post(`/coach-app/programs/${programId}/attendance/end`, {
+        latitude,
+        longitude
+      });
       setActiveSessionProgramId(null);
       refetchCommunities();
       alert('Community Session Ended successfully!');
     } catch (error: any) {
-      const msg = error.response?.data?.message || 'Ended session for community program.';
-      setActiveSessionProgramId(null);
+      const msg = error.response?.data?.message || 'Failed to end GPS attendance for community program.';
       alert(msg);
     } finally {
       setEndingAttendanceLoading(null);
@@ -183,10 +225,14 @@ export default function CoachDashboard() {
     ? communitiesResponse 
     : [];
 
-  const displaySalaryHistory = Array.isArray(salaryHistoryResponse?.data) 
-    ? salaryHistoryResponse.data 
-    : Array.isArray(salaryHistoryResponse) 
-    ? salaryHistoryResponse 
+  const displayEarningsHistory = Array.isArray(earningsHistoryResponse?.data) 
+    ? earningsHistoryResponse.data 
+    : Array.isArray(earningsHistoryResponse?.earnings)
+    ? earningsHistoryResponse.earnings
+    : Array.isArray(earningsHistoryResponse?.history)
+    ? earningsHistoryResponse.history
+    : Array.isArray(earningsHistoryResponse) 
+    ? earningsHistoryResponse 
     : [];
 
   const displaySubscribers = Array.isArray(subscribersResponse?.data) 
@@ -209,10 +255,32 @@ export default function CoachDashboard() {
   const metrics = dashboardData?.data?.metrics;
   const avgRating = metrics?.averageRating ?? 0;
 
+  const walletSummary = walletSummaryResponse?.data || walletSummaryResponse;
+  const availableBalance = Number(
+    walletSummary?.availableBalance ?? 
+    walletSummary?.currentBalance ?? 
+    walletSummary?.balance ?? 
+    metrics?.availableBalance ?? 
+    0
+  );
+  const pendingBalance = Number(
+    walletSummary?.pendingBalance ?? 
+    walletSummary?.heldBalance ?? 
+    metrics?.pendingBalance ?? 
+    0
+  );
+  const totalEarnings = Number(
+    walletSummary?.totalEarnings ?? 
+    walletSummary?.earnings ?? 
+    metrics?.totalEarnings ?? 
+    (availableBalance + pendingBalance)
+  );
+
   const mapSessionToUI = (session: any) => {
     const id = session._id || session.id || Math.random().toString();
     const coachUser = useAuthStore.getState().user;
     const studentName = resolveStudentName(session);
+    const sessionTitle = resolveSessionTitle(session, coachUser);
     const sportTitle = resolveSessionSport(session, coachUser);
     const dateFormatted = resolveSessionDate(
       session.slot?.date || 
@@ -231,25 +299,17 @@ export default function CoachDashboard() {
       session.slot?.pricePerPerson || 
       session.slot?.price || 
       session.price || 
-      400;
+      session.program?.price ||
+      (coachUser as any)?.pricePerSession ||
+      (coachUser as any)?.fee ||
+      (coachUser as any)?.price ||
+      0;
 
     const priceText = session.credits 
       ? `${session.credits} Credits` 
-      : `₹${numericPrice}`;
+      : (numericPrice > 0 ? `₹${numericPrice}` : 'Free');
 
-    const rawStatusNormalized = (session.status || session.rawStatus || 'requested').toString().toLowerCase().trim();
-    let normStatus = 'requested';
-    if (rawStatusNormalized === 'ongoing' || rawStatusNormalized === 'active') {
-      normStatus = 'ongoing';
-    } else if (rawStatusNormalized === 'confirmed' || rawStatusNormalized === 'accepted' || rawStatusNormalized === 'approved') {
-      normStatus = 'accepted';
-    } else if (rawStatusNormalized === 'completed' || rawStatusNormalized === 'done') {
-      normStatus = 'completed';
-    } else if (rawStatusNormalized === 'cancelled' || rawStatusNormalized === 'canceled' || rawStatusNormalized === 'declined' || rawStatusNormalized === 'no_show' || rawStatusNormalized === 'no-show') {
-      normStatus = 'cancelled';
-    } else {
-      normStatus = 'requested';
-    }
+    const normStatus = getNormalizedStatus(session);
 
     let uiStatus = 'Requested';
     if (normStatus === 'ongoing') uiStatus = 'Ongoing';
@@ -261,8 +321,9 @@ export default function CoachDashboard() {
     return {
       id,
       name: studentName,
+      title: sessionTitle,
       sport: sportTitle,
-      subtitle: `${sportTitle} • ${priceText}`,
+      subtitle: `${sessionTitle || sportTitle} • ${priceText}`,
       price: numericPrice.toString(),
       startedAt: session.startedAt ? formatSingleTime(session.startedAt) : undefined,
       date: dateFormatted,
@@ -296,15 +357,76 @@ export default function CoachDashboard() {
       ''
     ).toString().toLowerCase().trim();
 
-    if (st === 'confirmed' || st === 'accepted' || st === 'approved' || st === 'upcoming') return 'accepted';
-    if (st === 'ongoing' || st === 'active' || st === 'started' || st === 'in_progress') return 'ongoing';
-    if (st === 'completed' || st === 'done' || st === 'finished') return 'completed';
+    if (st === 'completed' || st === 'done' || st === 'finished' || st === 'ended') return 'completed';
     if (st === 'cancelled' || st === 'canceled' || st === 'declined' || st === 'rejected' || st === 'no_show' || st === 'no-show') return 'cancelled';
+    if (
+      st === 'ongoing' || 
+      st === 'active' || 
+      st === 'started' || 
+      st === 'in_progress' || 
+      st === 'in-progress' || 
+      st === 'session_started' || 
+      st === 'live' ||
+      s.attendanceVerified === true ||
+      s.attendanceStatus?.toString().toLowerCase() === 'verified' ||
+      (!!s.startedAt && !s.endedAt)
+    ) {
+      return 'ongoing';
+    }
+    if (st === 'confirmed' || st === 'accepted' || st === 'approved' || st === 'upcoming') return 'accepted';
     
     return 'requested';
   };
 
-  const rawSessions = Array.isArray(allSessionsResponse) ? allSessionsResponse : [];
+  // Merge sessions from all available endpoints (dashboard, segmented, my sessions) to ensure full data
+  const rawDashboardUpcoming = Array.isArray(dashboardData?.data?.upcomingSessions) ? dashboardData.data.upcomingSessions : [];
+  const rawDashboardActive = Array.isArray(dashboardData?.data?.activeSessions) ? dashboardData.data.activeSessions : [];
+  const rawSegmentedUpcoming = Array.isArray(segmentedSessions?.data?.upcoming) ? segmentedSessions.data.upcoming : [];
+  const rawSegmentedCurrent = Array.isArray(segmentedSessions?.data?.current) ? segmentedSessions.data.current : [];
+  const rawSegmentedCompleted = Array.isArray(segmentedSessions?.data?.completed) ? segmentedSessions.data.completed : [];
+  const rawMySessions = Array.isArray(allSessionsResponse) ? allSessionsResponse : (Array.isArray(allSessionsResponse?.data) ? allSessionsResponse.data : []);
+
+  const sessionMap = new Map<string, any>();
+
+  const registerSession = (s: any, defaultStatus?: string) => {
+    if (!s) return;
+    const sid = s._id || s.id;
+    if (!sid) return;
+    const prev = sessionMap.get(sid) || {};
+
+    let chosenStatus = s.status || prev.status || defaultStatus;
+    if (defaultStatus === 'ongoing' || prev.status === 'ongoing') {
+      chosenStatus = 'ongoing';
+    } else if (defaultStatus === 'completed' || prev.status === 'completed') {
+      chosenStatus = 'completed';
+    }
+
+    sessionMap.set(sid, {
+      ...prev,
+      ...s,
+      status: chosenStatus,
+      slot: (typeof s.slot === 'object' && s.slot) ? s.slot : (prev.slot || s.slot),
+      user: (typeof s.user === 'object' && s.user) ? s.user : (prev.user || s.user),
+      child: (typeof s.child === 'object' && s.child) ? s.child : (prev.child || s.child),
+      studentName: s.studentName || prev.studentName,
+      time: (s.time && s.time !== 'Scheduled Time' && s.time !== 'Time TBD') ? s.time : (prev.time || s.time),
+      endTime: s.endTime || prev.endTime,
+      startTime: s.startTime || prev.startTime,
+      title: s.title || prev.title,
+      sport: (s.sport && s.sport !== 'Badminton') ? s.sport : (prev.sport || s.sport),
+      date: s.date || prev.date || s.startDate || prev.startDate,
+      location: s.location || prev.location
+    });
+  };
+
+  rawDashboardUpcoming.forEach((s: any) => registerSession(s, 'upcoming'));
+  rawDashboardActive.forEach((s: any) => registerSession(s, 'ongoing'));
+  rawSegmentedUpcoming.forEach((s: any) => registerSession(s, 'upcoming'));
+  rawSegmentedCurrent.forEach((s: any) => registerSession(s, 'ongoing'));
+  rawSegmentedCompleted.forEach((s: any) => registerSession(s, 'completed'));
+  rawMySessions.forEach((s: any) => registerSession(s));
+
+  const rawSessions = Array.from(sessionMap.values());
 
   const upcomingSessionsList = dedupe(rawSessions.filter((s: any) => {
     const st = getNormalizedStatus(s);
@@ -330,114 +452,52 @@ export default function CoachDashboard() {
     }
   ];
 
-  const { data: coachBannersResponse } = useQuery({
+  const { data: coachBannersResponse, refetch: refetchCoachBanners } = useQuery({
     queryKey: ['coachAppBanners'],
     queryFn: async () => {
       try {
         const res = await api.get('/coach-app/banners');
-        return res.data?.banners || res.data?.data || res.data;
+        return res.data;
       } catch (e) {
         return null;
       }
     }
   });
 
-  const defaultBanners: Array<{ id: string; title: string; desc: string; color: string; route: string; buttonText: string; imageUrl?: string }> = [
-    { id: '1', title: 'Welcome Coach Partner!', desc: 'Complete KYC & Partner Agreement to start coaching students in your area.', color: 'bg-secondary', route: '/(coach)/onboarding', buttonText: 'KYC & Agreement', imageUrl: undefined },
-    { id: '2', title: 'Boost Group Session Earnings', desc: 'Host multi-student group batches this weekend to maximize your income.', color: 'bg-[#4B9C73]', route: '/(coach)/(coach-tabs)/schedule', buttonText: 'Manage Batches', imageUrl: undefined },
-    { id: '3', title: 'Verify Session OTPs Instantly', desc: 'Use individual or group batch OTP verification to confirm student attendance.', color: 'bg-[#F58220]', route: '/(coach)/(coach-tabs)/activity', buttonText: 'Verify OTP', imageUrl: undefined }
-  ];
-
-  const serverBannersList = Array.isArray(coachBannersResponse) ? coachBannersResponse.map((b: any, idx: number) => ({
-    id: b._id || b.id || idx.toString(),
-    title: b.title || b.name || 'Coach Update',
-    desc: b.description || b.desc || b.subtitle || 'Check out new coaching opportunities.',
-    color: idx % 3 === 0 ? 'bg-secondary' : idx % 3 === 1 ? 'bg-[#4B9C73]' : 'bg-[#F58220]',
-    route: b.route || b.link || b.targetUrl || '/(coach)/(coach-tabs)/coach-dashboard',
-    buttonText: b.buttonText || b.ctaText || 'Learn More',
-    imageUrl: b.imageUrl || b.image
-  })) : [];
-
-  const banners = serverBannersList.length > 0 ? serverBannersList : defaultBanners;
+  const banners = normalizeBanners(coachBannersResponse, '/(coach)/(coach-tabs)/schedule', [], 'coach');
 
   const [activeBannerIndex, setActiveBannerIndex] = React.useState(0);
   const bannerScrollRef = React.useRef<React.ComponentRef<typeof ScrollView>>(null);
 
   React.useEffect(() => {
+    const unsubscribeFocus = navigation.addListener('focus', () => {
+      refetchDashboard();
+      refetchWalletSummary();
+      refetchCoachBanners();
+    });
+    return unsubscribeFocus;
+  }, [navigation, refetchDashboard, refetchWalletSummary, refetchCoachBanners]);
+
+  const BANNER_CARD_GAP = 14;
+  const bannerCardWidth = require('react-native').Dimensions.get('window').width - 48;
+
+  React.useEffect(() => {
+    if (banners.length <= 1) return;
     const timer = setInterval(() => {
       const nextIndex = (activeBannerIndex + 1) % banners.length;
-      const width = require('react-native').Dimensions.get('window').width;
-      bannerScrollRef.current?.scrollTo({ x: nextIndex * width, animated: true });
+      bannerScrollRef.current?.scrollTo({ x: nextIndex * (bannerCardWidth + BANNER_CARD_GAP), animated: true });
       setActiveBannerIndex(nextIndex);
-    }, 3000);
+    }, 4000);
     return () => clearInterval(timer);
-  }, [activeBannerIndex, banners.length]);
+  }, [activeBannerIndex, banners.length, bannerCardWidth]);
 
   return (
     <View className="flex-1 bg-[#EEF3F9]">
       {/* Sticky Header Section */}
       <View className="z-10">
-        {/* Header / Banner Carousel */}
-        <View className="relative">
-          <ScrollView 
-            ref={bannerScrollRef}
-            horizontal 
-            pagingEnabled 
-            showsHorizontalScrollIndicator={false}
-            onScroll={(e) => {
-              const slideSize = e.nativeEvent.layoutMeasurement.width;
-              const index = e.nativeEvent.contentOffset.x / slideSize;
-              setActiveBannerIndex(Math.round(index));
-            }}
-            scrollEventThrottle={16}
-          >
-            {banners.map((banner, index) => (
-              <View 
-                key={banner.id} 
-                className={`${banner.color} pt-28 pb-16 rounded-b-3xl relative overflow-hidden`}
-                style={{ width: require('react-native').Dimensions.get('window').width }}
-              >
-                {banner.imageUrl ? (
-                  <Image 
-                    source={{ uri: banner.imageUrl }} 
-                    style={{ position: 'absolute', width: '100%', height: '100%', opacity: 0.25 }}
-                    resizeMode="cover" 
-                  />
-                ) : null}
-                <View className="px-6 flex-row justify-between items-start z-10">
-                  <View className="flex-1">
-                    <Typography variant="h1" color="white" weight="bold" className="mb-2">
-                      {banner.title}
-                    </Typography>
-                    <Typography variant="body2" color="white" className="opacity-90 leading-5">
-                      {banner.desc}
-                    </Typography>
-                    {banner.route && (
-                      <TouchableOpacity 
-                        onPress={() => router.push(banner.route as any)}
-                        className="mt-3 bg-white/25 self-start px-4 py-1.5 rounded-full border border-white/30"
-                      >
-                        <Typography variant="caption" color="white" weight="bold">{banner.buttonText}</Typography>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                </View>
-              </View>
-            ))}
-          </ScrollView>
-          
-          {/* Pagination Dots */}
-          <View className="absolute bottom-12 left-0 right-0 flex-row justify-center pointer-events-none">
-            {banners.map((_, i) => (
-              <View 
-                key={i} 
-                className={`w-2 h-2 rounded-full mx-1 ${activeBannerIndex === i ? 'bg-white' : 'bg-white/50'}`} 
-              />
-            ))}
-          </View>
-
+        <View className="bg-secondary pt-14 pb-14 rounded-b-3xl px-6 shadow-sm relative overflow-hidden">
           {/* Header Row (Left: Location, Right: Settings & Notifications) */}
-          <View className="flex-row items-center justify-between absolute top-12 left-6 right-6 z-20 pointer-events-box-none">
+          <View className="flex-row items-center justify-between mb-4">
             {/* Active Location Display on the Left */}
             <TouchableOpacity 
               onPress={() => router.push('/locations')}
@@ -452,22 +512,33 @@ export default function CoachDashboard() {
             </TouchableOpacity>
 
             {/* Sticky Header Icons */}
-            <View className="flex-row items-center pointer-events-box-none">
-              <TouchableOpacity className="relative p-1" onPress={() => router.push('/notifications')}>
+            <View className="flex-row items-center">
+              <TouchableOpacity className="p-1 mr-3" onPress={() => router.push('/(coach)/wallet' as any)}>
+                <Ionicons name="wallet-outline" size={24} color="white" />
+              </TouchableOpacity>
+              <TouchableOpacity className="relative p-1 mr-3" onPress={() => router.push('/notifications')}>
                 <Ionicons name="notifications-outline" size={24} color="white" />
                 {unreadCount > 0 && (
                   <View className="absolute top-0 right-0 w-2.5 h-2.5 bg-primary rounded-full border border-secondary" />
                 )}
               </TouchableOpacity>
-              <TouchableOpacity className="p-1 ml-3" onPress={() => router.push('/settings')}>
+              <TouchableOpacity className="p-1" onPress={() => router.push('/settings')}>
                 <Ionicons name="settings-outline" size={24} color="white" />
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* Coach Welcome Info */}
+          <Typography variant="h1" color="white" weight="bold" className="font-outfit-bold text-2xl mb-1">
+            Welcome back, {user?.name || 'Coach'}!
+          </Typography>
+          <Typography variant="body2" color="white" className="opacity-80 font-outfit text-xs leading-4">
+            Manage your sessions, track student attendance, and grow your earnings.
+          </Typography>
         </View>
 
         {/* Metrics Cards (Overlapping header) */}
-        <View className="px-6 -mt-8 mb-6 flex-row justify-between gap-3">
+        <View className="px-6 -mt-8 mb-4 flex-row justify-between gap-3">
           <TouchableOpacity 
             onPress={() => openMetricsModal('earnings')}
             className="flex-1 py-3 px-1 rounded-xl bg-[#4B9C73] justify-center items-center"
@@ -481,7 +552,7 @@ export default function CoachDashboard() {
             }}
           >
             <Typography variant="subtitle1" color="white" weight="bold" className="mb-0.5">
-              ₹{metrics?.totalEarnings ?? 0}
+              ₹{totalEarnings}
             </Typography>
             <Typography variant="caption" color="white" className="text-center opacity-90 text-[10px]">Total{'\n'}Earnings</Typography>
           </TouchableOpacity>
@@ -536,6 +607,86 @@ export default function CoachDashboard() {
       </View>
 
       <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} scrollEventThrottle={16} decelerationRate="normal" className="flex-1 pt-2" contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 40, 60) }}>
+        {/* Dynamic Coach Promotional Banners (UI Friendly Dedicated Carousel) */}
+        {banners.length > 0 && (
+          <View className="mb-6 mx-6 relative">
+            <ScrollView 
+              ref={bannerScrollRef}
+              horizontal 
+              decelerationRate="fast"
+              snapToInterval={bannerCardWidth + BANNER_CARD_GAP}
+              snapToAlignment="start"
+              showsHorizontalScrollIndicator={false}
+              onScroll={(e) => {
+                const scrollX = e.nativeEvent.contentOffset.x;
+                const index = Math.round(scrollX / (bannerCardWidth + BANNER_CARD_GAP));
+                setActiveBannerIndex(index);
+              }}
+              scrollEventThrottle={16}
+            >
+              {banners.map((banner, index) => (
+                <TouchableOpacity 
+                  key={banner.id} 
+                  onPress={() => handleBannerNavigation(banner, router, 'coach')}
+                  activeOpacity={0.9}
+                  className={`${banner.color} rounded-3xl shadow-sm overflow-hidden relative justify-between`}
+                  style={{ 
+                    width: bannerCardWidth, 
+                    height: 150,
+                    marginRight: index < banners.length - 1 ? BANNER_CARD_GAP : 0,
+                    ...(banner.bgStyle || {}) 
+                  }}
+                >
+                  {banner.imageUrl ? (
+                    <Image 
+                      source={{ uri: banner.imageUrl }} 
+                      style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, width: '100%', height: '100%' }}
+                      resizeMode="cover" 
+                    />
+                  ) : null}
+                  {(banner.title || banner.desc) ? (
+                    <View className="p-5 w-2/3 z-10 flex-1 justify-between bg-black/25">
+                      <View>
+                        {banner.title ? (
+                          <Typography variant="h3" color="white" weight="bold" className="mb-1 font-outfit-bold text-lg">
+                            {banner.title}
+                          </Typography>
+                        ) : null}
+                        {banner.desc ? (
+                          <Typography variant="caption" color="white" className="mb-3 opacity-90 leading-4 font-outfit text-xs">
+                            {banner.desc}
+                          </Typography>
+                        ) : null}
+                      </View>
+                      {banner.route && banner.buttonText ? (
+                        <TouchableOpacity 
+                          onPress={() => handleBannerNavigation(banner, router, 'coach')}
+                          activeOpacity={0.8}
+                          className="bg-white px-4 py-2 rounded-full self-start shadow-xs"
+                        >
+                          <Typography variant="caption" color="secondary" weight="bold" className="font-outfit-bold text-xs">{banner.buttonText}</Typography>
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+                  ) : null}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            
+            {/* Pagination Dots */}
+            {banners.length > 1 && (
+              <View className="flex-row justify-center items-center mt-3">
+                {banners.map((_, i) => (
+                  <View 
+                    key={i} 
+                    className={`h-1.5 rounded-full mx-1 ${activeBannerIndex === i ? 'w-5 bg-primary' : 'w-1.5 bg-gray-300'}`} 
+                  />
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+
         {/* Upcoming Sessions Section */}
         <View className="pb-6">
           <View className="flex-row justify-between items-center mb-4 px-6">
@@ -583,10 +734,10 @@ export default function CoachDashboard() {
                           </View>
                           <View className="flex-1">
                             <Typography variant="subtitle1" color="secondary" weight="bold" numberOfLines={1} className="font-outfit-bold text-base">
-                              {session.name}
+                              {session.title || `${session.sport} Coaching`}
                             </Typography>
                             <Typography variant="caption" color="primary" weight="bold" className="text-xs font-outfit-bold">
-                              {session.sport}
+                              {session.name} • {session.sport}
                             </Typography>
                           </View>
                         </View>
@@ -649,7 +800,8 @@ export default function CoachDashboard() {
                               time: session.time,
                               location: session.location,
                               price: session.price,
-                              coachSport: session.sport
+                              coachSport: session.sport,
+                              sessionTitle: session.title
                             }
                           })}
                           className="px-4 py-3 rounded-2xl bg-blue-50 border border-blue-200 items-center justify-center active:opacity-80"
@@ -671,7 +823,8 @@ export default function CoachDashboard() {
                             time: session.time,
                             location: session.location,
                             price: session.price,
-                            coachSport: session.sport
+                            coachSport: session.sport,
+                            sessionTitle: session.title
                           }
                         })}
                         className="w-full py-3 rounded-2xl bg-[#0F2C59] items-center justify-center shadow-xs active:opacity-80 mt-2"
@@ -822,10 +975,10 @@ export default function CoachDashboard() {
                       </Typography>
                     </View>
                     <Typography variant="h3" color="white" weight="bold" className="text-white text-xl">
-                      {session.name}
+                      {session.title || `${session.sport} Coaching`}
                     </Typography>
                     <Typography variant="body2" color="white" className="text-white/80 mt-1 mb-6">
-                      {session.sport}
+                      {session.name} • {session.sport}
                     </Typography>
                   </View>
 
@@ -839,7 +992,9 @@ export default function CoachDashboard() {
                         studentName: session.name,
                         date: session.date,
                         time: session.time,
-                        location: session.location
+                        location: session.location,
+                        sessionTitle: session.title,
+                        coachSport: session.sport
                       }
                     })}
                   >
@@ -854,25 +1009,37 @@ export default function CoachDashboard() {
           )}
         </View>
 
-        {/* My Communities & Programs Section */}
+        {/* My Communities Section */}
         <View className="px-6 pb-6">
-          <View className="flex-row justify-between items-center mb-4 flex-wrap gap-y-2">
-            <View className="flex-1 flex-row items-center min-w-[180px] pr-2">
-              <Typography variant="h3" color="secondary" weight="bold" className="text-[17px] leading-6" numberOfLines={1}>
-                My Communities & Programs
+          <View className="flex-row justify-between items-center mb-4">
+            <View className="flex-row items-center">
+              <Typography variant="h3" color="secondary" weight="bold" className="font-outfit-bold text-lg">
+                My Communities
               </Typography>
-              <View className="w-2.5 h-2.5 rounded-full bg-primary ml-1.5 flex-shrink-0" />
+              <View className="w-2.5 h-2.5 rounded-full bg-primary ml-2" />
             </View>
 
-            <TouchableOpacity 
-              onPress={() => setSalaryHistoryModalVisible(true)}
-              className="flex-row items-center bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-200/80 flex-shrink-0 active:opacity-80"
-            >
-              <Ionicons name="cash-outline" size={14} color="#047857" className="mr-1" />
-              <Typography variant="caption" className="text-[#047857] font-bold text-[11px] font-outfit-bold">
-                Salary History
-              </Typography>
-            </TouchableOpacity>
+            <View className="flex-row items-center gap-2">
+              <TouchableOpacity 
+                onPress={() => setEarningsHistoryModalVisible(true)}
+                className="flex-row items-center bg-emerald-50 px-2.5 py-1.5 rounded-full border border-emerald-200 active:opacity-80"
+              >
+                <Ionicons name="cash-outline" size={13} color="#047857" className="mr-1" />
+                <Typography variant="caption" className="text-[#047857] font-bold text-[11px] font-outfit-bold">
+                  Earnings
+                </Typography>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                onPress={() => router.push('/(coach)/community' as any)}
+                activeOpacity={0.7}
+                className="py-1 px-1"
+              >
+                <Typography variant="body2" color="primary" weight="bold" className="font-outfit-bold text-sm">
+                  View All
+                </Typography>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {displayCommunities.length === 0 ? (
@@ -928,7 +1095,7 @@ export default function CoachDashboard() {
                   )}
                 </View>
 
-                {/* Schedule & Salary */}
+                {/* Schedule & Earnings */}
                 <View className="bg-[#F8FAFC] rounded-2xl p-3 mb-4 border border-slate-100">
                   <View className="flex-row items-center mb-1.5">
                     <Ionicons name="time-outline" size={14} color="#64748B" className="mr-2" />
@@ -941,7 +1108,7 @@ export default function CoachDashboard() {
                     <View className="flex-row items-center">
                       <Ionicons name="wallet-outline" size={14} color="#10B981" className="mr-2" />
                       <Typography variant="caption" className="text-emerald-700 font-bold text-[12px]">
-                        {item.salary || 'Salary Contracted'}
+                        {item.earnings || item.payout || item.salary || 'Contracted Earnings'}
                       </Typography>
                     </View>
 
@@ -989,6 +1156,28 @@ export default function CoachDashboard() {
             );
           })
         )}
+
+        {/* Downside View All Button */}
+        <TouchableOpacity
+          onPress={() => router.push('/(coach)/community' as any)}
+          activeOpacity={0.85}
+          className="mt-2 py-3 px-4 rounded-2xl bg-white border border-gray-200 shadow-2xs flex-row items-center justify-between active:bg-gray-50"
+        >
+          <View className="flex-row items-center">
+            <View className="w-8 h-8 rounded-full bg-blue-50 items-center justify-center mr-2.5">
+              <Ionicons name="business" size={16} color="#0F2C59" />
+            </View>
+            <Typography variant="subtitle2" color="secondary" weight="bold" className="font-outfit-bold text-xs">
+              View All Communities & Batches
+            </Typography>
+          </View>
+          <View className="flex-row items-center">
+            <Typography variant="caption" color="primary" weight="bold" className="font-outfit-bold text-xs mr-1">
+              Open
+            </Typography>
+            <Ionicons name="chevron-forward" size={14} color="#FF5100" />
+          </View>
+        </TouchableOpacity>
         </View>
 
         {/* Learning & Tips */}
@@ -1156,23 +1345,23 @@ export default function CoachDashboard() {
                   <View className="flex-row justify-between items-center bg-green-50 border border-green-100 p-4 rounded-2xl mb-4">
                     <View>
                       <Typography variant="caption" className="text-green-800 font-semibold mb-0.5">Available Balance</Typography>
-                      <Typography variant="h2" className="text-[#2b7a43] text-2xl font-bold">₹{metrics?.availableBalance ?? 0}</Typography>
+                      <Typography variant="h2" className="text-[#2b7a43] text-2xl font-bold">₹{availableBalance}</Typography>
                     </View>
                     <Ionicons name="cash-outline" size={32} color="#4B9C73" />
                   </View>
                   
                   <View>
                     <View className="flex-row justify-between items-center border-b border-gray-100 pb-2 mb-3">
-                      <Typography variant="body2" color="muted">Completed Sessions ({metrics?.totalSessions ?? 0})</Typography>
-                      <Typography variant="body2" color="secondary" weight="bold">₹{metrics?.totalEarnings ?? 0}</Typography>
+                      <Typography variant="body2" color="muted">Completed Sessions ({metrics?.totalSessions ?? completedSessionsList.length})</Typography>
+                      <Typography variant="body2" color="secondary" weight="bold">₹{totalEarnings}</Typography>
                     </View>
                     <View className="flex-row justify-between items-center border-b border-gray-100 pb-2 mb-3">
-                      <Typography variant="body2" color="muted">Pending Balance</Typography>
-                      <Typography variant="body2" className="text-orange-600 font-bold">₹{metrics?.pendingBalance ?? 0}</Typography>
+                      <Typography variant="body2" color="muted">Pending Balance (Held)</Typography>
+                      <Typography variant="body2" className="text-orange-600 font-bold">₹{pendingBalance}</Typography>
                     </View>
                     <View className="flex-row justify-between items-center pt-1">
-                      <Typography variant="body1" color="secondary" weight="bold">Net Income</Typography>
-                      <Typography variant="body1" className="text-[#2b7a43] font-bold">₹{metrics?.totalEarnings ?? 0}</Typography>
+                      <Typography variant="body1" color="secondary" weight="bold">Total Earnings</Typography>
+                      <Typography variant="body1" className="text-[#2b7a43] font-bold">₹{totalEarnings}</Typography>
                     </View>
                   </View>
                 </View>
@@ -1357,13 +1546,13 @@ export default function CoachDashboard() {
         </View>
       )}
 
-      {/* Salary Payout History Modal */}
-      {salaryHistoryModalVisible && (
+      {/* Earnings Payout History Modal */}
+      {earningsHistoryModalVisible && (
         <View className="absolute inset-0 bg-black/50 justify-end z-50">
           <TouchableOpacity 
             className="absolute inset-0" 
             activeOpacity={1} 
-            onPress={() => setSalaryHistoryModalVisible(false)} 
+            onPress={() => setEarningsHistoryModalVisible(false)} 
           />
           <View 
             onStartShouldSetResponder={() => true}
@@ -1376,15 +1565,15 @@ export default function CoachDashboard() {
             <View className="flex-row justify-between items-center mb-4">
               <View>
                 <Typography variant="h3" color="secondary" weight="bold" className="text-xl">
-                  Salary Payout History
+                  Earnings Payout History
                 </Typography>
                 <Typography variant="caption" color="muted">
-                  Assigned Community Contracts Payout Log
+                  Assigned Community Contracts & Earnings Log
                 </Typography>
               </View>
 
               <TouchableOpacity 
-                onPress={() => setSalaryHistoryModalVisible(false)}
+                onPress={() => setEarningsHistoryModalVisible(false)}
                 className="w-8 h-8 rounded-full bg-gray-100 justify-center items-center"
               >
                 <Ionicons name="close" size={18} color="#0F2C59" />
@@ -1392,17 +1581,17 @@ export default function CoachDashboard() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} className="max-h-[380px] mb-4">
-              {displaySalaryHistory.length === 0 ? (
+              {displayEarningsHistory.length === 0 ? (
                 <View className="py-8 items-center">
                   <Ionicons name="receipt-outline" size={36} color="#9CA3AF" className="mb-2" />
-                  <Typography variant="body2" color="muted">No salary payout history available yet.</Typography>
+                  <Typography variant="body2" color="muted">No earnings payout history available yet.</Typography>
                 </View>
               ) : (
-                displaySalaryHistory.map((pay: any, idx: number) => (
+                displayEarningsHistory.map((pay: any, idx: number) => (
                   <View key={pay.id || idx} className="p-4 bg-gray-50 rounded-2xl mb-3 border border-gray-100 flex-row justify-between items-center">
                     <View className="flex-1 pr-2">
                       <Typography variant="subtitle2" color="secondary" weight="bold">
-                        {pay.period || 'Monthly Salary Payout'}
+                        {pay.period || 'Monthly Earnings Payout'}
                       </Typography>
                       <Typography variant="caption" color="muted" className="mt-0.5">
                         {pay.date} • {pay.method || 'Bank Transfer'}
@@ -1427,7 +1616,7 @@ export default function CoachDashboard() {
             <Button 
               title="Close" 
               variant="secondary"
-              onPress={() => setSalaryHistoryModalVisible(false)} 
+              onPress={() => setEarningsHistoryModalVisible(false)} 
             />
           </View>
         </View>

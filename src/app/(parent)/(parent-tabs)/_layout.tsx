@@ -1,12 +1,27 @@
+import React, { useEffect } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { Tabs } from 'expo-router';
-import { Platform } from 'react-native';
+import { Tabs, useRouter } from 'expo-router';
+import { Platform, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuthStore } from '@/store';
 
 export default function ParentTabLayout() {
+  const router = useRouter();
+  const { user, token } = useAuthStore();
   const insets = useSafeAreaInsets();
   const bottomPadding = Platform.OS === 'android' ? Math.max(insets.bottom, 16) : Math.max(insets.bottom, 12);
   const barHeight = 58 + bottomPadding;
+
+  // Strict Role Boundary Guard: Coaches can NEVER access parent portal
+  useEffect(() => {
+    if (token && user && user.role === 'coach') {
+      Alert.alert(
+        'Access Denied (Role Boundary)',
+        'Coaches cannot access parent management screens.'
+      );
+      router.replace('/(coach)/(coach-tabs)/coach-dashboard');
+    }
+  }, [user, token, router]);
 
   return (
     <Tabs 

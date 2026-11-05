@@ -22,6 +22,17 @@ export default function SelectPlayerScreen() {
   }>();
   const { user, children: storedChildren } = useAuthStore();
 
+  // Strict Role Guard: Coaches cannot book coaching sessions
+  React.useEffect(() => {
+    if (user?.role === 'coach') {
+      Alert.alert(
+        'Access Denied (Role Boundary)',
+        'Coaches cannot book coaching sessions. Please use your coach dashboard.'
+      );
+      router.replace('/(coach)/(coach-tabs)/coach-dashboard');
+    }
+  }, [user, router]);
+
   // Fetch children list from API
   const { data: childrenResponse, isLoading } = useQuery({
     queryKey: ['children'],
@@ -91,7 +102,7 @@ export default function SelectPlayerScreen() {
   };
 
   // Pricing calculations
-  const perPersonFee = Number(searchParams.price || 400);
+  const perPersonFee = Number(searchParams.price || 0);
   const attendeeCount = selectedPlayerIds.length;
   const subtotal = attendeeCount * perPersonFee;
   const totalAmount = subtotal;

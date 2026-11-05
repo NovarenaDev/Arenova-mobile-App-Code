@@ -15,6 +15,17 @@ export default function PaymentScreen() {
   const { user } = useAuthStore();
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // Strict Role Guard: Coaches cannot make booking payments
+  React.useEffect(() => {
+    if (user?.role === 'coach') {
+      Alert.alert(
+        'Access Denied (Role Boundary)',
+        'Coaches cannot book coaching sessions or make payments. Please use your coach dashboard.'
+      );
+      router.replace('/(coach)/(coach-tabs)/coach-dashboard');
+    }
+  }, [user, router]);
+
   const [isRazorpayModalVisible, setIsRazorpayModalVisible] = useState(false);
   const [razorpayOrder, setRazorpayOrder] = useState<{
     orderId: string;
@@ -35,6 +46,7 @@ export default function PaymentScreen() {
     price, 
     coachName, 
     coachSport,
+    sessionTitle,
     location,
     totalAmount 
   } = useLocalSearchParams<{ 
@@ -49,11 +61,12 @@ export default function PaymentScreen() {
     price?: string;
     coachName?: string;
     coachSport?: string;
+    sessionTitle?: string;
     location?: string;
     totalAmount?: string;
   }>();
 
-  const sessionFee = Number(totalAmount || price || 400);
+  const sessionFee = Number(totalAmount || price || 0);
   const computedTotal = sessionFee;
 
   const handlePayment = async () => {
@@ -149,8 +162,9 @@ export default function PaymentScreen() {
             coachName: coachName || 'Coach',
             studentName: studentName || 'Attendee',
             sport: coachSport || 'Sports',
+            sessionTitle: sessionTitle || `${coachSport || 'Sports'} Coaching`,
             date: date || 'Scheduled Date',
-            time: time || 'Scheduled Time',
+            time: time || 'Time TBD',
             location: location || '',
             amount: computedTotal.toString(),
             txnId: data.razorpay_payment_id
@@ -262,6 +276,21 @@ export default function PaymentScreen() {
     `;
   };
 
+  const handleCloseRazorpay = () => {
+    Alert.alert(
+      'Exit Checkout?',
+      'Are you sure you want to cancel payment? Your slot will not be reserved until payment is completed.',
+      [
+        { text: 'Keep Paying', style: 'cancel' },
+        { 
+          text: 'Exit', 
+          style: 'destructive',
+          onPress: () => setIsRazorpayModalVisible(false)
+        }
+      ]
+    );
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-[#EEF3F9]" edges={['top']}>
       {/* Header */}
@@ -362,48 +391,56 @@ export default function PaymentScreen() {
       <Modal
         visible={isRazorpayModalVisible}
         animationType="slide"
-        onRequestClose={() => {
-          setIsRazorpayModalVisible(false);
-        }}
+        transparent={false}
+        onRequestClose={handleCloseRazorpay}
       >
-        <SafeAreaView className="flex-1 bg-[#EEF3F9]">
-          <View className="px-4 py-3 bg-white border-b border-gray-100 flex-row justify-between items-center shadow-sm">
-            <View className="flex-row items-center">
-              <Ionicons name="shield-checkmark-outline" size={20} color="#FF5100" className="mr-2" />
-              <Typography variant="subtitle1" color="secondary" weight="bold" className="font-outfit-bold">
-                Razorpay Secure Checkout
-              </Typography>
+        <View style={{ flex: 1, backgroundColor: '#0F2C59', paddingTop: insets.top }}>
+          {/* Header */}
+          <View className="px-4 py-3.5 bg-[#0F2C59] border-b border-white/10 flex-row justify-between items-center shadow-sm">
+            <View className="flex-row items-center flex-1 mr-3">
+              <View className="w-9 h-9 rounded-full bg-white/10 items-center justify-center mr-3 border border-white/15">
+                <Ionicons name="shield-checkmark" size={18} color="#FF5100" />
+              </View>
+              <View className="flex-1">
+                <Typography variant="subtitle1" color="white" weight="bold" className="font-outfit-bold text-sm">
+                  Complete Payment
+                </Typography>
+                <Typography variant="caption" color="light" className="font-outfit opacity-75 text-[11px]">
+                  Razorpay 256-bit Secure Checkout
+                </Typography>
+              </View>
             </View>
             <TouchableOpacity 
-              onPress={() => {
-                setIsRazorpayModalVisible(false);
-              }}
-              className="p-1"
+              onPress={handleCloseRazorpay}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              className="w-9 h-9 rounded-full bg-white/15 items-center justify-center active:bg-white/25"
             >
-              <Ionicons name="close" size={24} color="#0F2C59" />
+              <Ionicons name="close" size={20} color="white" />
             </TouchableOpacity>
           </View>
 
-          {razorpayOrder && (
-            <WebView
-              originWhitelist={['*']}
-              source={{ html: getRazorpayHtml() }}
-              onMessage={handleRazorpayMessage}
-              style={{ flex: 1 }}
-              javaScriptEnabled={true}
-              domStorageEnabled={true}
-              startInLoadingState={true}
-              renderLoading={() => (
-                <View className="absolute inset-0 justify-center items-center bg-[#EEF3F9]">
-                  <ActivityIndicator size="large" color="#FF5100" />
-                  <Typography variant="body2" color="secondary" className="mt-3 font-outfit-bold">
-                    Initializing Payment Gateway...
-                  </Typography>
-                </View>
-              )}
-            />
-          )}
-        </SafeAreaView>
+          <View style={{ flex: 1, backgroundColor: '#F9FAFB', paddingBottom: insets.bottom }}>
+            {razorpayOrder && (
+              <WebView
+                originWhitelist={['*']}
+                source={{ html: getRazorpayHtml() }}
+                onMessage={handleRazorpayMessage}
+                style={{ flex: 1, backgroundColor: '#F9FAFB' }}
+                javaScriptEnabled={true}
+                domStorageEnabled={true}
+                startInLoadingState={true}
+                renderLoading={() => (
+                  <View className="absolute inset-0 items-center justify-center bg-[#F9FAFB]">
+                    <ActivityIndicator size="large" color="#FF5100" />
+                    <Typography variant="body2" color="secondary" weight="bold" className="font-outfit-bold mt-3">
+                      Connecting to Razorpay...
+                    </Typography>
+                  </View>
+                )}
+              />
+            )}
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );

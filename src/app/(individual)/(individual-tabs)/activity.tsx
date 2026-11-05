@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, ScrollView, TouchableOpacity, ActivityIndicator, Modal, Alert, Linking } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
@@ -7,15 +7,31 @@ import { Typography, Button } from '@/components/ui';
 import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, RAZORPAY_KEY_ID } from '@/services/api';
+import { useAuthStore } from '@/store';
+import { resolveSessionSport, resolveSessionTitle, resolveCoachName } from '@/utils/sessionFormatter';
+import { 
+  getDeletedPendingTournamentIds, 
+  markPendingTournamentAsDeleted, 
+  markMultiplePendingTournamentsAsDeleted,
+  unmarkPendingTournamentAsDeleted,
+  getConfirmedTournamentIds,
+  markTournamentAsConfirmed,
+  processTournamentRegistrations,
+  normalizeInvoices,
+  invoiceMatchesRegistration,
+  isTournamentInvoice
+} from '@/utils/deletedTournaments';
 
 export default function BookingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
   
   // Section toggle: Coaching Sessions vs Tournament Registrations
   const [sectionType, setSectionType] = useState<'coaching' | 'tournaments'>('coaching');
   const [activeTab, setActiveTab] = useState<'upcoming' | 'completed'>('upcoming');
+  const [tournTab, setTournTab] = useState<'confirmed' | 'pending'>('confirmed');
 
   // Tournaments Detail & Invoice States
   const [selectedReg, setSelectedReg] = useState<any | null>(null);
@@ -53,10 +69,60 @@ export default function BookingsScreen() {
     refetch: refetchTournaments, 
     isRefetching: isRefetchingTournaments 
   } = useQuery({
-    queryKey: ['myTournamentRegistrations'],
+    queryKey: ['myTournamentRegistrations', user?.phone],
     queryFn: async () => {
-      const res = await api.get('/novare/registrations/my');
-      return res.data?.data || res.data;
+      let list: any[] = [];
+      const cleanPhone = (user?.phone || '').replace(/\D/g, '').slice(-10);
+
+      try {
+        const res = await api.get('/novare/registrations/my', {
+          params: cleanPhone ? { phone: cleanPhone, mobile: cleanPhone, mobileNumber: cleanPhone } : undefined
+        });
+        const data = res.data?.data || res.data;
+        list = Array.isArray(data) ? [...data] : (Array.isArray(data?.registrations) ? [...data.registrations] : []);
+      } catch (e) {
+        console.log('Error fetching registrations:', e);
+      }
+
+      // Check invoices to pull any registration by that ID
+      try {
+        const invRes = await api.get('/invoices/my', { params: { limit: 50 } });
+        const invList = normalizeInvoices(invRes.data);
+        for (const inv of invList) {
+          const invRegId = String(
+            inv.registrationId || 
+            inv.registration_id || 
+            inv.registration?._id || 
+            inv.metadata?.registrationId || 
+            inv.metadata?.registration_id || 
+            ''
+          ).trim();
+
+          if (invRegId && invRegId.length > 5) {
+            const alreadyExists = list.some(r => String(r._id || r.id) === invRegId);
+            if (!alreadyExists) {
+              try {
+                const regRes = await api.get(`/novare/registrations/${invRegId}`);
+                const regData = regRes.data?.data || regRes.data;
+                if (regData && (regData._id || regData.id)) {
+                  list.push(regData);
+                }
+              } catch (_) {}
+            }
+          }
+        }
+      } catch (_) {}
+
+      return list;
+    }
+  });
+
+  // 3. Invoices Query
+  const { data: invoicesResponse } = useQuery({
+    queryKey: ['invoices'],
+    queryFn: async () => {
+      const res = await api.get('/invoices/my', { params: { limit: 50 } }).catch(() => null);
+      return res?.data?.data || res?.data || [];
     }
   });
 
@@ -74,15 +140,39 @@ export default function BookingsScreen() {
   );
   const displayBookings = activeTab === 'upcoming' ? upcomingBookings : completedBookings;
 
-  const rawTournaments = Array.isArray(tournamentsResponse)
-    ? tournamentsResponse
-    : (tournamentsResponse?.registrations || tournamentsResponse?.data || []);
+  const [deletedTournamentIds, setDeletedTournamentIds] = useState<string[]>([]);
+  const [locallyConfirmedIds, setLocallyConfirmedIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    getDeletedPendingTournamentIds().then(setDeletedTournamentIds);
+    getConfirmedTournamentIds().then(setLocallyConfirmedIds);
+  }, []);
+
+  const {
+    confirmedRegistrations: confirmedTournaments,
+    pendingRegistrations: pendingTournaments,
+    allInvoices,
+    totalPaidAmount,
+  } = useMemo(() => {
+    return processTournamentRegistrations({
+      rawRegistrations: tournamentsResponse,
+      invoicesResponse,
+      locallyConfirmedIds,
+      deletedIds: deletedTournamentIds,
+    });
+  }, [tournamentsResponse, invoicesResponse, locallyConfirmedIds, deletedTournamentIds]);
+
+  const displayTournaments = tournTab === 'confirmed' ? confirmedTournaments : pendingTournaments;
 
   const isRegConfirmed = (reg: any) => {
-    const paymentStatus = String(reg?.paymentStatus || '').toUpperCase();
-    const registrationStatus = String(reg?.registrationStatus || reg?.status || '').toUpperCase();
-    const isPaid = paymentStatus === 'PAID' || paymentStatus === 'COMPLETED' || paymentStatus === 'VERIFIED';
-    return isPaid && (registrationStatus === 'CONFIRMED' || registrationStatus === 'VERIFIED');
+    if (!reg) return false;
+    const rid = reg._id || reg.id;
+    return (
+      confirmedTournaments.some((cr: any) => (cr._id || cr.id) === rid) ||
+      locallyConfirmedIds.includes(rid) ||
+      String(reg.paymentStatus || '').toUpperCase() === 'PAID' ||
+      String(reg.registrationStatus || '').toUpperCase() === 'CONFIRMED'
+    );
   };
 
   const handleResumePayment = async (reg: any) => {
@@ -172,6 +262,10 @@ export default function BookingsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
+              if (regId) {
+                await markPendingTournamentAsDeleted(regId);
+                setDeletedTournamentIds(prev => prev.includes(regId) ? prev : [...prev, regId]);
+              }
               await api.delete(`/novare/registrations/${regId}`).catch(() => 
                 api.post(`/novare/registrations/${regId}/cancel`).catch(() => null)
               );
@@ -191,10 +285,46 @@ export default function BookingsScreen() {
               return old;
             });
 
-            queryClient.invalidateQueries({ queryKey: ['myTournamentRegistrations'] });
             setSelectedReg(null);
             Alert.alert('Registration Removed', 'The pending registration has been successfully removed.');
           }
+        }
+      ]
+    );
+  };
+
+  const handleClearAllPending = () => {
+    if (pendingTournaments.length === 0) return;
+    Alert.alert(
+      'Clear All Pending Registrations',
+      `Are you sure you want to delete all ${pendingTournaments.length} pending registration(s)?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete All',
+          style: 'destructive',
+          onPress: async () => {
+            const ids = pendingTournaments.map((r: any) => r._id || r.id).filter(Boolean);
+            await markMultiplePendingTournamentsAsDeleted(ids);
+            setDeletedTournamentIds(prev => Array.from(new Set([...prev, ...ids])));
+            queryClient.invalidateQueries({ queryKey: ['myTournamentRegistrations'] });
+            Alert.alert('Cleared', 'All pending registrations have been deleted.');
+          }
+        }
+      ]
+    );
+  };
+
+  const handleCloseRazorpay = () => {
+    Alert.alert(
+      'Exit Checkout?',
+      'Are you sure you want to cancel payment? You can resume payment anytime from your pending list.',
+      [
+        { text: 'Keep Paying', style: 'cancel' },
+        { 
+          text: 'Exit', 
+          style: 'destructive',
+          onPress: () => setIsRazorpayModalVisible(false)
         }
       ]
     );
@@ -212,6 +342,7 @@ export default function BookingsScreen() {
           try {
             await api.post(`/novare/registrations/${targetRegId}/verify-payment`, {
               transactionId: data.razorpay_payment_id,
+              paymentTransactionId: data.razorpay_payment_id,
               razorpay_payment_id: data.razorpay_payment_id,
               paymentOrderId: data.razorpay_order_id || razorpayOrder?.orderId,
               razorpay_order_id: data.razorpay_order_id || razorpayOrder?.orderId,
@@ -221,6 +352,10 @@ export default function BookingsScreen() {
               registrationStatus: 'CONFIRMED',
               status: 'verified',
             });
+            await unmarkPendingTournamentAsDeleted(targetRegId);
+            await markTournamentAsConfirmed(targetRegId, activePayReg?.tournamentId?._id || activePayReg?.tournamentId);
+            setLocallyConfirmedIds(prev => [...prev, targetRegId]);
+            setDeletedTournamentIds(prev => prev.filter(id => id !== targetRegId));
           } catch (e) {
             console.warn('Payment verification error:', e);
           }
@@ -324,18 +459,28 @@ export default function BookingsScreen() {
       let targetInvoiceId = invoiceIdParam;
 
       if (!targetInvoiceId) {
-        const res = await api.get('/invoices/my', { params: { limit: 25 } }).catch(() => null);
-        const list = res?.data?.data || res?.data || [];
-        const match = list.find((inv: any) => 
-          inv.registrationId === regId || 
-          inv.registration?._id === regId ||
-          inv.metadata?.registrationId === regId ||
-          inv.bookingId === regId
-        ) || list[0];
+        const match = allInvoices.find((inv: any) => {
+          if (regId && invoiceMatchesRegistration(inv, { _id: regId, id: regId })) return true;
+          return false;
+        }) || allInvoices.find((inv: any) => isTournamentInvoice(inv)) || allInvoices[0];
 
         if (match) {
           targetInvoiceId = match._id || match.id;
         }
+      }
+
+      if (!targetInvoiceId) {
+        try {
+          const freshRes = await api.get('/invoices/my', { params: { limit: 25 } });
+          const freshList = normalizeInvoices(freshRes.data);
+          const freshMatch = freshList.find((inv: any) => {
+            if (regId && invoiceMatchesRegistration(inv, { _id: regId, id: regId })) return true;
+            return false;
+          }) || freshList[0];
+          if (freshMatch) {
+            targetInvoiceId = freshMatch._id || freshMatch.id;
+          }
+        } catch (_) {}
       }
 
       if (!targetInvoiceId) {
@@ -356,11 +501,19 @@ export default function BookingsScreen() {
       } else {
         Alert.alert('Notice', 'Invoice PDF will be ready in a few moments.');
       }
-      setIsDownloadingInvoice(false);
     } catch (err: any) {
+      const status = err?.response?.status;
+      if (status === 400) {
+        Alert.alert(
+          'PDF Being Generated',
+          'Your invoice PDF is currently being prepared on the server. Please tap download again in a moment.'
+        );
+      } else {
+        const msg = err?.response?.data?.message || err?.message || 'Invoice PDF is being prepared.';
+        Alert.alert('Invoice', msg);
+      }
+    } finally {
       setIsDownloadingInvoice(false);
-      const msg = err?.response?.data?.message || err?.message || 'Invoice PDF is being prepared.';
-      Alert.alert('Invoice', msg);
     }
   };
 
@@ -433,6 +586,35 @@ export default function BookingsScreen() {
         </View>
       </View>
 
+      {/* Community Passes & Complaints Quick Access */}
+      <View className="px-4 pt-1.5 pb-1">
+        <TouchableOpacity 
+          onPress={() => router.push('/(individual)/community?tab=subscriptions')}
+          className="bg-white rounded-2xl px-3.5 py-2.5 border border-blue-100 shadow-2xs flex-row items-center justify-between"
+          activeOpacity={0.8}
+        >
+          <View className="flex-row items-center flex-1 pr-2">
+            <View className="w-7 h-7 rounded-full bg-blue-50 items-center justify-center mr-2">
+              <Ionicons name="business-outline" size={15} color="#0F2C59" />
+            </View>
+            <View className="flex-1">
+              <Typography variant="caption" color="secondary" weight="bold" className="font-outfit-bold text-xs">
+                Academy Subscriptions & Complaints
+              </Typography>
+              <Typography variant="caption" color="muted" className="text-[10px] font-outfit" numberOfLines={1}>
+                View training passes, schedules, or report issues
+              </Typography>
+            </View>
+          </View>
+          <View className="flex-row items-center">
+            <Typography variant="caption" color="primary" weight="bold" className="font-outfit-bold text-[11px] mr-0.5">
+              Passes
+            </Typography>
+            <Ionicons name="chevron-forward" size={14} color="#FF5100" />
+          </View>
+        </TouchableOpacity>
+      </View>
+
       {/* SECTION 1: COACHING SESSIONS */}
       {sectionType === 'coaching' && (
         <>
@@ -488,9 +670,10 @@ export default function BookingsScreen() {
               contentContainerStyle={{ paddingLeft: 16, paddingRight: 16, paddingTop: 12, paddingBottom: Math.max(insets.bottom + 110, 130) }}
             >
               {displayBookings.map((booking: any) => {
-                const coachName = booking.coach?.name || booking.coachName || 'Coach';
+                const coachName = resolveCoachName(booking);
                 const coachInitials = coachName.split(' ').map((n: string) => n[0]).join('');
                 const statusLabel = booking.status.charAt(0).toUpperCase() + booking.status.slice(1);
+                const resolvedSport = resolveSessionSport(booking, booking.coach);
 
                 return (
                   <View key={booking._id || booking.id} className="bg-white rounded-2xl p-4 mb-4 shadow-sm border border-gray-100">
@@ -506,7 +689,7 @@ export default function BookingsScreen() {
                             {coachName}
                           </Typography>
                           <Typography variant="caption" color="primary" weight="bold" className="font-outfit-bold">
-                            {booking.sport || 'Sports'}
+                            {resolvedSport}
                           </Typography>
                         </View>
                       </View>
@@ -556,18 +739,43 @@ export default function BookingsScreen() {
                             OTP: {booking.attendanceOtp}
                           </Typography>
                         </View>
+                      ) : (booking.status === 'completed' || activeTab === 'completed') ? (
+                        <TouchableOpacity
+                          onPress={() => router.push({
+                            pathname: '/review-player',
+                            params: {
+                              bookingId: booking._id || booking.id,
+                              coachId: booking.coach?._id || booking.coachId || booking.coach?.id,
+                              coachName: coachName,
+                              dateDisplay: booking.slot?.date || booking.date,
+                              sport: resolvedSport,
+                              type: 'coach'
+                            }
+                          })}
+                          className="bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-xl flex-row items-center active:opacity-80"
+                        >
+                          <Ionicons name="star" size={13} color="#D97706" style={{ marginRight: 4 }} />
+                          <Typography variant="caption" className="text-amber-800 font-bold font-outfit-bold text-xs">
+                            Review Coach
+                          </Typography>
+                        </TouchableOpacity>
                       ) : (
                         <View />
                       )}
 
-                      <View className="w-32">
+                      <View className="w-28">
                         <Button 
-                          title="View Details" 
+                          title="Details" 
                           variant="outline" 
                           size="sm"
                           onPress={() => router.push({
                             pathname: '/session-summary',
-                            params: { id: booking._id || booking.id, status: booking.status }
+                            params: { 
+                              id: booking._id || booking.id, 
+                              status: booking.status,
+                              coachSport: resolvedSport,
+                              coachName: coachName
+                            }
                           })}
                         />
                       </View>
@@ -583,6 +791,58 @@ export default function BookingsScreen() {
       {/* SECTION 2: TOURNAMENTS HISTORY */}
       {sectionType === 'tournaments' && (
         <>
+          {/* Total Paid & Invoices Summary Header for Tournaments */}
+          <View className="px-4 pt-2 pb-1">
+            <View className="bg-white rounded-2xl p-3 flex-row items-center justify-between border border-gray-200 shadow-sm">
+              <View className="flex-row items-center flex-1 mr-2">
+                <View className="w-9 h-9 rounded-xl bg-orange-50 border border-orange-200 items-center justify-center mr-2.5">
+                  <Ionicons name="receipt-outline" size={18} color="#FF5100" />
+                </View>
+                <View>
+                  <Typography variant="caption" color="muted" className="font-outfit text-[11px] uppercase tracking-wider">
+                    Total Tournaments Paid
+                  </Typography>
+                  <Typography variant="subtitle2" color="secondary" weight="bold" className="font-outfit-bold text-sm">
+                    ₹{totalPaidAmount.toLocaleString('en-IN')}
+                  </Typography>
+                </View>
+              </View>
+
+              {allInvoices.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => router.push('/my-tournaments')}
+                  className="px-3 py-1.5 bg-[#FF5100] rounded-xl flex-row items-center shadow-xs"
+                >
+                  <Ionicons name="document-text-outline" size={13} color="white" style={{ marginRight: 4 }} />
+                  <Typography variant="caption" color="white" weight="bold" className="font-outfit-bold text-xs">
+                    Invoices ({allInvoices.length})
+                  </Typography>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
+          <View className="px-4 pt-2 pb-2">
+            <View className="flex-row bg-white rounded-full border border-gray-200 overflow-hidden h-11">
+              <TouchableOpacity 
+                className={`flex-1 justify-center items-center ${tournTab === 'confirmed' ? 'bg-secondary' : 'bg-transparent'}`}
+                onPress={() => setTournTab('confirmed')}
+              >
+                <Typography variant="caption" color={tournTab === 'confirmed' ? 'white' : 'secondary'} weight="bold" className="font-outfit-bold">
+                  Confirmed ({confirmedTournaments.length})
+                </Typography>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                className={`flex-1 justify-center items-center ${tournTab === 'pending' ? 'bg-secondary' : 'bg-transparent'}`}
+                onPress={() => setTournTab('pending')}
+              >
+                <Typography variant="caption" color={tournTab === 'pending' ? 'white' : 'secondary'} weight="bold" className="font-outfit-bold">
+                  Pending ({pendingTournaments.length})
+                </Typography>
+              </TouchableOpacity>
+            </View>
+          </View>
+
           {isCurrentLoading ? (
             <View className="flex-1 justify-center items-center">
               <ActivityIndicator size="large" color="#FF5100" />
@@ -590,23 +850,38 @@ export default function BookingsScreen() {
                 Loading tournament registrations...
               </Typography>
             </View>
-          ) : rawTournaments.length === 0 ? (
+          ) : displayTournaments.length === 0 ? (
             <View className="flex-1 px-8 pt-20 items-center">
               <View className="w-16 h-16 rounded-full bg-white shadow-sm items-center justify-center mb-4 border border-gray-100">
-                <Ionicons name="trophy-outline" size={32} color="#9CA3AF" />
+                <Ionicons 
+                  name={tournTab === 'confirmed' ? 'trophy-outline' : 'checkmark-done-circle-outline'} 
+                  size={32} 
+                  color={tournTab === 'confirmed' ? '#9CA3AF' : '#10B981'} 
+                />
               </View>
               <Typography variant="subtitle1" color="secondary" weight="semibold" className="mb-2 font-outfit-semibold">
-                No Tournaments Yet
+                {tournTab === 'confirmed' ? 'No Confirmed Tournaments' : 'No Pending Payments'}
               </Typography>
               <Typography variant="body2" color="muted" align="center" className="mb-6 font-outfit">
-                You haven't registered for any sports tournaments yet. Find upcoming tournaments and compete!
+                {tournTab === 'confirmed' 
+                  ? "You don't have any confirmed tournament registrations yet. Find upcoming tournaments and compete!"
+                  : "Great news! You have no pending payments or unpaid registrations."}
               </Typography>
-              <Button 
-                title="Explore Tournaments" 
-                onPress={() => router.push('/(individual)/(individual-tabs)/tournaments')}
-                fullWidth={false}
-                className="px-6"
-              />
+              {tournTab === 'confirmed' ? (
+                <Button 
+                  title="Explore Tournaments" 
+                  onPress={() => router.push('/(individual)/(individual-tabs)/tournaments')}
+                  fullWidth={false}
+                  className="px-6"
+                />
+              ) : (
+                <Button 
+                  title="View Confirmed" 
+                  onPress={() => setTournTab('confirmed')}
+                  fullWidth={false}
+                  className="px-6"
+                />
+              )}
             </View>
           ) : (
             <ScrollView 
@@ -614,7 +889,24 @@ export default function BookingsScreen() {
               className="flex-1"
               contentContainerStyle={{ paddingLeft: 16, paddingRight: 16, paddingTop: 12, paddingBottom: Math.max(insets.bottom + 110, 130) }}
             >
-              {rawTournaments.map((reg: any, idx: number) => {
+              {tournTab === 'pending' && pendingTournaments.length > 0 && (
+                <View className="flex-row justify-between items-center mb-3 px-1">
+                  <Typography variant="caption" color="muted" className="font-outfit">
+                    {pendingTournaments.length} Pending Registration{pendingTournaments.length > 1 ? 's' : ''}
+                  </Typography>
+                  <TouchableOpacity
+                    onPress={handleClearAllPending}
+                    className="flex-row items-center px-2.5 py-1.5 bg-red-50 border border-red-200 rounded-xl active:bg-red-100 shadow-xs"
+                  >
+                    <Ionicons name="trash-outline" size={13} color="#EF4444" style={{ marginRight: 4 }} />
+                    <Typography variant="caption" weight="bold" className="font-outfit-bold text-red-600 text-xs">
+                      Clear All Pending
+                    </Typography>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {displayTournaments.map((reg: any, idx: number) => {
                 const regId = reg._id || reg.id || idx.toString();
                 const tournamentObj = reg.tournamentId || reg.tournament || {};
                 const tournamentName = tournamentObj.name || tournamentObj.title || reg.tournamentName || 'Tournament';
@@ -649,32 +941,48 @@ export default function BookingsScreen() {
                           weight="bold" 
                           className={`font-outfit-bold text-[10px] ${confirmed ? 'text-emerald-700' : 'text-amber-700'}`}
                         >
-                          {confirmed ? 'REGISTERED' : 'PAYMENT PENDING'}
+                          {confirmed ? (fee > 0 ? `PAID ₹${fee}` : 'REGISTERED') : 'PAYMENT PENDING'}
                         </Typography>
                       </View>
                     </View>
 
-                    {/* Participant Details */}
+                    {/* Participant & Registration Details */}
                     <View className="bg-gray-50 rounded-2xl p-3 mb-3 border border-gray-100">
                       <View className="flex-row justify-between items-center">
                         <Typography variant="caption" color="muted" className="font-outfit">Participant</Typography>
                         <Typography variant="caption" color="secondary" weight="bold" className="font-outfit-bold">
-                          {reg.participantName || reg.name || 'Athlete'}
+                          {reg.participantName || reg.childName || reg.name || user?.name || 'Athlete'}
                         </Typography>
                       </View>
-                      {reg.phone ? (
+                      {(reg.phone || user?.phone) ? (
                         <View className="flex-row justify-between items-center mt-1">
                           <Typography variant="caption" color="muted" className="font-outfit">Contact</Typography>
                           <Typography variant="caption" color="secondary" weight="medium" className="font-outfit text-xs">
-                            +91 {reg.phone}
+                            +91 {reg.phone || user?.phone}
                           </Typography>
                         </View>
                       ) : null}
-                      {reg.amount !== undefined ? (
+                      {regId && !regId.startsWith('synth_') && !regId.startsWith('tourn_reg_') ? (
+                        <View className="flex-row justify-between items-center mt-1">
+                          <Typography variant="caption" color="muted" className="font-outfit">Registration ID</Typography>
+                          <Typography variant="caption" color="secondary" weight="medium" className="font-outfit text-xs">
+                            #{regId.length > 8 ? regId.slice(-8) : regId}
+                          </Typography>
+                        </View>
+                      ) : null}
+                      {reg.invoiceNumber ? (
+                        <View className="flex-row justify-between items-center mt-1">
+                          <Typography variant="caption" color="muted" className="font-outfit">Invoice</Typography>
+                          <Typography variant="caption" color="primary" weight="bold" className="font-outfit-bold text-xs">
+                            #{reg.invoiceNumber}
+                          </Typography>
+                        </View>
+                      ) : null}
+                      {fee > 0 ? (
                         <View className="flex-row justify-between items-center mt-1">
                           <Typography variant="caption" color="muted" className="font-outfit">Fee</Typography>
                           <Typography variant="caption" color="primary" weight="bold" className="font-outfit-bold">
-                            ₹{reg.amount}
+                            ₹{fee}
                           </Typography>
                         </View>
                       ) : null}
@@ -712,9 +1020,12 @@ export default function BookingsScreen() {
 
                             <TouchableOpacity
                               onPress={() => handleDeleteRegistration(reg)}
-                              className="p-1.5 bg-red-50 border border-red-200 rounded-xl items-center justify-center shadow-xs"
+                              className="px-2.5 py-1.5 bg-red-50 border border-red-200 rounded-xl flex-row items-center justify-center shadow-xs active:bg-red-100"
                             >
-                              <Ionicons name="trash-outline" size={14} color="#EF4444" />
+                              <Ionicons name="trash-outline" size={13} color="#EF4444" style={{ marginRight: 4 }} />
+                              <Typography variant="caption" weight="bold" className="font-outfit-bold text-red-600 text-xs">
+                                Delete
+                              </Typography>
                             </TouchableOpacity>
                           </View>
                         )}
@@ -891,51 +1202,57 @@ export default function BookingsScreen() {
         visible={isRazorpayModalVisible}
         animationType="slide"
         transparent={false}
-        onRequestClose={() => setIsRazorpayModalVisible(false)}
+        onRequestClose={handleCloseRazorpay}
       >
-        <SafeAreaView className="flex-1 bg-white" edges={['top', 'bottom']}>
-          <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-100 bg-[#0F2C59]">
-            <View className="flex-row items-center">
-              <View className="w-8 h-8 rounded-full bg-[#FF5100]/20 items-center justify-center mr-3">
+        <View style={{ flex: 1, backgroundColor: '#0F2C59', paddingTop: insets.top }}>
+          {/* Header */}
+          <View className="flex-row items-center justify-between px-4 py-3.5 bg-[#0F2C59] border-b border-white/10">
+            <View className="flex-row items-center flex-1 mr-3">
+              <View className="w-9 h-9 rounded-full bg-white/10 items-center justify-center mr-3 border border-white/15">
                 <Ionicons name="shield-checkmark" size={18} color="#FF5100" />
               </View>
-              <View>
-                <Typography variant="subtitle2" color="white" weight="bold" className="font-outfit-bold">
-                  Arenova Secure Payment
+              <View className="flex-1">
+                <Typography variant="subtitle1" color="white" weight="bold" className="font-outfit-bold text-sm">
+                  Complete Payment
                 </Typography>
-                <Typography variant="caption" className="text-gray-300 font-outfit text-xs">
-                  Razorpay Payment Gateway
+                <Typography variant="caption" color="light" className="font-outfit opacity-75 text-[11px]">
+                  Razorpay 256-bit Secure Checkout
                 </Typography>
               </View>
             </View>
+
             <TouchableOpacity
-              onPress={() => {
-                setIsRazorpayModalVisible(false);
-                Alert.alert('Payment Cancelled', 'Payment cancelled. You can resume it anytime.');
-              }}
-              className="p-1 rounded-full bg-white/10"
+              onPress={handleCloseRazorpay}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              className="w-9 h-9 rounded-full bg-white/15 items-center justify-center active:bg-white/25"
             >
               <Ionicons name="close" size={20} color="white" />
             </TouchableOpacity>
           </View>
-          <WebView
-            originWhitelist={['*']}
-            source={{ html: generateRazorpayHtml() }}
-            onMessage={handleRazorpayMessage}
-            javaScriptEnabled={true}
-            domStorageEnabled={true}
-            startInLoadingState={true}
-            renderLoading={() => (
-              <View className="absolute inset-0 justify-center items-center bg-white z-50">
-                <ActivityIndicator size="large" color="#FF5100" />
-                <Typography variant="body2" color="secondary" className="mt-3 font-outfit">
-                  Loading secure checkout...
-                </Typography>
-              </View>
+
+          {/* WebView Container */}
+          <View style={{ flex: 1, backgroundColor: '#F9FAFB', paddingBottom: insets.bottom }}>
+            {razorpayOrder && (
+              <WebView
+                originWhitelist={['*']}
+                source={{ html: generateRazorpayHtml() }}
+                onMessage={handleRazorpayMessage}
+                javaScriptEnabled={true}
+                domStorageEnabled={true}
+                style={{ flex: 1, backgroundColor: '#F9FAFB' }}
+                startInLoadingState={true}
+                renderLoading={() => (
+                  <View className="absolute inset-0 items-center justify-center bg-[#F9FAFB]">
+                    <ActivityIndicator size="large" color="#FF5100" />
+                    <Typography variant="body2" color="secondary" weight="bold" className="font-outfit-bold mt-3">
+                      Connecting to Razorpay...
+                    </Typography>
+                  </View>
+                )}
+              />
             )}
-            className="flex-1"
-          />
-        </SafeAreaView>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );

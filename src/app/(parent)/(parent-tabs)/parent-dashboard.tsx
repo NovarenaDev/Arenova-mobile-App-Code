@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, ScrollView, TouchableOpacity, ActivityIndicator, Modal, Alert } from 'react-native';
+import { View, ScrollView, TouchableOpacity, ActivityIndicator, Modal, Alert, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Button, ConfirmModal } from '@/components/ui';
@@ -7,6 +7,15 @@ import { useRouter, useNavigation } from 'expo-router';
 import { useAuthStore } from '@/store';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/services/api';
+import { 
+  resolveSessionSport, 
+  resolveSessionTitle, 
+  resolveSessionDate, 
+  resolveSessionTime, 
+  resolveCoachName,
+  resolveStudentName 
+} from '@/utils/sessionFormatter';
+import { normalizeBanners, handleBannerNavigation } from '@/utils/bannerHelpers';
 
 interface Child {
   _id: string;
@@ -105,17 +114,59 @@ export default function ParentDashboard() {
     }
   });
 
-  const { data: bookingsResponse, isLoading: isLoadingBookings } = useQuery({
-    queryKey: ['playerBookings'],
+  const { data: bookingsResponse, isLoading: isLoadingBookings, refetch: refetchBookings } = useQuery({
+    queryKey: ['parentBookings'],
     queryFn: async () => {
       const res = await api.get('/bookings/my');
       return res.data;
     }
   });
 
+  useEffect(() => {
+    const unsubscribeFocus = navigation.addListener('focus', () => {
+      refetchBookings();
+    });
+    return unsubscribeFocus;
+  }, [navigation, refetchBookings]);
+
   const coaches = coachesResponse?.data || [];
-  const allBookings = bookingsResponse?.data || [];
+  const rawBookings = bookingsResponse?.data || bookingsResponse || [];
+  const allBookings: any[] = Array.isArray(rawBookings) ? rawBookings : [];
+
+  // If a child is selected, filter bookings for that child if matches found
+  const filteredBookings = activeChildFilter === 'all' 
+    ? allBookings 
+    : allBookings.filter((b: any) => {
+        const cId = b.childId || b.child?._id || b.child?.id;
+        const cName = selectedChild?.name;
+        if (cId === activeChildFilter) return true;
+        if (Array.isArray(b.childIds) && b.childIds.includes(activeChildFilter)) return true;
+        if (cName && (b.childName === cName || b.studentName?.toLowerCase().includes(cName.toLowerCase()))) return true;
+        return false;
+      });
+
+  const effectiveBookings = filteredBookings.length > 0 ? filteredBookings : allBookings;
   const hasBookings = allBookings.length > 0;
+
+  // Prioritize active and ongoing sessions, then sort by session date
+  const sortedBookings = [...effectiveBookings].sort((a: any, b: any) => {
+    const statusWeight: Record<string, number> = {
+      ongoing: 1,
+      confirmed: 2,
+      accepted: 3,
+      requested: 4,
+      pending: 5,
+      completed: 6,
+      cancelled: 7,
+      no_show: 8
+    };
+    const wa = statusWeight[String(a.status || '').toLowerCase()] || 50;
+    const wb = statusWeight[String(b.status || '').toLowerCase()] || 50;
+    if (wa !== wb) return wa - wb;
+    const dateA = new Date(a.date || a.slot?.date || a.createdAt || 0).getTime();
+    const dateB = new Date(b.date || b.slot?.date || b.createdAt || 0).getTime();
+    return dateB - dateA;
+  });
   const colors = ['bg-emerald-500', 'bg-indigo-500', 'bg-purple-500', 'bg-amber-500', 'bg-blue-500'];
 
   return (
@@ -273,19 +324,65 @@ export default function ParentDashboard() {
               {isLoadingBookings ? (
                 <ActivityIndicator size="small" color="#FF5100" />
               ) : (
-                allBookings.slice(0, 3).map((booking: any) => {
+                sortedBookings.slice(0, 3).map((booking: any) => {
                   const bookingId = booking._id || booking.id;
-                  const coachObj = booking.coachId || booking.coach || {};
-                  const coachName = coachObj.name || `${coachObj.firstName || ''} ${coachObj.lastName || ''}`.trim() || booking.coachName || 'Coach';
-                  const sport = booking.sport || coachObj.sport || 'Sports Training';
-                  const dateStr = booking.date || booking.sessionDate || 'Upcoming Session';
-                  const timeStr = booking.time || booking.sessionTime || '';
-                  const status = (booking.status || 'confirmed').toUpperCase();
+                  const coachName = resolveCoachName(booking);
+                  const resolvedSport = resolveSessionSport(booking, booking.coach || booking.coachId);
+                  const resolvedTitle = resolveSessionTitle(booking, booking.coach || booking.coachId);
+                  const resolvedDate = resolveSessionDate(
+                    booking.slot?.date || 
+                    booking.date || 
+                    booking.slotDate || 
+                    booking.sessionDate || 
+                    booking.startDate || 
+                    booking.createdAt
+                  );
+                  const resolvedTime = resolveSessionTime(booking);
+                  const attendeeName = resolveStudentName(booking);
+                  const rawStatus = String(booking.status || 'confirmed').toLowerCase();
+                  const statusLabel = rawStatus.toUpperCase();
+
+                  const isConfirmed = rawStatus === 'confirmed' || rawStatus === 'accepted';
+                  const isOngoing = rawStatus === 'ongoing';
+                  const isCompleted = rawStatus === 'completed';
+                  const isCancelled = rawStatus === 'cancelled' || rawStatus === 'no_show';
+
+                  const badgeBg = isConfirmed 
+                    ? 'bg-green-50 border border-green-200' 
+                    : isOngoing 
+                      ? 'bg-orange-50 border border-orange-200' 
+                      : isCompleted 
+                        ? 'bg-emerald-50 border border-emerald-200' 
+                        : isCancelled 
+                          ? 'bg-red-50 border border-red-200' 
+                          : 'bg-primary/10 border border-primary/20';
+
+                  const badgeText = isConfirmed 
+                    ? 'text-green-700' 
+                    : isOngoing 
+                      ? 'text-orange-700' 
+                      : isCompleted 
+                        ? 'text-emerald-700' 
+                        : isCancelled 
+                          ? 'text-red-700' 
+                          : 'text-primary';
+
+                  const displaySportTitle = resolvedTitle && resolvedTitle.toLowerCase() !== 'coaching session'
+                    ? resolvedTitle
+                    : `${resolvedSport} Coaching`;
 
                   return (
                     <TouchableOpacity 
                       key={bookingId}
-                      onPress={() => router.push('/(parent)/(parent-tabs)/activity')}
+                      onPress={() => router.push({
+                        pathname: '/session-summary',
+                        params: {
+                          id: bookingId,
+                          status: rawStatus,
+                          coachSport: resolvedSport,
+                          coachName: coachName
+                        }
+                      })}
                       activeOpacity={0.8}
                       className="bg-white rounded-2xl p-4 mb-4 shadow-sm border border-gray-100 flex-row items-center"
                     >
@@ -297,17 +394,18 @@ export default function ParentDashboard() {
                           <Typography variant="subtitle1" color="secondary" weight="bold" className="font-outfit-bold">
                             {coachName}
                           </Typography>
-                          <View className="bg-primary/10 px-2 py-0.5 rounded-md">
-                            <Typography variant="caption" color="primary" weight="bold" className="font-outfit-bold text-[10px]">
-                              {status}
+                          <View className={`px-2 py-0.5 rounded-md ${badgeBg}`}>
+                            <Typography variant="caption" weight="bold" className={`font-outfit-bold text-[10px] ${badgeText}`}>
+                              {statusLabel}
                             </Typography>
                           </View>
                         </View>
-                        <Typography variant="body2" color="muted" className="font-outfit mb-1">
-                          {sport}
+                        <Typography variant="body2" color="primary" weight="bold" className="font-outfit-bold mb-1">
+                          {displaySportTitle}
                         </Typography>
                         <Typography variant="caption" color="secondary" className="font-outfit opacity-80">
-                          {dateStr} {timeStr ? `• ${timeStr}` : ''}
+                          {resolvedDate}{resolvedTime && resolvedTime !== 'Time TBD' ? ` • ${resolvedTime}` : ''}
+                          {attendeeName && attendeeName !== 'Student' ? ` • ${attendeeName}` : ''}
                         </Typography>
                       </View>
                       <Ionicons name="chevron-forward" size={20} color="#9CA3AF" className="ml-2" />
@@ -526,55 +624,14 @@ function ParentBannerCarousel({ router }: { router: any }) {
     queryFn: async () => {
       try {
         const res = await api.get('/users/banners');
-        return res.data?.banners || res.data?.data || res.data;
+        return res.data;
       } catch (e) {
         return null;
       }
     }
   });
 
-  const defaultParentBanners = [
-    {
-      id: '1',
-      title: 'Verified Kids Coaches',
-      desc: 'Select background-checked expert trainers in sports, swimming & fitness for your kids.',
-      color: 'bg-primary',
-      icon: 'shield-checkmark',
-      route: '/(parent)/search',
-      buttonText: 'Find a Coach'
-    },
-    {
-      id: '2',
-      title: 'Family Sports Pass',
-      desc: 'Manage child profiles, track attendance, and receive instant session alerts.',
-      color: 'bg-[#4A90E2]',
-      icon: 'people',
-      route: '/(parent)/family-tree',
-      buttonText: 'Manage Profiles'
-    },
-    {
-      id: '3',
-      title: 'Group Session Discounts',
-      desc: 'Enroll siblings or group batches to unlock up to 30% off coaching fees.',
-      color: 'bg-[#F58220]',
-      icon: 'sparkles',
-      route: '/(parent)/select-sport',
-      buttonText: 'View Sports'
-    }
-  ];
-
-  const serverParentBanners = Array.isArray(userBannersResponse) ? userBannersResponse.map((b: any, idx: number) => ({
-    id: b._id || b.id || idx.toString(),
-    title: b.title || b.name || 'Youth Sports Alert',
-    desc: b.description || b.desc || b.subtitle || 'Explore youth sports and certified coaches.',
-    color: idx % 3 === 0 ? 'bg-primary' : idx % 3 === 1 ? 'bg-[#4A90E2]' : 'bg-[#F58220]',
-    icon: idx % 3 === 0 ? 'shield-checkmark' : idx % 3 === 1 ? 'people' : 'sparkles',
-    route: b.route || b.link || b.targetUrl || '/(parent)/search',
-    buttonText: b.buttonText || b.ctaText || 'Explore',
-    imageUrl: b.imageUrl || b.image
-  })) : [];
-
-  const parentBanners = serverParentBanners.length > 0 ? serverParentBanners : defaultParentBanners;
+  const parentBanners = normalizeBanners(userBannersResponse, '/(parent)/search', [], 'parent');
 
   const [activeBannerIndex, setActiveBannerIndex] = React.useState(0);
   const bannerScrollRef = React.useRef<React.ComponentRef<typeof ScrollView>>(null);
@@ -582,6 +639,7 @@ function ParentBannerCarousel({ router }: { router: any }) {
   const bannerCardWidth = require('react-native').Dimensions.get('window').width - 48;
 
   useEffect(() => {
+    if (parentBanners.length <= 1) return;
     const timer = setInterval(() => {
       const nextIndex = (activeBannerIndex + 1) % parentBanners.length;
       bannerScrollRef.current?.scrollTo({ x: nextIndex * (bannerCardWidth + BANNER_CARD_GAP), animated: true });
@@ -589,6 +647,10 @@ function ParentBannerCarousel({ router }: { router: any }) {
     }, 4000);
     return () => clearInterval(timer);
   }, [activeBannerIndex, parentBanners.length, bannerCardWidth]);
+
+  if (parentBanners.length === 0) {
+    return null;
+  }
 
   return (
     <View className="mt-6 mx-6 relative">
@@ -607,46 +669,71 @@ function ParentBannerCarousel({ router }: { router: any }) {
         scrollEventThrottle={16}
       >
         {parentBanners.map((banner, index) => (
-          <View 
+          <TouchableOpacity 
             key={banner.id}
-            className={`${banner.color} rounded-3xl p-5 shadow-sm overflow-hidden relative justify-between`}
+            onPress={() => handleBannerNavigation(banner, router, 'parent')}
+            activeOpacity={0.9}
+            className={`${banner.color} rounded-3xl shadow-sm overflow-hidden relative justify-between`}
             style={{ 
               width: bannerCardWidth, 
               minHeight: 150,
-              marginRight: index < parentBanners.length - 1 ? BANNER_CARD_GAP : 0
+              height: 150,
+              marginRight: index < parentBanners.length - 1 ? BANNER_CARD_GAP : 0,
+              ...(banner.bgStyle || {})
             }}
           >
-            <View className="w-2/3 z-10">
-              <Typography variant="h3" color="white" weight="bold" className="mb-1 font-outfit-bold text-lg">
-                {banner.title}
-              </Typography>
-              <Typography variant="caption" color="white" className="mb-3 opacity-90 leading-4 font-outfit text-xs">
-                {banner.desc}
-              </Typography>
-              <TouchableOpacity 
-                onPress={() => router.push(banner.route as any)}
-                activeOpacity={0.8}
-                className="bg-white px-4 py-2 rounded-full self-start shadow-xs"
-              >
-                <Typography variant="caption" color="secondary" weight="bold" className="font-outfit-bold text-xs">{banner.buttonText}</Typography>
-              </TouchableOpacity>
-            </View>
-            <View className="absolute -right-4 -bottom-4 opacity-20 pointer-events-none">
-              <Ionicons name={banner.icon as any} size={140} color="white" />
-            </View>
-          </View>
+            {banner.imageUrl ? (
+              <Image 
+                source={{ uri: banner.imageUrl }} 
+                style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, width: '100%', height: '100%' }}
+                resizeMode="cover"
+              />
+            ) : null}
+            {(banner.title || banner.desc) ? (
+              <View className="p-5 w-2/3 z-10 flex-1 justify-between bg-black/25">
+                <View>
+                  {banner.title ? (
+                    <Typography variant="h3" color="white" weight="bold" className="mb-1 font-outfit-bold text-lg">
+                      {banner.title}
+                    </Typography>
+                  ) : null}
+                  {banner.desc ? (
+                    <Typography variant="caption" color="white" className="mb-3 opacity-90 leading-4 font-outfit text-xs">
+                      {banner.desc}
+                    </Typography>
+                  ) : null}
+                </View>
+                {banner.buttonText ? (
+                  <TouchableOpacity 
+                    onPress={() => handleBannerNavigation(banner, router, 'parent')}
+                    activeOpacity={0.8}
+                    className="bg-white px-4 py-2 rounded-full self-start shadow-xs"
+                  >
+                    <Typography variant="caption" color="secondary" weight="bold" className="font-outfit-bold text-xs">{banner.buttonText}</Typography>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            ) : null}
+            {!banner.imageUrl && banner.icon && (
+              <View className="absolute -right-4 -bottom-4 opacity-20 pointer-events-none">
+                <Ionicons name={banner.icon as any} size={140} color="white" />
+              </View>
+            )}
+          </TouchableOpacity>
         ))}
       </ScrollView>
 
       {/* Carousel Indicator Dots */}
-      <View className="flex-row justify-center items-center mt-3">
-        {parentBanners.map((_, i) => (
-          <View 
-            key={i} 
-            className={`h-1.5 rounded-full mx-1 ${activeBannerIndex === i ? 'w-5 bg-primary' : 'w-1.5 bg-gray-300'}`} 
-          />
-        ))}
-      </View>
+      {parentBanners.length > 1 && (
+        <View className="flex-row justify-center items-center mt-3">
+          {parentBanners.map((_, i) => (
+            <View 
+              key={i} 
+              className={`h-1.5 rounded-full mx-1 ${activeBannerIndex === i ? 'w-5 bg-primary' : 'w-1.5 bg-gray-300'}`} 
+            />
+          ))}
+        </View>
+      )}
     </View>
   );
 }

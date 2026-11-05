@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, ScrollView, TouchableOpacity, Image, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography } from '@/components/ui';
@@ -7,10 +7,23 @@ import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/services/api';
 import { getTournamentBanner } from '@/utils/tournamentImages';
+import { useAuthStore } from '@/store';
 
 export default function SelectSportScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuthStore();
+
+  // Strict Role Guard: Coaches cannot access sport selection / player booking flow
+  useEffect(() => {
+    if (user?.role === 'coach') {
+      Alert.alert(
+        'Access Denied (Role Boundary)',
+        'Coaches cannot access player booking flows. Please use your coach dashboard.'
+      );
+      router.replace('/(coach)/(coach-tabs)/coach-dashboard');
+    }
+  }, [user, router]);
 
   const fallbackSports = [
     { id: '1', name: 'Badminton' },

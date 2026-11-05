@@ -37,11 +37,13 @@ export function SessionOtpVerificationModal({ visible, onClose, session, onSucce
   const [errorMsg, setErrorMsg] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [alreadyStartedNotice, setAlreadyStartedNotice] = useState(false);
   const inputRef = useRef<any>(null);
 
   useEffect(() => {
     if (visible) {
       setIsSuccess(false);
+      setAlreadyStartedNotice(false);
       setIsVerifying(false);
       setOtp('');
       setErrorMsg('');
@@ -49,6 +51,11 @@ export function SessionOtpVerificationModal({ visible, onClose, session, onSucce
         inputRef.current?.focus();
       }, 150);
       return () => clearTimeout(timer);
+    } else {
+      setOtp('');
+      setErrorMsg('');
+      setIsSuccess(false);
+      setAlreadyStartedNotice(false);
     }
   }, [visible, session]);
 
@@ -101,6 +108,25 @@ export function SessionOtpVerificationModal({ visible, onClose, session, onSucce
         err?.response?.data?.error || 
         err?.message || 
         'Invalid attendance code or outside session start window (±15 min).';
+
+      const lowerMsg = serverMsg.toLowerCase();
+      if (
+        lowerMsg.includes('already started') || 
+        lowerMsg.includes('already active') || 
+        lowerMsg.includes('already verified') ||
+        lowerMsg.includes('session in progress') ||
+        lowerMsg.includes('already ongoing') ||
+        lowerMsg.includes('already begun')
+      ) {
+        setAlreadyStartedNotice(true);
+        setIsSuccess(true);
+        setTimeout(() => {
+          if (onSuccess) onSuccess();
+          onClose();
+        }, 1100);
+        return;
+      }
+
       setErrorMsg(serverMsg);
     }
   };
@@ -163,10 +189,12 @@ export function SessionOtpVerificationModal({ visible, onClose, session, onSucce
                       <Ionicons name="checkmark-circle" size={54} color="#10B981" />
                     </View>
                     <Typography variant="h2" color="secondary" weight="bold" className="font-outfit-bold text-xl mb-1 text-center">
-                      Attendance Verified!
+                      {alreadyStartedNotice ? 'Session Already Active!' : 'Attendance Verified!'}
                     </Typography>
                     <Typography variant="body2" color="muted" align="center" className="font-outfit px-4 text-xs">
-                      Session has officially started. Best of luck with training!
+                      {alreadyStartedNotice 
+                        ? 'This session is already in progress. Redirecting to your Current sessions tab...' 
+                        : 'Session has officially started. Moving to your current session...'}
                     </Typography>
                   </View>
                 ) : (

@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { View, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, ScrollView, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Button } from '@/components/ui';
@@ -7,6 +7,14 @@ import { useRouter, useNavigation } from 'expo-router';
 import { useAuthStore } from '@/store';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/services/api';
+import { 
+  resolveSessionSport, 
+  resolveSessionTitle, 
+  resolveSessionDate, 
+  resolveSessionTime, 
+  resolveCoachName 
+} from '@/utils/sessionFormatter';
+import { normalizeBanners, handleBannerNavigation } from '@/utils/bannerHelpers';
 
 export default function IndividualDashboard() {
   const router = useRouter();
@@ -32,7 +40,7 @@ export default function IndividualDashboard() {
     }
   });
 
-  const { data: bookingsResponse, isLoading: isLoadingBookings } = useQuery({
+  const { data: bookingsResponse, isLoading: isLoadingBookings, refetch: refetchBookings } = useQuery({
     queryKey: ['playerBookings'],
     queryFn: async () => {
       const res = await api.get('/bookings/my');
@@ -40,64 +48,52 @@ export default function IndividualDashboard() {
     }
   });
 
-  const coaches = coachesResponse?.data || [];
-  const allBookings = bookingsResponse?.data || [];
-  const hasBookings = allBookings.length > 0;
-
-  const { data: userBannersResponse } = useQuery({
+  const { data: userBannersResponse, refetch: refetchUserBanners } = useQuery({
     queryKey: ['usersBanners'],
     queryFn: async () => {
       try {
         const res = await api.get('/users/banners');
-        return res.data?.banners || res.data?.data || res.data;
+        return res.data;
       } catch (e) {
         return null;
       }
     }
   });
 
-  const defaultPlayerBanners = [
-    {
-      id: '1',
-      title: 'Learn From Expert Coaches',
-      desc: 'Book 1-on-1 training slots with certified sports trainers near you.',
-      color: 'bg-primary',
-      icon: 'ribbon',
-      route: '/(individual)/search',
-      buttonText: 'Book Session'
-    },
-    {
-      id: '2',
-      title: 'Explore Sports Venues',
-      desc: 'Discover and reserve premium turfs, courts, and training complexes.',
-      color: 'bg-[#4B9C73]',
-      icon: 'location',
-      route: '/(individual)/venues',
-      buttonText: 'Find Venues'
-    },
-    {
-      id: '3',
-      title: 'Join Community Matches',
-      desc: 'Connect with local players, form teams, and join competitive games.',
-      color: 'bg-[#0F2C59]',
-      icon: 'people',
-      route: '/(individual)/community',
-      buttonText: 'Join Community'
-    }
-  ];
+  useEffect(() => {
+    const unsubscribeFocus = navigation.addListener('focus', () => {
+      refetchBookings();
+      refetchUserBanners();
+    });
+    return unsubscribeFocus;
+  }, [navigation, refetchBookings, refetchUserBanners]);
 
-  const serverPlayerBanners = Array.isArray(userBannersResponse) ? userBannersResponse.map((b: any, idx: number) => ({
-    id: b._id || b.id || idx.toString(),
-    title: b.title || b.name || 'Sports Update',
-    desc: b.description || b.desc || b.subtitle || 'Discover sports, venues, and coaches.',
-    color: idx % 3 === 0 ? 'bg-primary' : idx % 3 === 1 ? 'bg-[#4B9C73]' : 'bg-[#0F2C59]',
-    icon: idx % 3 === 0 ? 'ribbon' : idx % 3 === 1 ? 'location' : 'people',
-    route: b.route || b.link || b.targetUrl || '/(individual)/search',
-    buttonText: b.buttonText || b.ctaText || 'Explore Now',
-    imageUrl: b.imageUrl || b.image
-  })) : [];
+  const coaches = coachesResponse?.data || [];
+  const rawBookings = bookingsResponse?.data || bookingsResponse || [];
+  const allBookings: any[] = Array.isArray(rawBookings) ? rawBookings : [];
+  const hasBookings = allBookings.length > 0;
 
-  const playerBanners = serverPlayerBanners.length > 0 ? serverPlayerBanners : defaultPlayerBanners;
+  // Prioritize active and ongoing sessions, then sort by session date
+  const sortedBookings = [...allBookings].sort((a: any, b: any) => {
+    const statusWeight: Record<string, number> = {
+      ongoing: 1,
+      confirmed: 2,
+      accepted: 3,
+      requested: 4,
+      pending: 5,
+      completed: 6,
+      cancelled: 7,
+      no_show: 8
+    };
+    const wa = statusWeight[String(a.status || '').toLowerCase()] || 50;
+    const wb = statusWeight[String(b.status || '').toLowerCase()] || 50;
+    if (wa !== wb) return wa - wb;
+    const dateA = new Date(a.date || a.slot?.date || a.createdAt || 0).getTime();
+    const dateB = new Date(b.date || b.slot?.date || b.createdAt || 0).getTime();
+    return dateB - dateA;
+  });
+
+  const playerBanners = normalizeBanners(userBannersResponse, '/(individual)/search', [], 'individual');
 
   const [activeBannerIndex, setActiveBannerIndex] = React.useState(0);
   const bannerScrollRef = React.useRef<React.ComponentRef<typeof ScrollView>>(null);
@@ -105,6 +101,7 @@ export default function IndividualDashboard() {
   const bannerCardWidth = require('react-native').Dimensions.get('window').width - 48;
 
   useEffect(() => {
+    if (playerBanners.length <= 1) return;
     const timer = setInterval(() => {
       const nextIndex = (activeBannerIndex + 1) % playerBanners.length;
       bannerScrollRef.current?.scrollTo({ x: nextIndex * (bannerCardWidth + BANNER_CARD_GAP), animated: true });
@@ -139,64 +136,91 @@ export default function IndividualDashboard() {
           </View>
         </View>
 
-        {/* Dynamic Player Banner Carousel */}
-        <View className="mt-6 mx-6 relative">
-          <ScrollView
-            ref={bannerScrollRef}
-            horizontal
-            decelerationRate="fast"
-            snapToInterval={bannerCardWidth + BANNER_CARD_GAP}
-            snapToAlignment="start"
-            showsHorizontalScrollIndicator={false}
-            onScroll={(e) => {
-              const scrollX = e.nativeEvent.contentOffset.x;
-              const index = Math.round(scrollX / (bannerCardWidth + BANNER_CARD_GAP));
-              setActiveBannerIndex(index);
-            }}
-            scrollEventThrottle={16}
-          >
-            {playerBanners.map((banner, index) => (
-              <View 
-                key={banner.id}
-                className={`${banner.color} rounded-3xl p-5 shadow-sm overflow-hidden relative justify-between`}
-                style={{ 
-                  width: bannerCardWidth, 
-                  minHeight: 150,
-                  marginRight: index < playerBanners.length - 1 ? BANNER_CARD_GAP : 0
-                }}
-              >
-                <View className="w-2/3 z-10">
-                  <Typography variant="h3" color="white" weight="bold" className="mb-1 font-outfit-bold text-lg">
-                    {banner.title}
-                  </Typography>
-                  <Typography variant="caption" color="white" className="mb-3 opacity-90 leading-4 font-outfit text-xs">
-                    {banner.desc}
-                  </Typography>
-                  <TouchableOpacity 
-                    onPress={() => router.push(banner.route as any)}
-                    activeOpacity={0.8}
-                    className="bg-white px-4 py-2 rounded-full self-start shadow-xs"
-                  >
-                    <Typography variant="caption" color="secondary" weight="bold" className="font-outfit-bold text-xs">{banner.buttonText}</Typography>
-                  </TouchableOpacity>
-                </View>
-                <View className="absolute -right-4 -bottom-4 opacity-20 pointer-events-none">
-                  <Ionicons name={banner.icon as any} size={140} color="white" />
-                </View>
-              </View>
-            ))}
-          </ScrollView>
+        {/* Dynamic Player Banner Carousel (Only rendered when dynamic banners exist in backend) */}
+        {playerBanners.length > 0 && (
+          <View className="mt-6 mx-6 relative">
+            <ScrollView
+              ref={bannerScrollRef}
+              horizontal
+              decelerationRate="fast"
+              snapToInterval={bannerCardWidth + BANNER_CARD_GAP}
+              snapToAlignment="start"
+              showsHorizontalScrollIndicator={false}
+              onScroll={(e) => {
+                const scrollX = e.nativeEvent.contentOffset.x;
+                const index = Math.round(scrollX / (bannerCardWidth + BANNER_CARD_GAP));
+                setActiveBannerIndex(index);
+              }}
+              scrollEventThrottle={16}
+            >
+              {playerBanners.map((banner, index) => (
+                <TouchableOpacity 
+                  key={banner.id}
+                  onPress={() => handleBannerNavigation(banner, router, 'individual')}
+                  activeOpacity={0.9}
+                  className={`${banner.color} rounded-3xl shadow-sm overflow-hidden relative justify-between`}
+                  style={{ 
+                    width: bannerCardWidth, 
+                    minHeight: 150,
+                    height: 150,
+                    marginRight: index < playerBanners.length - 1 ? BANNER_CARD_GAP : 0,
+                    ...(banner.bgStyle || {})
+                  }}
+                >
+                  {banner.imageUrl ? (
+                    <Image 
+                      source={{ uri: banner.imageUrl }} 
+                      style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, width: '100%', height: '100%' }}
+                      resizeMode="cover"
+                    />
+                  ) : null}
+                  {(banner.title || banner.desc) ? (
+                    <View className="p-5 w-2/3 z-10 flex-1 justify-between bg-black/25">
+                      <View>
+                        {banner.title ? (
+                          <Typography variant="h3" color="white" weight="bold" className="mb-1 font-outfit-bold text-lg">
+                            {banner.title}
+                          </Typography>
+                        ) : null}
+                        {banner.desc ? (
+                          <Typography variant="caption" color="white" className="mb-3 opacity-90 leading-4 font-outfit text-xs">
+                            {banner.desc}
+                          </Typography>
+                        ) : null}
+                      </View>
+                      {banner.buttonText ? (
+                        <TouchableOpacity 
+                          onPress={() => handleBannerNavigation(banner, router, 'individual')}
+                          activeOpacity={0.8}
+                          className="bg-white px-4 py-2 rounded-full self-start shadow-xs"
+                        >
+                          <Typography variant="caption" color="secondary" weight="bold" className="font-outfit-bold text-xs">{banner.buttonText}</Typography>
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+                  ) : null}
+                  {!banner.imageUrl && banner.icon && (
+                    <View className="absolute -right-4 -bottom-4 opacity-20 pointer-events-none">
+                      <Ionicons name={banner.icon as any} size={140} color="white" />
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
 
-          {/* Carousel Indicator Dots */}
-          <View className="flex-row justify-center items-center mt-3">
-            {playerBanners.map((_, i) => (
-              <View 
-                key={i} 
-                className={`h-1.5 rounded-full mx-1 ${activeBannerIndex === i ? 'w-5 bg-primary' : 'w-1.5 bg-gray-300'}`} 
-              />
-            ))}
+            {/* Carousel Indicator Dots */}
+            {playerBanners.length > 1 && (
+              <View className="flex-row justify-center items-center mt-3">
+                {playerBanners.map((_, i) => (
+                  <View 
+                    key={i} 
+                    className={`h-1.5 rounded-full mx-1 ${activeBannerIndex === i ? 'w-5 bg-primary' : 'w-1.5 bg-gray-300'}`} 
+                  />
+                ))}
+              </View>
+            )}
           </View>
-        </View>
+        )}
 
         {/* Fast Action Categories */}
         <View className="px-6 pt-6 pb-12 flex-row justify-between">
@@ -247,19 +271,64 @@ export default function IndividualDashboard() {
               {isLoadingBookings ? (
                 <ActivityIndicator size="small" color="#FF5100" />
               ) : (
-                allBookings.slice(0, 3).map((booking: any) => {
+                sortedBookings.slice(0, 3).map((booking: any) => {
                   const bookingId = booking._id || booking.id;
-                  const coachObj = booking.coachId || booking.coach || {};
-                  const coachName = coachObj.name || `${coachObj.firstName || ''} ${coachObj.lastName || ''}`.trim() || booking.coachName || 'Coach';
-                  const sport = booking.sport || coachObj.sport || 'Sports Training';
-                  const dateStr = booking.date || booking.sessionDate || 'Upcoming Session';
-                  const timeStr = booking.time || booking.sessionTime || '';
-                  const status = (booking.status || 'confirmed').toUpperCase();
+                  const coachName = resolveCoachName(booking);
+                  const resolvedSport = resolveSessionSport(booking, booking.coach || booking.coachId);
+                  const resolvedTitle = resolveSessionTitle(booking, booking.coach || booking.coachId);
+                  const resolvedDate = resolveSessionDate(
+                    booking.slot?.date || 
+                    booking.date || 
+                    booking.slotDate || 
+                    booking.sessionDate || 
+                    booking.startDate || 
+                    booking.createdAt
+                  );
+                  const resolvedTime = resolveSessionTime(booking);
+                  const rawStatus = String(booking.status || 'confirmed').toLowerCase();
+                  const statusLabel = rawStatus.toUpperCase();
+
+                  const isConfirmed = rawStatus === 'confirmed' || rawStatus === 'accepted';
+                  const isOngoing = rawStatus === 'ongoing';
+                  const isCompleted = rawStatus === 'completed';
+                  const isCancelled = rawStatus === 'cancelled' || rawStatus === 'no_show';
+
+                  const badgeBg = isConfirmed 
+                    ? 'bg-green-50 border border-green-200' 
+                    : isOngoing 
+                      ? 'bg-orange-50 border border-orange-200' 
+                      : isCompleted 
+                        ? 'bg-emerald-50 border border-emerald-200' 
+                        : isCancelled 
+                          ? 'bg-red-50 border border-red-200' 
+                          : 'bg-primary/10 border border-primary/20';
+
+                  const badgeText = isConfirmed 
+                    ? 'text-green-700' 
+                    : isOngoing 
+                      ? 'text-orange-700' 
+                      : isCompleted 
+                        ? 'text-emerald-700' 
+                        : isCancelled 
+                          ? 'text-red-700' 
+                          : 'text-primary';
+
+                  const displaySportTitle = resolvedTitle && resolvedTitle.toLowerCase() !== 'coaching session'
+                    ? resolvedTitle
+                    : `${resolvedSport} Coaching`;
 
                   return (
                     <TouchableOpacity 
                       key={bookingId}
-                      onPress={() => router.push('/(individual)/(individual-tabs)/activity')}
+                      onPress={() => router.push({
+                        pathname: '/session-summary',
+                        params: {
+                          id: bookingId,
+                          status: rawStatus,
+                          coachSport: resolvedSport,
+                          coachName: coachName
+                        }
+                      })}
                       activeOpacity={0.8}
                       className="bg-white rounded-2xl p-4 mb-4 shadow-sm border border-gray-100 flex-row items-center"
                     >
@@ -271,17 +340,17 @@ export default function IndividualDashboard() {
                           <Typography variant="subtitle1" color="secondary" weight="bold" className="font-outfit-bold">
                             {coachName}
                           </Typography>
-                          <View className="bg-primary/10 px-2 py-0.5 rounded-md">
-                            <Typography variant="caption" color="primary" weight="bold" className="font-outfit-bold text-[10px]">
-                              {status}
+                          <View className={`px-2 py-0.5 rounded-md ${badgeBg}`}>
+                            <Typography variant="caption" weight="bold" className={`font-outfit-bold text-[10px] ${badgeText}`}>
+                              {statusLabel}
                             </Typography>
                           </View>
                         </View>
-                        <Typography variant="body2" color="muted" className="font-outfit mb-1">
-                          {sport}
+                        <Typography variant="body2" color="primary" weight="bold" className="font-outfit-bold mb-1">
+                          {displaySportTitle}
                         </Typography>
                         <Typography variant="caption" color="secondary" className="font-outfit opacity-80">
-                          {dateStr} {timeStr ? `• ${timeStr}` : ''}
+                          {resolvedDate}{resolvedTime && resolvedTime !== 'Time TBD' ? ` • ${resolvedTime}` : ''}
                         </Typography>
                       </View>
                       <Ionicons name="chevron-forward" size={20} color="#9CA3AF" className="ml-2" />

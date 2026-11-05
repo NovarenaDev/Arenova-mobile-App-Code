@@ -1,15 +1,36 @@
-import React from 'react';
-import { View, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Button } from '@/components/ui';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuthStore } from '@/store';
+import { useQueryClient } from '@tanstack/react-query';
 
 export default function BookingConfirmedScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { user } = useAuthStore();
+
+  // Strict Role Guard: Coaches cannot access player booking confirmation
+  useEffect(() => {
+    if (user?.role === 'coach') {
+      Alert.alert(
+        'Access Denied (Role Boundary)',
+        'Coaches cannot access player booking confirmations. Please use your coach dashboard.'
+      );
+      router.replace('/(coach)/(coach-tabs)/coach-dashboard');
+    }
+  }, [user, router]);
+
+  useEffect(() => {
+    queryClient.invalidateQueries({ queryKey: ['playerBookings'] });
+    queryClient.invalidateQueries({ queryKey: ['parentBookings'] });
+    queryClient.invalidateQueries({ queryKey: ['myBookings'] });
+    queryClient.invalidateQueries({ queryKey: ['coachSessions'] });
+    queryClient.invalidateQueries({ queryKey: ['segmentedSessions'] });
+  }, [queryClient]);
   const { 
     bookingId,
     attendanceOtp,
@@ -20,7 +41,8 @@ export default function BookingConfirmedScreen() {
     time, 
     location,
     amount, 
-    txnId 
+    txnId,
+    sessionTitle
   } = useLocalSearchParams<{
     bookingId?: string;
     attendanceOtp?: string;
@@ -32,15 +54,16 @@ export default function BookingConfirmedScreen() {
     location?: string;
     amount?: string;
     txnId?: string;
+    sessionTitle?: string;
   }>();
 
   const displayCoachName = coachName || 'Coach';
   const displayStudentName = studentName || (user?.role === 'parent' ? 'Child' : user?.name || 'Player');
-  const displaySport = sport || 'Sports';
+  const displaySport = sessionTitle || sport || 'Sports';
   const displayDate = date || 'Confirmed Date';
   const displayTime = time || 'Scheduled Slot';
   const displayLocation = location || 'Training Venue';
-  const displayAmount = amount || '400';
+  const displayAmount = amount || '0';
   const displayTxnId = txnId || ("TXN" + Math.random().toString(36).substring(2, 10).toUpperCase());
 
   return (

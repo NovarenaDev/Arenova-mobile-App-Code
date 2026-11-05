@@ -7,12 +7,15 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Calendar } from 'react-native-calendars';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/services/api';
-
 import { useAuthStore } from '@/store';
+import { resolveSessionSport, resolveSessionTitle } from '@/utils/sessionFormatter';
 
 interface Slot {
   _id: string;
   id?: string;
+  title?: string;
+  sport?: string;
+  sportName?: string;
   startTime: string;
   endTime: string;
   status?: string;
@@ -27,6 +30,17 @@ export default function SelectDateScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
   const { coachId } = useLocalSearchParams<{ coachId?: string }>();
+
+  // Strict Role Guard: Coaches cannot book coaching sessions
+  React.useEffect(() => {
+    if (user?.role === 'coach') {
+      Alert.alert(
+        'Access Denied (Role Boundary)',
+        'Coaches cannot book coaching sessions. Please use your coach dashboard.'
+      );
+      router.replace('/(coach)/(coach-tabs)/coach-dashboard');
+    }
+  }, [user, router]);
   
   const today = new Date().toISOString().split('T')[0];
   const [selectedDate, setSelectedDate] = useState(today);
@@ -44,7 +58,7 @@ export default function SelectDateScreen() {
 
   const coach = coachResponse?.data || coachResponse || null;
   const coachName = coach?.name || `${coach?.firstName || ''} ${coach?.lastName || ''}`.trim() || 'Coach';
-  const coachSport = coach?.sport || coach?.sports?.[0] || 'Badminton';
+  const coachSport = coach?.sport || coach?.sports?.[0] || 'Tennis';
   const coachLocation = (typeof coach?.location === 'string' ? coach.location : coach?.location?.name || coach?.location?.city || coach?.address?.city || coach?.city || 'Training Venue');
 
   const { data: slotsResponse, isLoading: isLoadingSlots } = useQuery({
@@ -137,8 +151,10 @@ export default function SelectDateScreen() {
     }
 
     const selectedSlot = slots.find(s => (s._id || s.id) === selectedSlotId);
+    const resolvedSport = selectedSlot?.sport || selectedSlot?.sportName || coachSport;
     const slotPrice = (selectedSlot?.pricePerPerson ?? selectedSlot?.price ?? 500).toString();
     const timeFormatted = `${selectedSlot?.startTime} - ${selectedSlot?.endTime}`;
+    const sessionTitle = selectedSlot?.title || `${resolvedSport} Coaching`;
     
     if (user?.role === 'parent') {
       router.push({
@@ -150,7 +166,8 @@ export default function SelectDateScreen() {
           time: timeFormatted,
           price: slotPrice,
           coachName,
-          coachSport,
+          coachSport: resolvedSport,
+          sessionTitle,
           location: coachLocation
         }
       });
@@ -164,7 +181,8 @@ export default function SelectDateScreen() {
           time: timeFormatted,
           price: slotPrice,
           coachName,
-          coachSport,
+          coachSport: resolvedSport,
+          sessionTitle,
           location: coachLocation,
           studentName: user?.name || 'Myself'
         }
@@ -173,6 +191,12 @@ export default function SelectDateScreen() {
   };
 
   const selectedSlot = slots.find(s => (s._id || s.id) === selectedSlotId);
+  const activeSlotSport = selectedSlot 
+    ? resolveSessionSport(selectedSlot, coach) 
+    : coachSport;
+  const activeSessionTitle = selectedSlot 
+    ? resolveSessionTitle(selectedSlot, coach) 
+    : `${coachSport} Coach`;
 
   return (
     <SafeAreaView className="flex-1 bg-[#EEF3F9]">
@@ -207,12 +231,12 @@ export default function SelectDateScreen() {
                 <Typography variant="body1" color="secondary" weight="bold" className="font-outfit-bold">
                   {coachName}
                 </Typography>
-                <Typography variant="caption" color="primary" weight="medium" className="font-outfit-medium">
-                  {coachSport}
+                <Typography variant="caption" color="primary" weight="bold" className="font-outfit-bold">
+                  {selectedSlot ? (selectedSlot.title || `${activeSlotSport} Coaching`) : `${coachSport} Coach`}
                 </Typography>
                 {selectedDate && selectedSlot && (
                   <Typography variant="caption" color="text" className="mt-1 font-outfit text-gray-500 text-[10px]">
-                    {selectedDate} | {selectedSlot.startTime} - {selectedSlot.endTime}
+                    {selectedDate} | {formatSlotTime(selectedSlot.startTime)} - {formatSlotTime(selectedSlot.endTime)}
                   </Typography>
                 )}
               </View>
@@ -267,6 +291,7 @@ export default function SelectDateScreen() {
                   const isSelected = selectedSlotId === (slot._id || slot.id);
                   const displayPrice = slot.pricePerPerson ?? slot.price;
                   const isFull = slot.capacity !== undefined && slot.bookedCount !== undefined && slot.bookedCount >= slot.capacity;
+                  const slotSport = resolveSessionSport(slot, coach);
 
                   return (
                     <TouchableOpacity
@@ -274,7 +299,7 @@ export default function SelectDateScreen() {
                       onPress={() => !isFull && setSelectedSlotId(slot._id || slot.id || null)}
                       activeOpacity={isFull ? 1 : 0.8}
                       disabled={isFull}
-                      className={`px-4 py-2.5 rounded-xl border-2 ${
+                      className={`px-4 py-2.5 rounded-xl border-2 min-w-[90px] items-center ${
                         isFull
                           ? 'bg-gray-100 border-gray-200 opacity-50'
                           : isSelected 
@@ -286,9 +311,19 @@ export default function SelectDateScreen() {
                         variant="body2" 
                         color={isFull ? 'muted' : isSelected ? 'white' : 'secondary'} 
                         weight="bold"
-                        className="font-outfit-bold"
+                        align="center"
+                        className="font-outfit-bold text-center"
                       >
                         {formatSlotTime(slot.startTime)}
+                      </Typography>
+                      <Typography 
+                        variant="caption" 
+                        color={isFull ? 'muted' : isSelected ? 'white' : 'primary'} 
+                        weight="bold"
+                        align="center"
+                        className="font-outfit text-[10px] mt-0.5"
+                      >
+                        {slotSport}
                       </Typography>
                       {displayPrice !== undefined && (
                         <Typography 

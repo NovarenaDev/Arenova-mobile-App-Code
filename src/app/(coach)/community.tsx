@@ -1,2 +1,2 @@
-import CommunityScreen from '@/components/shared/CommunityScreen';
-export default CommunityScreen;
+import CoachCommunityScreen from '@/components/shared/CoachCommunityScreen';
+export default CoachCommunityScreen;

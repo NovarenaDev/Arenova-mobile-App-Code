@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, ScrollView, TouchableOpacity, ActivityIndicator, Alert, RefreshControl } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Button } from '@/components/ui';
@@ -7,7 +7,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store';
-import { resolveSessionTime, resolveSessionDate, resolveSessionSport, resolveSessionLocation, resolveStudentName, formatSingleTime } from '@/utils/sessionFormatter';
+import { resolveSessionTime, resolveSessionDate, resolveSessionSport, resolveSessionTitle, resolveSessionLocation, resolveStudentName, formatSingleTime } from '@/utils/sessionFormatter';
 import { SessionOtpVerificationModal } from '@/components/shared/SessionOtpVerificationModal';
 
 export default function CoachActivityScreen() {
@@ -20,6 +20,7 @@ export default function CoachActivityScreen() {
   );
 
   const [selectedSessionForOtp, setSelectedSessionForOtp] = useState<any | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     if (tab && (tab === 'current' || tab === 'upcoming' || tab === 'completed')) {
@@ -29,11 +30,33 @@ export default function CoachActivityScreen() {
     }
   }, [tab]);
 
+  const onRefresh = async () => {
+    setIsRefreshing(true);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['coachSessions'] }),
+      queryClient.invalidateQueries({ queryKey: ['segmentedSessions'] }),
+      queryClient.invalidateQueries({ queryKey: ['coachDashboard'] })
+    ]);
+    setIsRefreshing(false);
+  };
+
   const { data: sessionsResponse, isLoading: isSessionsLoading } = useQuery({
     queryKey: ['coachSessions'],
     queryFn: async () => {
       const res = await api.get('/coaches/my/sessions');
       return res.data?.data || res.data || [];
+    }
+  });
+
+  const { data: segmentedSessions } = useQuery({
+    queryKey: ['segmentedSessions'],
+    queryFn: async () => {
+      try {
+        const res = await api.get('/coach-app/sessions/segmented');
+        return res.data;
+      } catch {
+        return null;
+      }
     }
   });
 
@@ -57,12 +80,139 @@ export default function CoachActivityScreen() {
     }
   });
 
-  const allSessions = Array.isArray(sessionsResponse) ? sessionsResponse : [];
+  const endSessionMutation = useMutation({
+    mutationFn: async (sessionId: string) => {
+      try {
+        const res = await api.put(`/coach-app/sessions/${sessionId}/end`);
+        return res.data;
+      } catch (err: any) {
+        if (err?.response?.status === 404) {
+          try {
+            const fallbackRes = await api.put(`/coaches/my/sessions/${sessionId}/status`, { status: 'completed' });
+            return fallbackRes.data;
+          } catch {
+            const fallbackRes2 = await api.put(`/bookings/${sessionId}/status`, { status: 'completed' });
+            return fallbackRes2.data;
+          }
+        }
+        throw err;
+      }
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['coachSessions'] }),
+        queryClient.invalidateQueries({ queryKey: ['segmentedSessions'] }),
+        queryClient.invalidateQueries({ queryKey: ['coachDashboard'] })
+      ]);
+      setActiveTab('completed');
+      Alert.alert('Session Completed', 'The session has concluded successfully and is now in Completed sessions!');
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message || err?.message || 'Could not end session. At least 80% of scheduled duration must elapse.';
+      Alert.alert('Cannot End Session', msg);
+    }
+  });
+
+  const handleEndSessionPress = (booking: any) => {
+    Alert.alert(
+      'Complete Session',
+      `Are you sure you want to conclude the coaching session for ${booking.name}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Complete Session', 
+          style: 'default',
+          onPress: () => endSessionMutation.mutate(booking.id)
+        }
+      ]
+    );
+  };
+
+  // Merge sessions from all available endpoints (my sessions & segmented)
+  const rawSegmentedUpcoming = Array.isArray(segmentedSessions?.data?.upcoming) ? segmentedSessions.data.upcoming : [];
+  const rawSegmentedCurrent = Array.isArray(segmentedSessions?.data?.current) ? segmentedSessions.data.current : [];
+  const rawSegmentedCompleted = Array.isArray(segmentedSessions?.data?.completed) ? segmentedSessions.data.completed : [];
+  const rawMySessions = Array.isArray(sessionsResponse) ? sessionsResponse : (Array.isArray(sessionsResponse?.data) ? sessionsResponse.data : []);
+
+  const sessionMap = new Map<string, any>();
+
+  const registerSession = (s: any, defaultStatus?: string) => {
+    if (!s) return;
+    const sid = s._id || s.id;
+    if (!sid) return;
+    const prev = sessionMap.get(sid) || {};
+
+    let chosenStatus = s.status || prev.status || defaultStatus;
+    if (defaultStatus === 'ongoing' || prev.status === 'ongoing') {
+      chosenStatus = 'ongoing';
+    } else if (defaultStatus === 'completed' || prev.status === 'completed') {
+      chosenStatus = 'completed';
+    }
+
+    sessionMap.set(sid, {
+      ...prev,
+      ...s,
+      status: chosenStatus,
+      slot: (typeof s.slot === 'object' && s.slot) ? s.slot : (prev.slot || s.slot),
+      user: (typeof s.user === 'object' && s.user) ? s.user : (prev.user || s.user),
+      child: (typeof s.child === 'object' && s.child) ? s.child : (prev.child || s.child),
+      studentName: s.studentName || prev.studentName,
+      time: (s.time && s.time !== 'Scheduled Time' && s.time !== 'Time TBD') ? s.time : (prev.time || s.time),
+      endTime: s.endTime || prev.endTime,
+      startTime: s.startTime || prev.startTime,
+      title: s.title || prev.title,
+      sport: (s.sport && s.sport !== 'Badminton') ? s.sport : (prev.sport || s.sport),
+      date: s.date || prev.date || s.startDate || prev.startDate,
+      location: s.location || prev.location
+    });
+  };
+
+  rawSegmentedUpcoming.forEach((s: any) => registerSession(s, 'upcoming'));
+  rawSegmentedCurrent.forEach((s: any) => registerSession(s, 'ongoing'));
+  rawSegmentedCompleted.forEach((s: any) => registerSession(s, 'completed'));
+  rawMySessions.forEach((s: any) => registerSession(s));
+
+  const allSessions = Array.from(sessionMap.values());
+
+  const getNormalizedStatus = (s: any) => {
+    if (!s) return 'requested';
+
+    const st = (
+      s.status || 
+      s.rawStatus || 
+      s.bookingStatus || 
+      s.slotStatus || 
+      s.state || 
+      s.slot?.status || 
+      ''
+    ).toString().toLowerCase().trim();
+
+    if (st === 'completed' || st === 'done' || st === 'finished' || st === 'ended') return 'completed';
+    if (st === 'cancelled' || st === 'canceled' || st === 'declined' || st === 'rejected' || st === 'no_show' || st === 'no-show') return 'cancelled';
+    if (
+      st === 'ongoing' || 
+      st === 'active' || 
+      st === 'started' || 
+      st === 'in_progress' || 
+      st === 'in-progress' || 
+      st === 'session_started' || 
+      st === 'live' ||
+      s.attendanceVerified === true ||
+      s.attendanceStatus?.toString().toLowerCase() === 'verified' ||
+      (!!s.startedAt && !s.endedAt)
+    ) {
+      return 'ongoing';
+    }
+    if (st === 'confirmed' || st === 'accepted' || st === 'approved' || st === 'upcoming') return 'accepted';
+    
+    return 'requested';
+  };
 
   const mapSessionToUI = (session: any) => {
     const id = session._id || session.id || Math.random().toString();
     const coachUser = useAuthStore.getState().user;
     const studentName = resolveStudentName(session);
+    const sessionTitle = resolveSessionTitle(session, coachUser);
     const sportTitle = resolveSessionSport(session, coachUser);
     const dateFormatted = resolveSessionDate(
       session.slot?.date || 
@@ -81,25 +231,17 @@ export default function CoachActivityScreen() {
       session.slot?.pricePerPerson || 
       session.slot?.price || 
       session.price || 
-      400;
+      session.program?.price ||
+      (coachUser as any)?.pricePerSession ||
+      (coachUser as any)?.fee ||
+      (coachUser as any)?.price ||
+      0;
 
     const priceText = session.credits 
       ? `${session.credits} Credits` 
-      : `₹${numericPrice}`;
+      : (numericPrice > 0 ? `₹${numericPrice}` : 'Free');
 
-    const rawStatusNormalized = (session.status || session.rawStatus || 'requested').toString().toLowerCase().trim();
-    let normStatus = 'requested';
-    if (rawStatusNormalized === 'ongoing' || rawStatusNormalized === 'active') {
-      normStatus = 'ongoing';
-    } else if (rawStatusNormalized === 'confirmed' || rawStatusNormalized === 'accepted' || rawStatusNormalized === 'approved') {
-      normStatus = 'accepted';
-    } else if (rawStatusNormalized === 'completed' || rawStatusNormalized === 'done') {
-      normStatus = 'completed';
-    } else if (rawStatusNormalized === 'cancelled' || rawStatusNormalized === 'canceled' || rawStatusNormalized === 'declined' || rawStatusNormalized === 'no_show' || rawStatusNormalized === 'no-show') {
-      normStatus = 'cancelled';
-    } else {
-      normStatus = 'requested';
-    }
+    const normStatus = getNormalizedStatus(session);
 
     let uiStatus = 'Requested';
     if (normStatus === 'ongoing') uiStatus = 'Ongoing';
@@ -111,9 +253,11 @@ export default function CoachActivityScreen() {
     return {
       id,
       name: studentName,
+      title: sessionTitle,
       sport: sportTitle,
-      subtitle: `${sportTitle} • ${priceText}`,
+      subtitle: `${sessionTitle || sportTitle} • ${priceText}`,
       price: numericPrice.toString(),
+      priceText,
       date: dateFormatted,
       time: timeFormatted,
       rawDate: session.slot?.date || session.date || '',
@@ -135,26 +279,6 @@ export default function CoachActivityScreen() {
       seenIds.add(item.id);
       return true;
     });
-  };
-
-  const getNormalizedStatus = (s: any) => {
-    if (!s) return 'requested';
-    const st = (
-      s.status || 
-      s.rawStatus || 
-      s.bookingStatus || 
-      s.slotStatus || 
-      s.state || 
-      s.slot?.status || 
-      ''
-    ).toString().toLowerCase().trim();
-
-    if (st === 'confirmed' || st === 'accepted' || st === 'approved' || st === 'upcoming') return 'accepted';
-    if (st === 'ongoing' || st === 'active' || st === 'started' || st === 'in_progress') return 'ongoing';
-    if (st === 'completed' || st === 'done' || st === 'finished') return 'completed';
-    if (st === 'cancelled' || st === 'canceled' || st === 'declined' || st === 'rejected' || st === 'no_show' || st === 'no-show') return 'cancelled';
-    
-    return 'requested';
   };
 
   const upcomingBookings = dedupe(
@@ -228,6 +352,14 @@ export default function CoachActivityScreen() {
       <ScrollView 
         showsVerticalScrollIndicator={false} 
         className="flex-1"
+        refreshControl={
+          <RefreshControl 
+            refreshing={isRefreshing} 
+            onRefresh={onRefresh} 
+            tintColor="#FF5100" 
+            colors={['#FF5100']} 
+          />
+        }
         contentContainerStyle={{ paddingLeft: 16, paddingRight: 16, paddingTop: 16, paddingBottom: Math.max(insets.bottom + 110, 130) }}
       >
         
@@ -258,10 +390,10 @@ export default function CoachActivityScreen() {
                 </View>
                 <View>
                   <Typography variant="subtitle1" color="secondary" weight="bold">
-                    {booking.name}
+                    {booking.title || `${booking.sport} Coaching`}
                   </Typography>
                   <Typography variant="caption" color="muted" weight="bold">
-                    {booking.subtitle}
+                    {booking.name} • {booking.priceText}
                   </Typography>
                 </View>
               </View>
@@ -342,18 +474,106 @@ export default function CoachActivityScreen() {
                       time: booking.time,
                       location: booking.location,
                       price: booking.price,
-                      coachSport: booking.sport
+                      coachSport: booking.sport,
+                      sessionTitle: booking.title
                     }
                   })}
-                  className="px-3 py-2.5 rounded-xl bg-blue-50 border border-blue-200 items-center justify-center active:opacity-80"
+                  className="px-3.5 py-2.5 rounded-xl bg-blue-50 border border-blue-200 items-center justify-center active:opacity-80"
                 >
                   <Typography variant="subtitle2" className="text-blue-700 text-xs font-outfit-bold">
                     Details
                   </Typography>
                 </TouchableOpacity>
               </View>
+            ) : activeTab === 'current' || booking.rawStatus === 'ongoing' ? (
+              <View className="pt-3 border-t border-gray-100">
+                <View className="flex-row items-center justify-between mb-2.5 bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-100">
+                  <View className="flex-row items-center flex-1 mr-2">
+                    <View className="w-2.5 h-2.5 rounded-full bg-emerald-500 mr-2" />
+                    <Typography variant="caption" weight="bold" className="text-emerald-800 font-outfit-bold text-xs">
+                      Session In Progress
+                    </Typography>
+                  </View>
+                  <Typography variant="caption" color="muted" className="font-outfit text-[11px]">
+                    {booking.time}
+                  </Typography>
+                </View>
+
+                <View className="flex-row justify-end gap-2 items-center">
+                  <TouchableOpacity
+                    disabled={endSessionMutation.isPending}
+                    onPress={() => handleEndSessionPress(booking)}
+                    className="flex-1 py-2.5 rounded-xl bg-emerald-600 flex-row items-center justify-center active:opacity-80 shadow-xs"
+                  >
+                    {endSessionMutation.isPending && (endSessionMutation.variables as any) === booking.id ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <Ionicons name="checkmark-done-circle-outline" size={16} color="#FFFFFF" className="mr-1.5" />
+                        <Typography variant="caption" weight="bold" className="text-white text-xs font-outfit-bold">
+                          End / Complete Session
+                        </Typography>
+                      </>
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => router.push({
+                      pathname: '/session-summary',
+                      params: { 
+                        id: booking.id,
+                        status: 'ongoing',
+                        studentName: booking.name,
+                        date: booking.date,
+                        time: booking.time,
+                        location: booking.location,
+                        price: booking.price,
+                        coachSport: booking.sport,
+                        sessionTitle: booking.title
+                      }
+                    })}
+                    className="px-3.5 py-2.5 rounded-xl bg-blue-50 border border-blue-200 items-center justify-center active:opacity-80"
+                  >
+                    <Typography variant="subtitle2" className="text-blue-700 text-xs font-outfit-bold">
+                      Details
+                    </Typography>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : activeTab === 'completed' || booking.rawStatus === 'completed' ? (
+              <View className="flex-row justify-between items-center pt-3 border-t border-gray-100">
+                <View className="flex-row items-center">
+                  <Ionicons name="checkmark-circle" size={17} color="#059669" className="mr-1.5" />
+                  <Typography variant="caption" weight="bold" className="text-emerald-700 font-outfit-bold text-xs">
+                    Session Concluded
+                  </Typography>
+                </View>
+
+                <TouchableOpacity
+                  onPress={() => router.push({
+                    pathname: '/session-summary',
+                    params: { 
+                      id: booking.id,
+                      status: 'completed',
+                      studentName: booking.name,
+                      date: booking.date,
+                      time: booking.time,
+                      location: booking.location,
+                      price: booking.price,
+                      coachSport: booking.sport,
+                      sessionTitle: booking.title
+                    }
+                  })}
+                  className="px-4 py-2 rounded-xl bg-gray-100 border border-gray-200 items-center justify-center active:opacity-80"
+                >
+                  <Typography variant="subtitle2" className="text-gray-700 text-xs font-outfit-bold">
+                    View Summary
+                  </Typography>
+                </TouchableOpacity>
+              </View>
             ) : (
-              <View className="flex-row justify-end mt-1 gap-2">
+              /* Upcoming tab */
+              <View className="flex-row justify-end mt-1 gap-2 items-center">
                 <TouchableOpacity
                   onPress={() => setSelectedSessionForOtp({
                     id: booking.id,
@@ -363,33 +583,35 @@ export default function CoachActivityScreen() {
                     time: booking.time,
                     type: booking.name.includes(',') || booking.subtitle.includes('Group') ? 'group' : 'individual'
                   })}
-                  className="px-3 py-2 rounded-xl bg-orange-50 border border-orange-200 flex-row items-center justify-center active:opacity-80"
+                  className="px-4 py-2.5 rounded-xl bg-[#FF5100] flex-row items-center justify-center active:opacity-80 shadow-xs"
                 >
-                  <Ionicons name="key-outline" size={14} color="#FF5100" className="mr-1" />
-                  <Typography variant="caption" color="primary" weight="bold" className="text-xs font-outfit-bold">
-                    Verify OTP
+                  <Ionicons name="key-outline" size={15} color="#FFFFFF" className="mr-1.5" />
+                  <Typography variant="caption" weight="bold" className="text-white text-xs font-outfit-bold">
+                    Verify OTP & Start
                   </Typography>
                 </TouchableOpacity>
 
-                <View className="w-32">
-                  <Button 
-                    title="View Details" 
-                    size="sm"
-                    onPress={() => router.push({
-                      pathname: '/session-summary',
-                      params: { 
-                        id: booking.id,
-                        status: activeTab === 'current' ? 'ongoing' : activeTab === 'upcoming' ? 'accepted' : booking.rawStatus,
-                        studentName: booking.name,
-                        date: booking.date,
-                        time: booking.time,
-                        location: booking.location,
-                        price: booking.price,
-                        coachSport: booking.sport
-                      }
-                    })}
-                  />
-                </View>
+                <TouchableOpacity
+                  onPress={() => router.push({
+                    pathname: '/session-summary',
+                    params: { 
+                      id: booking.id,
+                      status: 'accepted',
+                      studentName: booking.name,
+                      date: booking.date,
+                      time: booking.time,
+                      location: booking.location,
+                      price: booking.price,
+                      coachSport: booking.sport,
+                      sessionTitle: booking.title
+                    }
+                  })}
+                  className="px-3.5 py-2.5 rounded-xl bg-blue-50 border border-blue-200 items-center justify-center active:opacity-80"
+                >
+                  <Typography variant="subtitle2" className="text-blue-700 text-xs font-outfit-bold">
+                    Details
+                  </Typography>
+                </TouchableOpacity>
               </View>
             )}
           </View>
@@ -402,12 +624,18 @@ export default function CoachActivityScreen() {
         visible={!!selectedSessionForOtp}
         session={selectedSessionForOtp}
         onClose={() => setSelectedSessionForOtp(null)}
-        onSuccess={() => {
+        onSuccess={async () => {
+          setSelectedSessionForOtp(null);
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ['coachSessions'] }),
+            queryClient.invalidateQueries({ queryKey: ['segmentedSessions'] }),
+            queryClient.invalidateQueries({ queryKey: ['coachDashboard'] })
+          ]);
+          setActiveTab('current');
           Alert.alert(
-            'Attendance Verified!',
-            'Session attendance verified successfully! The session is now active.'
+            'Session Active!',
+            'Session attendance verified successfully! The session is now active in your Current sessions tab.'
           );
-          queryClient.invalidateQueries({ queryKey: ['coachSessions'] });
         }}
       />
     </SafeAreaView>

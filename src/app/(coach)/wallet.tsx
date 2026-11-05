@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Button, TextInput } from '@/components/ui';
-import { useRouter } from 'expo-router';
+import { useRouter, useNavigation } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/services/api';
+import { useAuthStore } from '@/store';
 
 interface Transaction {
   id: string;
@@ -15,13 +16,31 @@ interface Transaction {
   date: string;
   amount: number;
   status: 'completed' | 'pending' | 'failed' | 'processing' | 'approved' | 'rejected';
+  reason?: string;
 }
 
 export default function WalletScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const navigation = useNavigation();
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
   const [withdrawTab, setWithdrawTab] = useState<'upi' | 'bank'>('upi');
+  const [activityTab, setActivityTab] = useState<'all' | 'transactions' | 'withdrawals'>('all');
+
+  // Strict Role Guard: Players and Parents cannot access coach wallet
+  useEffect(() => {
+    if (user && user.role !== 'coach') {
+      Alert.alert(
+        'Access Denied (Role Boundary)',
+        'Coach Wallet is strictly reserved for registered coaching partners.'
+      );
+      const target = user.role === 'parent'
+        ? '/(parent)/(parent-tabs)/parent-dashboard'
+        : '/(individual)/(individual-tabs)/individual-dashboard';
+      router.replace(target as any);
+    }
+  }, [user, router]);
   
   // Withdrawal Form States
   const [amount, setAmount] = useState('');
@@ -32,7 +51,7 @@ export default function WalletScreen() {
   const [ifscCode, setIfscCode] = useState('');
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Fetch Wallet Summary
+  // 1. GET /api/wallet/summary - Fetch Coach Wallet Summary
   const { data: summaryResponse, isLoading: isSummaryLoading, refetch: refetchSummary } = useQuery({
     queryKey: ['walletSummary'],
     queryFn: async () => {
@@ -41,14 +60,35 @@ export default function WalletScreen() {
     }
   });
 
-  const summaryData = summaryResponse?.data || summaryResponse;
-  const availableBalance = summaryData?.availableBalance ?? summaryData?.currentBalance ?? summaryData?.balance ?? 0;
-  const pendingBalance = summaryData?.pendingBalance ?? 0;
-  const totalEarnings = summaryData?.totalEarnings ?? summaryData?.earnings ?? 0;
-  const totalWithdrawn = summaryData?.totalWithdrawn ?? summaryData?.withdrawn ?? 0;
-  const pendingWithdrawalsCount = summaryData?.pendingWithdrawals ?? summaryData?.pending ?? 0;
+  const summaryData = summaryResponse?.data || summaryResponse?.summary || summaryResponse || {};
+  const availableBalance = Number(
+    summaryData?.availableBalance ?? 
+    summaryData?.currentBalance ?? 
+    summaryData?.balance ?? 
+    summaryData?.walletBalance ?? 
+    0
+  );
+  const pendingBalance = Number(
+    summaryData?.pendingBalance ?? 
+    summaryData?.heldBalance ?? 
+    summaryData?.escrowBalance ?? 
+    0
+  );
+  const totalEarnings = Number(
+    summaryData?.totalEarnings ?? 
+    summaryData?.earnings ?? 
+    summaryData?.lifetimeEarnings ?? 
+    (availableBalance + pendingBalance)
+  );
+  const totalWithdrawn = Number(
+    summaryData?.totalWithdrawn ?? 
+    summaryData?.withdrawn ?? 
+    0
+  );
+  const minWithdrawal = Number(summaryData?.minWithdrawal ?? summaryData?.minWithdrawalAmount ?? 100);
+  const maxWithdrawal = Number(summaryData?.maxWithdrawal ?? summaryData?.maxWithdrawalAmount ?? 50000);
 
-  // Fetch Wallet Transactions
+  // 2. GET /api/wallet/transactions - Fetch Wallet Transactions
   const { data: transactionsResponse, isLoading: isTransactionsLoading, refetch: refetchTransactions } = useQuery({
     queryKey: ['walletTransactions'],
     queryFn: async () => {
@@ -57,7 +97,7 @@ export default function WalletScreen() {
     }
   });
 
-  // Fetch Payout/Withdrawal History
+  // 3. GET /api/wallet/withdrawals - Fetch Payout/Withdrawal History
   const { data: withdrawalsResponse, isLoading: isWithdrawalsLoading, refetch: refetchWithdrawals } = useQuery({
     queryKey: ['walletWithdrawals'],
     queryFn: async () => {
@@ -66,8 +106,27 @@ export default function WalletScreen() {
     }
   });
 
-  const rawTxList = transactionsResponse?.data || transactionsResponse?.transactions || (Array.isArray(transactionsResponse) ? transactionsResponse : []);
-  const rawWithdrawalsList = withdrawalsResponse?.data || withdrawalsResponse?.withdrawals || (Array.isArray(withdrawalsResponse) ? withdrawalsResponse : []);
+  // Auto-refetch all wallet queries when screen is focused
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      refetchSummary();
+      refetchTransactions();
+      refetchWithdrawals();
+    });
+    return unsubscribe;
+  }, [navigation, refetchSummary, refetchTransactions, refetchWithdrawals]);
+
+  const rawTxList = Array.isArray(transactionsResponse?.data) 
+    ? transactionsResponse.data 
+    : (Array.isArray(transactionsResponse?.transactions) 
+      ? transactionsResponse.transactions 
+      : (Array.isArray(transactionsResponse) ? transactionsResponse : []));
+
+  const rawWithdrawalsList = Array.isArray(withdrawalsResponse?.data) 
+    ? withdrawalsResponse.data 
+    : (Array.isArray(withdrawalsResponse?.withdrawals) 
+      ? withdrawalsResponse.withdrawals 
+      : (Array.isArray(withdrawalsResponse) ? withdrawalsResponse : []));
 
   const formatTxDate = (dateStr: string) => {
     if (!dateStr) return '';
@@ -76,21 +135,22 @@ export default function WalletScreen() {
   };
 
   const mappedTx: Transaction[] = rawTxList.map((tx: any) => {
-    const isCredit = tx.type === 'booking_credit' || tx.type === 'refund' || tx.amount > 0;
+    const isCredit = tx.type === 'booking_credit' || tx.type === 'refund' || tx.type === 'credit' || tx.type === 'session_earning' || tx.amount > 0;
     let title = 'Session Earnings';
-    if (tx.type === 'booking_credit') title = 'Session Earnings';
-    else if (tx.type === 'withdrawal') title = 'Withdrawal Payout';
+    if (tx.type === 'booking_credit' || tx.type === 'session_earning') title = 'Session Earnings';
+    else if (tx.type === 'withdrawal' || tx.type === 'payout') title = 'Withdrawal Payout';
     else if (tx.type === 'refund') title = 'Session Refund';
     else if (tx.type === 'admin_adjustment') title = 'Admin Adjustment';
+    else if (tx.title) title = tx.title;
     else if (tx.description) title = tx.description;
 
     return {
       id: tx._id || tx.id || Math.random().toString(),
       type: isCredit ? 'payout' : 'withdrawal',
       title,
-      subtitle: tx.description || (isCredit ? 'Credit added' : 'Transferred to account'),
+      subtitle: tx.description || tx.note || (isCredit ? 'Credit added to wallet' : 'Transferred to account'),
       date: formatTxDate(tx.createdAt || tx.date),
-      amount: tx.amount,
+      amount: Math.abs(tx.amount || 0),
       status: tx.status || 'completed'
     };
   });
@@ -102,8 +162,9 @@ export default function WalletScreen() {
       title: 'Withdrawal Request',
       subtitle: w.upiId ? `UPI: ${w.upiId}` : (w.bankAccount ? `Bank Account ending in ${w.bankAccount.slice(-4)}` : 'Bank Transfer'),
       date: formatTxDate(w.createdAt || w.date),
-      amount: -Math.abs(w.amount),
-      status: w.status || 'pending'
+      amount: -Math.abs(w.amount || 0),
+      status: w.status || 'pending',
+      reason: w.reason || w.rejectionReason || w.adminNote
     };
   });
 
@@ -114,34 +175,59 @@ export default function WalletScreen() {
     if (!existing) {
       combinedMap.set(w.id, w);
     } else {
-      combinedMap.set(w.id, { ...existing, status: w.status });
+      combinedMap.set(w.id, { ...existing, status: w.status, reason: w.reason || existing.reason });
     }
   });
 
-  const finalTransactions = Array.from(combinedMap.values()).sort((a, b) => {
+  const allActivityList = Array.from(combinedMap.values()).sort((a, b) => {
     return new Date(b.date).getTime() - new Date(a.date).getTime();
   });
 
-  // Request Withdrawal
+  const displayedList = activityTab === 'all' 
+    ? allActivityList 
+    : activityTab === 'transactions' 
+      ? mappedTx 
+      : mappedWithdrawals;
+
+  // 4. POST /api/wallet/withdraw - Request Withdrawal
   const requestWithdrawalMutation = useMutation({
     mutationFn: async (withdrawAmount: number) => {
-      const res = await api.post('/wallet/withdraw', {
-        amount: withdrawAmount
-      });
-      return res.data;
+      try {
+        const payload: any = { amount: withdrawAmount };
+        if (withdrawTab === 'upi' && upiId.trim()) {
+          payload.upiId = upiId.trim();
+        } else if (withdrawTab === 'bank' && accountNumber.trim()) {
+          payload.bankAccount = accountNumber.trim();
+          payload.ifsc = ifscCode.trim();
+          payload.accountName = accountName.trim();
+        }
+        const res = await api.post('/wallet/withdraw', payload);
+        return res.data;
+      } catch (err: any) {
+        // If server validator rejects extra fields, retry with strict { amount } payload as defined in Swagger
+        if (err?.response?.status === 400) {
+          const errMsg = err?.response?.data?.message || '';
+          if (errMsg.includes('allowed') || errMsg.includes('extra') || errMsg.includes('property')) {
+            const res2 = await api.post('/wallet/withdraw', { amount: withdrawAmount });
+            return res2.data;
+          }
+        }
+        throw err;
+      }
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['walletSummary'] });
       queryClient.invalidateQueries({ queryKey: ['walletTransactions'] });
       queryClient.invalidateQueries({ queryKey: ['walletWithdrawals'] });
       queryClient.invalidateQueries({ queryKey: ['coachDashboard'] });
       setSubmitError(null);
+      setAmount('');
 
+      const msg = data?.message || `Your withdrawal request of ₹${amount} was successfully submitted to the server.`;
       Alert.alert(
         'Payout Requested',
-        `Your withdrawal request of ₹${amount} was successfully submitted to the server.`,
-        [{ text: 'Great', onPress: () => {
-          setAmount('');
+        msg,
+        [{ text: 'OK', onPress: () => {
           refetchSummary();
           refetchTransactions();
           refetchWithdrawals();
@@ -149,9 +235,9 @@ export default function WalletScreen() {
       );
     },
     onError: (err: any) => {
-      setSubmitError(
-        err?.response?.data?.message || err?.message || 'Failed to request withdrawal. Try again.'
-      );
+      const msg = err?.response?.data?.message || err?.message || 'Failed to request withdrawal. Try again.';
+      setSubmitError(msg);
+      Alert.alert('Withdrawal Request Failed', msg);
     }
   });
 
@@ -163,13 +249,17 @@ export default function WalletScreen() {
       return;
     }
     if (withdrawAmount > availableBalance) {
-      setSubmitError('Withdrawal amount exceeds your available balance.');
+      setSubmitError(`Withdrawal amount exceeds your available balance (₹${availableBalance}).`);
+      return;
+    }
+    if (withdrawAmount < minWithdrawal) {
+      setSubmitError(`Minimum withdrawal amount is ₹${minWithdrawal}.`);
       return;
     }
 
     if (withdrawTab === 'upi') {
       if (!upiId || !upiId.includes('@')) {
-        setSubmitError('Please enter a valid UPI ID (e.g. coachname@ybl).');
+        setSubmitError('Please enter a valid UPI ID (e.g. coachname@upi).');
         return;
       }
     } else {
@@ -300,16 +390,19 @@ export default function WalletScreen() {
                 </TouchableOpacity>
               </View>
 
-              {/* Common Amount Input */}
-              <View className="mb-4">
-                <Typography variant="caption" color="secondary" weight="bold" className="mb-1 ml-1">Withdrawal Amount (₹)</Typography>
-                <TextInput 
-                  placeholder="Enter amount to withdraw" 
-                  keyboardType="numeric"
-                  value={amount}
-                  onChangeText={setAmount}
-                />
+            {/* Common Amount Input */}
+            <View className="mb-4">
+              <View className="flex-row justify-between items-center mb-1 ml-1">
+                <Typography variant="caption" color="secondary" weight="bold">Withdrawal Amount (₹)</Typography>
+                <Typography variant="caption" color="muted" className="text-[10px]">Min ₹{minWithdrawal} • Max ₹{availableBalance}</Typography>
               </View>
+              <TextInput 
+                placeholder="Enter amount to withdraw" 
+                keyboardType="numeric"
+                value={amount}
+                onChangeText={setAmount}
+              />
+            </View>
 
               {withdrawTab === 'upi' ? (
                 /* UPI Form */
@@ -372,22 +465,73 @@ export default function WalletScreen() {
               />
             </View>
 
-            {/* Transactions Ledger */}
-            <Typography variant="h3" color="secondary" weight="bold" className="mb-4">
-              Recent Transactions
-            </Typography>
+            {/* Wallet Activity Header & Filter Tabs */}
+            <View className="flex-row justify-between items-center mb-3">
+              <Typography variant="h3" color="secondary" weight="bold">
+                Wallet Activity
+              </Typography>
+              <Typography variant="caption" color="muted">
+                {displayedList.length} items
+              </Typography>
+            </View>
+
+            <View className="flex-row bg-[#EEF3F9] rounded-2xl p-1 mb-4">
+              <TouchableOpacity 
+                onPress={() => setActivityTab('all')}
+                className={`flex-1 py-2 rounded-xl items-center ${activityTab === 'all' ? 'bg-white shadow-xs' : 'bg-transparent'}`}
+              >
+                <Typography 
+                  variant="caption" 
+                  color={activityTab === 'all' ? 'secondary' : 'muted'} 
+                  weight="bold"
+                  className="font-outfit-bold text-xs"
+                >
+                  All Activity
+                </Typography>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                onPress={() => setActivityTab('transactions')}
+                className={`flex-1 py-2 rounded-xl items-center ${activityTab === 'transactions' ? 'bg-white shadow-xs' : 'bg-transparent'}`}
+              >
+                <Typography 
+                  variant="caption" 
+                  color={activityTab === 'transactions' ? 'secondary' : 'muted'} 
+                  weight="bold"
+                  className="font-outfit-bold text-xs"
+                >
+                  Earnings
+                </Typography>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                onPress={() => setActivityTab('withdrawals')}
+                className={`flex-1 py-2 rounded-xl items-center ${activityTab === 'withdrawals' ? 'bg-white shadow-xs' : 'bg-transparent'}`}
+              >
+                <Typography 
+                  variant="caption" 
+                  color={activityTab === 'withdrawals' ? 'secondary' : 'muted'} 
+                  weight="bold"
+                  className="font-outfit-bold text-xs"
+                >
+                  Withdrawals
+                </Typography>
+              </TouchableOpacity>
+            </View>
 
             <View className="bg-white rounded-3xl p-2 shadow-sm border border-gray-100 mb-8">
-              {finalTransactions.length === 0 ? (
+              {displayedList.length === 0 ? (
                 <View className="p-8 items-center justify-center">
                   <Ionicons name="receipt-outline" size={32} color="#9CA3AF" className="mb-2" />
-                  <Typography variant="body2" color="muted">No transactions found.</Typography>
+                  <Typography variant="body2" color="muted">
+                    {activityTab === 'all' ? 'No transactions or withdrawals found.' : activityTab === 'transactions' ? 'No session earnings recorded yet.' : 'No withdrawal requests found.'}
+                  </Typography>
                 </View>
               ) : (
-                finalTransactions.map((tx, index) => (
+                displayedList.map((tx, index) => (
                   <View 
                     key={tx.id} 
-                    className={`flex-row justify-between items-center p-4 ${index !== finalTransactions.length - 1 ? 'border-b border-gray-100' : ''}`}
+                    className={`flex-row justify-between items-center p-4 ${index !== displayedList.length - 1 ? 'border-b border-gray-100' : ''}`}
                   >
                     <View className="flex-row items-center flex-1 mr-3">
                       <View className={`w-10 h-10 rounded-full items-center justify-center mr-3 ${tx.type === 'payout' ? 'bg-[#EBF7F0]' : 'bg-red-50'}`}>
@@ -404,6 +548,11 @@ export default function WalletScreen() {
                         <Typography variant="caption" color="muted">
                           {tx.subtitle} • {tx.date}
                         </Typography>
+                        {tx.reason && (
+                          <Typography variant="caption" className="text-red-500 font-outfit text-[11px] mt-0.5">
+                            Note: {tx.reason}
+                          </Typography>
+                        )}
                       </View>
                     </View>
                     <View className="items-end">

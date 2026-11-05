@@ -1,11 +1,12 @@
-import React from 'react';
-import { View, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Button } from '@/components/ui';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/services/api';
+import { useAuthStore } from '@/store';
 
 interface CoachProfile {
   _id: string;
@@ -28,8 +29,20 @@ interface CoachProfile {
 export default function PublicCoachProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { user } = useAuthStore();
   const { id, coachId } = useLocalSearchParams<{ id?: string; coachId?: string }>();
   const targetCoachId = id || coachId;
+
+  // Strict Role Guard: Coaches cannot access player coach profile booking screens
+  useEffect(() => {
+    if (user?.role === 'coach') {
+      Alert.alert(
+        'Access Denied (Role Boundary)',
+        'Coaches cannot book coaching sessions. Please use your coach dashboard.'
+      );
+      router.replace('/(coach)/(coach-tabs)/coach-dashboard');
+    }
+  }, [user, router]);
 
   // Fetch coach details
   const { data: coachResponse, isLoading } = useQuery({

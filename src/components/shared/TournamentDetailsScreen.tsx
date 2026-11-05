@@ -9,6 +9,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, RAZORPAY_KEY_ID } from '@/services/api';
 import { useAuthStore } from '@/store';
 import { getTournamentBanner } from '@/utils/tournamentImages';
+import { 
+  unmarkPendingTournamentAsDeleted, 
+  markTournamentAsConfirmed, 
+  getConfirmedTournamentIds,
+  normalizeInvoices,
+  invoiceMatchesRegistration,
+  isTournamentInvoice
+} from '@/utils/deletedTournaments';
 
 export default function TournamentDetailsScreen() {
   const router = useRouter();
@@ -43,6 +51,11 @@ export default function TournamentDetailsScreen() {
   const [confirmedRegistration, setConfirmedRegistration] = useState<any>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [isDownloadingInvoice, setIsDownloadingInvoice] = useState(false);
+  const [locallyConfirmedIds, setLocallyConfirmedIds] = useState<string[]>([]);
+
+  React.useEffect(() => {
+    getConfirmedTournamentIds().then(setLocallyConfirmedIds);
+  }, []);
 
   const { data: tournamentResponse, isLoading, error } = useQuery({
     queryKey: ['novareTournament', id],
@@ -54,7 +67,76 @@ export default function TournamentDetailsScreen() {
     enabled: !!id,
   });
 
+  const { data: myRegistrationsResponse } = useQuery({
+    queryKey: ['myTournamentRegistrations'],
+    queryFn: async () => {
+      const res = await api.get('/novare/registrations/my');
+      return res.data?.data || res.data;
+    }
+  });
+
+  const { data: invoicesResponse } = useQuery({
+    queryKey: ['invoices'],
+    queryFn: async () => {
+      const res = await api.get('/invoices/my', { params: { limit: 50 } });
+      return res.data?.data || res.data || [];
+    }
+  });
+
   const tournament = tournamentResponse;
+
+  const rawMyRegs = Array.isArray(myRegistrationsResponse) 
+    ? myRegistrationsResponse 
+    : (myRegistrationsResponse?.registrations || myRegistrationsResponse?.data || []);
+
+  const invoicesList = normalizeInvoices(invoicesResponse);
+
+  // Check confirmed registrations from DB records or matching invoices
+  let existingConfirmedReg = rawMyRegs.find((r: any) => {
+    const tId = String(r.tournamentId?._id || r.tournamentId || r.tournament?._id || r.tournament || '');
+    if (tId !== String(id)) return false;
+
+    const rid = r._id || r.id;
+    if (rid && locallyConfirmedIds.includes(rid)) return true;
+    if (locallyConfirmedIds.includes(String(id))) return true;
+
+    const hasInvoice = invoicesList.some((inv: any) => invoiceMatchesRegistration(inv, r));
+    if (hasInvoice) return true;
+
+    const paymentStatus = String(r.paymentStatus || '').toUpperCase();
+    const registrationStatus = String(r.registrationStatus || r.status || '').toUpperCase();
+
+    if (registrationStatus === 'CANCELLED' || registrationStatus === 'REJECTED' || paymentStatus === 'REFUNDED') {
+      return false;
+    }
+    if (r.invoiceId || r.invoice) return true;
+    const isPaid = paymentStatus === 'PAID' || paymentStatus === 'COMPLETED' || paymentStatus === 'VERIFIED' || paymentStatus === 'SUCCESS';
+    if (isPaid) return true;
+    if (registrationStatus === 'CONFIRMED' || registrationStatus === 'VERIFIED' || registrationStatus === 'REGISTERED') return true;
+
+    return false;
+  });
+
+  // If no registration record in DB, check if an invoice exists for this tournament ID
+  if (!existingConfirmedReg) {
+    const matchingTournInvoice = invoicesList.find((inv: any) => {
+      const invTournId = String(inv.tournamentId || inv.tournament?._id || inv.tournament || inv.metadata?.tournamentId || '');
+      return invTournId === String(id);
+    });
+    if (matchingTournInvoice) {
+      existingConfirmedReg = {
+        _id: matchingTournInvoice.registrationId || matchingTournInvoice._id,
+        id: matchingTournInvoice.registrationId || matchingTournInvoice._id,
+        tournamentId: id,
+        tournamentName: matchingTournInvoice.tournamentName || matchingTournInvoice.title || tournament?.name,
+        categoryName: matchingTournInvoice.categoryName || 'Confirmed Entry',
+        amount: matchingTournInvoice.total || matchingTournInvoice.amount || 0,
+        paymentStatus: 'PAID',
+        registrationStatus: 'CONFIRMED',
+        invoiceId: matchingTournInvoice._id || matchingTournInvoice.id,
+      };
+    }
+  }
 
   const { data: childrenResponse } = useQuery({
     queryKey: ['children'],
@@ -88,20 +170,31 @@ export default function TournamentDetailsScreen() {
     setIsDownloadingInvoice(true);
     try {
       let invoiceId = null;
-      const invoicesRes = await api.get('/invoices/my', { params: { limit: 25 } }).catch(() => null);
-      const invoiceList = invoicesRes?.data?.data || invoicesRes?.data || [];
-      
       const targetRegId = registrationId || confirmedRegistration?._id || confirmedRegistration?.id;
-      const match = invoiceList.find((inv: any) => 
-        inv.registrationId === targetRegId || 
-        inv.registration?._id === targetRegId ||
-        inv.tournamentId === id ||
-        inv.tournament?._id === id ||
-        inv.metadata?.registrationId === targetRegId
-      ) || invoiceList[0];
+
+      const match = invoicesList.find((inv: any) => {
+        if (targetRegId && invoiceMatchesRegistration(inv, { _id: targetRegId, id: targetRegId })) return true;
+        const invTournId = String(inv.tournamentId || inv.tournament?._id || inv.tournament || inv.metadata?.tournamentId || '');
+        if (invTournId === String(id)) return true;
+        return false;
+      }) || invoicesList[0];
 
       if (match) {
         invoiceId = match._id || match.id;
+      }
+
+      if (!invoiceId) {
+        try {
+          const freshRes = await api.get('/invoices/my', { params: { limit: 25 } });
+          const freshList = normalizeInvoices(freshRes.data);
+          const freshMatch = freshList.find((inv: any) => {
+            const invTournId = String(inv.tournamentId || inv.tournament?._id || inv.tournament || inv.metadata?.tournamentId || '');
+            return invTournId === String(id);
+          }) || freshList[0];
+          if (freshMatch) {
+            invoiceId = freshMatch._id || freshMatch.id;
+          }
+        } catch (_) {}
       }
 
       if (!invoiceId) {
@@ -125,11 +218,33 @@ export default function TournamentDetailsScreen() {
       setIsDownloadingInvoice(false);
     } catch (err: any) {
       setIsDownloadingInvoice(false);
-      Alert.alert('Invoice', err?.response?.data?.message || 'Invoice will be ready shortly in My Tournaments.');
+      const status = err?.response?.status;
+      if (status === 400) {
+        Alert.alert(
+          'PDF Being Generated',
+          'Your invoice PDF is currently being prepared on the server. Please tap download again in a moment.'
+        );
+      } else {
+        Alert.alert('Invoice', err?.response?.data?.message || 'Invoice will be ready shortly in My Tournaments.');
+      }
     }
   };
 
   const handleOpenRegisterModal = (cat?: any) => {
+    if (existingConfirmedReg) {
+      const registeredPhone = existingConfirmedReg.phone || existingConfirmedReg.mobileNumber || user?.phone || '';
+      Alert.alert(
+        'Already Registered',
+        `You have already registered for ${tournament?.name || 'this tournament'} with mobile number +91 ${registeredPhone}.\n\nRegistration ID: #${existingConfirmedReg._id || existingConfirmedReg.id}`,
+        [
+          { text: 'OK', style: 'cancel' },
+          { text: 'Download Invoice', onPress: () => handleDownloadInvoice(existingConfirmedReg._id || existingConfirmedReg.id) },
+          { text: 'My Registrations', onPress: () => router.push('/my-tournaments') }
+        ]
+      );
+      return;
+    }
+
     const targetCat = cat || (tournament?.categories?.[0] || null);
     setSelectedCategory(targetCat);
     setRegisterError(null);
@@ -350,6 +465,24 @@ export default function TournamentDetailsScreen() {
       const resData = err?.response?.data;
       const errMsg = resData?.message || err?.message || 'Failed to initialize tournament registration. Please try again.';
 
+      const isAlreadyRegistered = 
+        errMsg.toLowerCase().includes('already') || 
+        errMsg.toLowerCase().includes('duplicate') || 
+        errMsg.toLowerCase().includes('registered');
+
+      if (isAlreadyRegistered) {
+        Alert.alert(
+          'Already Registered',
+          `You have already registered for ${tournament?.name || 'this tournament'} with mobile number +91 ${regPhone || user?.phone}.\n\nPlease check your registrations to view your entry and invoice.`,
+          [
+            { text: 'OK', style: 'cancel' },
+            { text: 'View My Registrations', onPress: () => router.push('/my-tournaments') }
+          ]
+        );
+        setIsRegisterModalVisible(false);
+        return;
+      }
+
       // If user already has a pending registration for this tournament
       const existingReg = resData?.data?.registration || resData?.registration || resData?.data;
       const existingRegId = existingReg?._id || existingReg?.id;
@@ -393,6 +526,7 @@ export default function TournamentDetailsScreen() {
 
         const verifyPayload = {
           transactionId: data.razorpay_payment_id,
+          paymentTransactionId: data.razorpay_payment_id,
           razorpay_payment_id: data.razorpay_payment_id,
           paymentOrderId: data.razorpay_order_id || razorpayOrder?.orderId,
           razorpay_order_id: data.razorpay_order_id || razorpayOrder?.orderId,
@@ -406,9 +540,15 @@ export default function TournamentDetailsScreen() {
         if (pendingRegistrationId) {
           try {
             await api.post(`/novare/registrations/${pendingRegistrationId}/verify-payment`, verifyPayload);
+            await unmarkPendingTournamentAsDeleted(pendingRegistrationId);
+            await markTournamentAsConfirmed(pendingRegistrationId, String(id));
+            setLocallyConfirmedIds(prev => [...prev, pendingRegistrationId, String(id)]);
           } catch (e) {
             console.warn('Payment verification fallback:', e);
           }
+        } else if (id) {
+          await markTournamentAsConfirmed('', String(id));
+          setLocallyConfirmedIds(prev => [...prev, String(id)]);
         }
 
         queryClient.invalidateQueries({ queryKey: ['myTournamentRegistrations'] });
@@ -444,6 +584,25 @@ export default function TournamentDetailsScreen() {
     } catch (e) {
       setIsRazorpayModalVisible(false);
     }
+  };
+
+  const handleCloseRazorpay = () => {
+    Alert.alert(
+      'Exit Payment?',
+      'Are you sure you want to cancel payment? You can complete payment anytime from your pending list.',
+      [
+        { text: 'Keep Paying', style: 'cancel' },
+        { 
+          text: 'Exit', 
+          style: 'destructive',
+          onPress: () => {
+            setIsRazorpayModalVisible(false);
+            setIsRegisterModalVisible(true);
+            setRegStep(2);
+          }
+        }
+      ]
+    );
   };
 
   const generateRazorpayHtml = () => {
@@ -590,6 +749,31 @@ export default function TournamentDetailsScreen() {
         </View>
 
         <View className="px-5 pt-5">
+          {existingConfirmedReg && (
+            <View className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 mb-4 flex-row items-center shadow-xs">
+              <View className="w-10 h-10 rounded-xl bg-emerald-100 items-center justify-center mr-3">
+                <Ionicons name="checkmark-circle" size={24} color="#059669" />
+              </View>
+              <View className="flex-1 mr-2">
+                <Typography variant="subtitle2" weight="bold" className="font-outfit-bold text-emerald-800">
+                  Already Registered
+                </Typography>
+                <Typography variant="caption" className="font-outfit text-emerald-700 mt-0.5 text-xs">
+                  Registered with: +91 {existingConfirmedReg.phone || existingConfirmedReg.mobileNumber || user?.phone}
+                </Typography>
+              </View>
+              <TouchableOpacity
+                onPress={() => handleDownloadInvoice(existingConfirmedReg._id || existingConfirmedReg.id)}
+                className="px-3 py-1.5 bg-white border border-emerald-300 rounded-xl flex-row items-center shadow-xs active:bg-emerald-50"
+              >
+                <Ionicons name="download-outline" size={13} color="#059669" style={{ marginRight: 4 }} />
+                <Typography variant="caption" weight="bold" className="font-outfit-bold text-emerald-800 text-xs">
+                  Invoice
+                </Typography>
+              </TouchableOpacity>
+            </View>
+          )}
+
           {/* Main Info */}
           <Typography variant="h2" color="secondary" weight="bold" className="font-outfit-bold mb-3">
             {tournament.name || tournament.title || 'Tournament Name'}
@@ -706,12 +890,35 @@ export default function TournamentDetailsScreen() {
           </Typography>
         </View>
 
-        <Button
-          title="Register Now"
-          onPress={() => handleOpenRegisterModal()}
-          fullWidth={false}
-          className="px-8 shadow-sm"
-        />
+        {existingConfirmedReg ? (
+          <TouchableOpacity
+            onPress={() => {
+              const regPhoneNum = existingConfirmedReg.phone || existingConfirmedReg.mobileNumber || user?.phone || '';
+              Alert.alert(
+                'Already Registered',
+                `You have already registered for ${tournament.name || 'this tournament'} with mobile number +91 ${regPhoneNum}.\n\nRegistration ID: #${existingConfirmedReg._id || existingConfirmedReg.id}`,
+                [
+                  { text: 'OK', style: 'cancel' },
+                  { text: 'Download Invoice', onPress: () => handleDownloadInvoice(existingConfirmedReg._id || existingConfirmedReg.id) },
+                  { text: 'My Registrations', onPress: () => router.push('/my-tournaments') }
+                ]
+              );
+            }}
+            className="px-6 py-3.5 bg-emerald-600 rounded-full flex-row items-center shadow-md active:bg-emerald-700"
+          >
+            <Ionicons name="checkmark-circle" size={18} color="white" style={{ marginRight: 6 }} />
+            <Typography variant="body2" color="white" weight="bold" className="font-outfit-bold">
+              Already Registered
+            </Typography>
+          </TouchableOpacity>
+        ) : (
+          <Button
+            title="Register Now"
+            onPress={() => handleOpenRegisterModal()}
+            fullWidth={false}
+            className="px-8 shadow-sm"
+          />
+        )}
       </View>
 
       {/* REGISTRATION MODAL SHEET (Step 1: Selection & Details | Step 2: Review & Price Breakdown) */}
@@ -1067,43 +1274,57 @@ export default function TournamentDetailsScreen() {
       <Modal
         visible={isRazorpayModalVisible}
         animationType="slide"
-        onRequestClose={() => {
-          setIsRazorpayModalVisible(false);
-          setIsRegisterModalVisible(true);
-          setRegStep(2);
-        }}
+        transparent={false}
+        onRequestClose={handleCloseRazorpay}
       >
-        <SafeAreaView className="flex-1 bg-white">
-          <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-100 bg-white">
-            <View>
-              <Typography variant="subtitle1" color="secondary" weight="bold" className="font-outfit-bold">
-                Secure Payment
-              </Typography>
-              <Typography variant="caption" color="muted" className="font-outfit text-xs">
-                Arenova Tournament Registration
-              </Typography>
+        <View style={{ flex: 1, backgroundColor: '#0F2C59', paddingTop: insets.top }}>
+          {/* Header */}
+          <View className="flex-row items-center justify-between px-4 py-3.5 bg-[#0F2C59] border-b border-white/10">
+            <View className="flex-row items-center flex-1 mr-3">
+              <View className="w-9 h-9 rounded-full bg-white/10 items-center justify-center mr-3 border border-white/15">
+                <Ionicons name="shield-checkmark" size={18} color="#FF5100" />
+              </View>
+              <View className="flex-1">
+                <Typography variant="subtitle1" color="white" weight="bold" className="font-outfit-bold text-sm">
+                  Complete Payment
+                </Typography>
+                <Typography variant="caption" color="light" className="font-outfit opacity-75 text-[11px]">
+                  Razorpay 256-bit Secure Checkout
+                </Typography>
+              </View>
             </View>
+
             <TouchableOpacity
-              onPress={() => {
-                setIsRazorpayModalVisible(false);
-                setIsRegisterModalVisible(true);
-                setRegStep(2);
-              }}
-              className="w-8 h-8 rounded-full bg-gray-100 items-center justify-center"
+              onPress={handleCloseRazorpay}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              className="w-9 h-9 rounded-full bg-white/15 items-center justify-center active:bg-white/25"
             >
-              <Ionicons name="close" size={20} color="#0F2C59" />
+              <Ionicons name="close" size={20} color="white" />
             </TouchableOpacity>
           </View>
-          {razorpayOrder && (
-            <WebView
-              source={{ html: generateRazorpayHtml() }}
-              onMessage={handleRazorpayMessage}
-              javaScriptEnabled={true}
-              domStorageEnabled={true}
-              className="flex-1"
-            />
-          )}
-        </SafeAreaView>
+
+          {/* WebView Container */}
+          <View style={{ flex: 1, backgroundColor: '#F9FAFB', paddingBottom: insets.bottom }}>
+            {razorpayOrder && (
+              <WebView
+                source={{ html: generateRazorpayHtml() }}
+                onMessage={handleRazorpayMessage}
+                javaScriptEnabled={true}
+                domStorageEnabled={true}
+                style={{ flex: 1, backgroundColor: '#F9FAFB' }}
+                startInLoadingState={true}
+                renderLoading={() => (
+                  <View className="absolute inset-0 items-center justify-center bg-[#F9FAFB]">
+                    <ActivityIndicator size="large" color="#FF5100" />
+                    <Typography variant="body2" color="secondary" weight="bold" className="font-outfit-bold mt-3">
+                      Connecting to Razorpay...
+                    </Typography>
+                  </View>
+                )}
+              />
+            )}
+          </View>
+        </View>
       </Modal>
 
       {/* REGISTRATION & PAYMENT SUCCESS MODAL WITH DOWNLOAD INVOICE */}

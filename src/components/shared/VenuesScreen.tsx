@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
-import { View, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Image, Alert } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Button } from '@/components/ui';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/services/api';
+import { useAuthStore } from '@/store';
 
 const DEFAULT_VENUE_IMAGES = [
   'https://images.unsplash.com/photo-1517649763962-0c623266010b?w=800&auto=format&fit=crop&q=80',
@@ -17,7 +18,19 @@ const DEFAULT_VENUE_IMAGES = [
 export default function VenuesScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuthStore();
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Strict Role Guard: Coaches cannot access player venue booking screens
+  useEffect(() => {
+    if (user?.role === 'coach') {
+      Alert.alert(
+        'Access Denied (Role Boundary)',
+        'Coaches cannot access player venue booking screens. Please use your coach dashboard.'
+      );
+      router.replace('/(coach)/(coach-tabs)/coach-dashboard');
+    }
+  }, [user, router]);
 
   const { data: venuesData, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['activeVenues'],

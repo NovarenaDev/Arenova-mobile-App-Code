@@ -8,7 +8,7 @@ import { useAuthStore } from '@/store';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/services/api';
 import { SessionOtpVerificationModal } from '@/components/shared/SessionOtpVerificationModal';
-import { resolveSessionTime, resolveSessionDate, resolveSessionSport, resolveSessionLocation, resolveStudentName } from '@/utils/sessionFormatter';
+import { resolveSessionTime, resolveSessionDate, resolveSessionSport, resolveSessionTitle, resolveSessionLocation, resolveStudentName } from '@/utils/sessionFormatter';
 
 export default function SessionSummaryScreen() {
   const insets = useSafeAreaInsets();
@@ -28,6 +28,7 @@ export default function SessionSummaryScreen() {
     price,
     coachName,
     coachSport,
+    sessionTitle
   } = useLocalSearchParams<{
     id?: string;
     status?: string;
@@ -43,6 +44,7 @@ export default function SessionSummaryScreen() {
     price?: string;
     coachName?: string;
     coachSport?: string;
+    sessionTitle?: string;
   }>();
 
   const isCheckoutMode = !!slotId;
@@ -110,13 +112,23 @@ export default function SessionSummaryScreen() {
         const res = await api.get(`/bookings/${id}`);
         return res.data;
       } catch (err) {
-        return null;
+        try {
+          const res2 = await api.get(`/coach-app/slots/${id}`);
+          return res2.data;
+        } catch {
+          try {
+            const res3 = await api.get(`/coach-app/sessions/${id}`);
+            return res3.data;
+          } catch {
+            return null;
+          }
+        }
       }
     },
     enabled: !!id && !isCheckoutMode
   });
 
-  const existingBooking = bookingDetailResponse?.data;
+  const existingBooking = bookingDetailResponse?.data || bookingDetailResponse;
   const rawStatusVal = status || existingBooking?.status || (isCheckoutMode ? 'checkout' : 'requested');
   const statusParam = rawStatusVal.toString().toLowerCase().trim();
 
@@ -145,7 +157,7 @@ export default function SessionSummaryScreen() {
         existingBooking?.createdAt
       );
 
-  const resolvedTime = time && time !== 'Scheduled Time' && !time.includes('07:00 AM - 08:00 AM')
+  const resolvedTime = time && time !== 'Scheduled Time' && time !== 'Time TBD' && !time.includes('07:00 AM - 08:00 AM')
     ? resolveSessionTime({ time })
     : resolveSessionTime(existingBooking);
 
@@ -161,6 +173,16 @@ export default function SessionSummaryScreen() {
     ? coachSport
     : resolveSessionSport(existingBooking, coachUser);
 
+  const resolvedSessionTitle = sessionTitle && sessionTitle !== 'Coaching Session' && sessionTitle !== 'Sports Coaching'
+    ? sessionTitle
+    : resolveSessionTitle(existingBooking, coachUser);
+
+  const resolvedCoachName = 
+    coachName || 
+    existingBooking?.coach?.name || 
+    (typeof existingBooking?.coach === 'string' ? existingBooking?.coach : null) || 
+    (coachUser?.name ? coachUser.name : 'Coach');
+
   const resolvedPrice = 
     price || 
     existingBooking?.amountInr || 
@@ -168,7 +190,8 @@ export default function SessionSummaryScreen() {
     existingBooking?.credits || 
     existingBooking?.slot?.pricePerPerson || 
     existingBooking?.slot?.price || 
-    '400';
+    existingBooking?.price ||
+    '0';
 
   const parentAttendanceOtp = existingBooking?.attendanceOtp ? String(existingBooking.attendanceOtp) : '';
 
@@ -337,20 +360,24 @@ export default function SessionSummaryScreen() {
               </View>
             ) : null}
 
-            {/* Coach & Sport Info Card */}
+            {/* Session & Coach Info Card */}
             <View className="bg-white rounded-2xl p-5 mb-4 shadow-sm border border-gray-50">
               <View className="flex-row items-center border-b border-gray-100 pb-4 mb-4">
                 <View className="w-14 h-14 rounded-full bg-[#F5E6D3] mr-4 items-center justify-center">
                   <Typography variant="subtitle1" color="primary" weight="bold" className="font-outfit-bold">
-                    {(coachName || existingBooking?.coach?.name || 'Coach').substring(0, 2).toUpperCase()}
+                    {isCoach 
+                      ? ((resolvedSport || 'SC').substring(0, 2).toUpperCase())
+                      : ((coachName || existingBooking?.coach?.name || 'Coach').substring(0, 2).toUpperCase())}
                   </Typography>
                 </View>
                 <View className="flex-1">
                   <Typography variant="subtitle1" color="secondary" weight="bold" className="font-outfit-bold">
-                    {coachName || existingBooking?.coach?.name || 'Coach'}
+                    {isCoach 
+                      ? (resolvedSessionTitle || `${resolvedSport} Coaching`)
+                      : (coachName || existingBooking?.coach?.name || 'Coach')}
                   </Typography>
                   <Typography variant="body2" color="primary" weight="medium" className="mb-0.5 font-outfit-medium">
-                    {resolvedSport}
+                    {isCoach ? resolvedSport : (resolvedSessionTitle || resolvedSport)}
                   </Typography>
                   <Typography variant="caption" color="text" className="font-outfit text-gray-500">
                     {resolvedLocation}
@@ -362,7 +389,7 @@ export default function SessionSummaryScreen() {
                 <View className="flex-row items-center">
                   <Ionicons name="person-circle-outline" size={20} color="#3B82F6" className="mr-2" />
                   <Typography variant="caption" color="secondary" weight="bold" className="font-outfit-bold">
-                    Attendee:
+                    {isCoach ? 'Student / Player:' : 'Attendee:'}
                   </Typography>
                 </View>
                 <Typography variant="body2" color="primary" weight="bold" className="font-outfit-bold">
@@ -458,6 +485,11 @@ export default function SessionSummaryScreen() {
           setShowOtpVerifyModal(false);
           refetchBooking();
           queryClient.invalidateQueries({ queryKey: ['coachSessions'] });
+          queryClient.invalidateQueries({ queryKey: ['segmentedSessions'] });
+          queryClient.invalidateQueries({ queryKey: ['coachDashboard'] });
+          queryClient.invalidateQueries({ queryKey: ['bookingDetail', id] });
+          router.setParams({ status: 'ongoing' });
+          Alert.alert('Session Started', 'Attendance verified! Session is now active.');
         }}
       />
 
@@ -676,7 +708,29 @@ export default function SessionSummaryScreen() {
             })}
           />
         ) : isPaid ? (
-          <View>
+          <View className="gap-2.5">
+            {(statusParam === 'completed' || existingBooking?.status === 'completed') && (
+              <TouchableOpacity
+                onPress={() => router.push({
+                  pathname: '/review-player',
+                  params: {
+                    bookingId: id,
+                    coachId: existingBooking?.coach?._id || existingBooking?.coachId || existingBooking?.coach?.id || coachId,
+                    coachName: resolvedCoachName,
+                    dateDisplay: resolvedDate,
+                    sport: resolvedSport,
+                    type: 'coach'
+                  }
+                })}
+                className="w-full py-3.5 bg-amber-500 rounded-xl flex-row items-center justify-center shadow-xs active:opacity-80"
+              >
+                <Ionicons name="star" size={17} color="#FFFFFF" className="mr-2" />
+                <Typography variant="subtitle2" className="text-white font-bold font-outfit-bold text-sm">
+                  Rate & Review Coach
+                </Typography>
+              </TouchableOpacity>
+            )}
+
             {!isDisputed ? (
               <Button 
                 title="Report Session Issue" 

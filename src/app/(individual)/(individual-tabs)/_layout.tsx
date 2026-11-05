@@ -1,12 +1,27 @@
-import { Tabs } from 'expo-router';
+import React, { useEffect } from 'react';
+import { Tabs, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Platform } from 'react-native';
+import { Platform, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuthStore } from '@/store';
 
 export default function IndividualTabLayout() {
+  const router = useRouter();
+  const { user, token } = useAuthStore();
   const insets = useSafeAreaInsets();
   const bottomPadding = Platform.OS === 'android' ? Math.max(insets.bottom, 16) : Math.max(insets.bottom, 12);
   const barHeight = 58 + bottomPadding;
+
+  // Strict Role Boundary Guard: Coaches can NEVER access player portal
+  useEffect(() => {
+    if (token && user && user.role === 'coach') {
+      Alert.alert(
+        'Access Denied (Role Boundary)',
+        'Coaches cannot access player booking screens or book coaching sessions.'
+      );
+      router.replace('/(coach)/(coach-tabs)/coach-dashboard');
+    }
+  }, [user, token, router]);
 
   return (
     <Tabs 

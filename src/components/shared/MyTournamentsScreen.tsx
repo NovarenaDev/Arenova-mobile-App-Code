@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, ScrollView, TouchableOpacity, ActivityIndicator, Modal, Alert, Linking } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
@@ -7,14 +7,30 @@ import { Typography, Button } from '@/components/ui';
 import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, RAZORPAY_KEY_ID } from '@/services/api';
+import { useAuthStore } from '@/store';
+import { 
+  getDeletedPendingTournamentIds, 
+  markPendingTournamentAsDeleted, 
+  markMultiplePendingTournamentsAsDeleted,
+  unmarkPendingTournamentAsDeleted,
+  getConfirmedTournamentIds,
+  markTournamentAsConfirmed,
+  processTournamentRegistrations,
+  normalizeInvoices,
+  invoiceMatchesRegistration,
+  isTournamentInvoice
+} from '@/utils/deletedTournaments';
 
 export default function MyTournamentsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
 
   const [selectedRegistrationId, setSelectedRegistrationId] = useState<string | null>(null);
   const [isDownloadingInvoice, setIsDownloadingInvoice] = useState(false);
+  const [tournamentTab, setTournamentTab] = useState<'confirmed' | 'pending'>('confirmed');
+  const [showInvoicesModal, setShowInvoicesModal] = useState(false);
 
   // Resume Payment States
   const [activePayReg, setActivePayReg] = useState<any | null>(null);
@@ -27,36 +43,120 @@ export default function MyTournamentsScreen() {
     currency?: string;
   } | null>(null);
 
+  // Fetch registrations: checks /novare/registrations/my AND fetches any registrations referenced in invoices
   const { data: registrationsResponse, isLoading, refetch, isRefetching } = useQuery({
-    queryKey: ['myTournamentRegistrations'],
+    queryKey: ['myTournamentRegistrations', user?.phone],
     queryFn: async () => {
-      const res = await api.get('/novare/registrations/my');
-      return res.data?.data || res.data;
+      let list: any[] = [];
+      const cleanPhone = (user?.phone || '').replace(/\D/g, '').slice(-10);
+
+      // 1. Fetch user registrations
+      try {
+        const res = await api.get('/novare/registrations/my', {
+          params: cleanPhone ? { phone: cleanPhone, mobile: cleanPhone, mobileNumber: cleanPhone } : undefined
+        });
+        const data = res.data?.data || res.data;
+        list = Array.isArray(data) ? [...data] : (Array.isArray(data?.registrations) ? [...data.registrations] : []);
+      } catch (e) {
+        console.log('Error fetching my registrations:', e);
+      }
+
+      // 2. Cross-check invoices to resolve any registration ID by that ID
+      try {
+        const invRes = await api.get('/invoices/my', { params: { limit: 50 } });
+        const invList = normalizeInvoices(invRes.data);
+        for (const inv of invList) {
+          const invRegId = String(
+            inv.registrationId || 
+            inv.registration_id || 
+            inv.registration?._id || 
+            inv.metadata?.registrationId || 
+            inv.metadata?.registration_id || 
+            ''
+          ).trim();
+
+          if (invRegId && invRegId.length > 5) {
+            const alreadyExists = list.some(r => String(r._id || r.id) === invRegId);
+            if (!alreadyExists) {
+              try {
+                const regRes = await api.get(`/novare/registrations/${invRegId}`);
+                const regData = regRes.data?.data || regRes.data;
+                if (regData && (regData._id || regData.id)) {
+                  list.push(regData);
+                }
+              } catch (_) {}
+            }
+          }
+        }
+      } catch (_) {}
+
+      return list;
     }
   });
+
+  const { data: invoicesResponse, refetch: refetchInvoices } = useQuery({
+    queryKey: ['invoices'],
+    queryFn: async () => {
+      const res = await api.get('/invoices/my', { params: { limit: 50 } }).catch(() => null);
+      return res?.data?.data || res?.data || [];
+    }
+  });
+
+  const [deletedIds, setDeletedIds] = useState<string[]>([]);
+  const [locallyConfirmedIds, setLocallyConfirmedIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    getDeletedPendingTournamentIds().then(setDeletedIds);
+    getConfirmedTournamentIds().then(setLocallyConfirmedIds);
+  }, []);
+
+  // Process registrations and invoices with synthesis so every paid entry is included
+  const {
+    confirmedRegistrations,
+    pendingRegistrations,
+    allInvoices,
+    totalPaidAmount,
+  } = useMemo(() => {
+    return processTournamentRegistrations({
+      rawRegistrations: registrationsResponse,
+      invoicesResponse,
+      locallyConfirmedIds,
+      deletedIds,
+    });
+  }, [registrationsResponse, invoicesResponse, locallyConfirmedIds, deletedIds]);
+
+  const displayRegistrations = tournamentTab === 'confirmed' ? confirmedRegistrations : pendingRegistrations;
+
+  const isRegConfirmed = (reg: any) => {
+    if (!reg) return false;
+    const rid = String(reg._id || reg.id || '').trim();
+    return (
+      confirmedRegistrations.some((cr: any) => String(cr._id || cr.id) === rid) ||
+      locallyConfirmedIds.includes(rid) ||
+      String(reg.paymentStatus || '').toUpperCase() === 'PAID' ||
+      String(reg.registrationStatus || '').toUpperCase() === 'CONFIRMED'
+    );
+  };
 
   const { data: detailResponse, isLoading: isLoadingDetail } = useQuery({
     queryKey: ['tournamentRegistrationDetail', selectedRegistrationId],
     queryFn: async () => {
       if (!selectedRegistrationId) return null;
-      const res = await api.get(`/novare/registrations/${selectedRegistrationId}`);
-      return res.data?.data || res.data;
+      try {
+        const res = await api.get(`/novare/registrations/${selectedRegistrationId}`);
+        return res.data?.data || res.data;
+      } catch (e) {
+        return null;
+      }
     },
     enabled: !!selectedRegistrationId
   });
 
-  const registrations = Array.isArray(registrationsResponse) 
-    ? registrationsResponse 
-    : (registrationsResponse?.registrations || registrationsResponse?.data || []);
-
-  const detailObj = detailResponse;
-
-  const isRegConfirmed = (reg: any) => {
-    const paymentStatus = String(reg?.paymentStatus || '').toUpperCase();
-    const registrationStatus = String(reg?.registrationStatus || reg?.status || '').toUpperCase();
-    const isPaid = paymentStatus === 'PAID' || paymentStatus === 'COMPLETED' || paymentStatus === 'VERIFIED';
-    return isPaid && (registrationStatus === 'CONFIRMED' || registrationStatus === 'VERIFIED');
-  };
+  // Fallback to in-memory registration if detail query is loading or 404
+  const detailObj = 
+    detailResponse || 
+    confirmedRegistrations.find(r => (r._id || r.id) === selectedRegistrationId) || 
+    pendingRegistrations.find(r => (r._id || r.id) === selectedRegistrationId);
 
   const handleDownloadInvoice = async (regId?: string, invoiceIdParam?: string) => {
     setIsDownloadingInvoice(true);
@@ -64,18 +164,29 @@ export default function MyTournamentsScreen() {
       let targetInvoiceId = invoiceIdParam;
 
       if (!targetInvoiceId) {
-        const res = await api.get('/invoices/my', { params: { limit: 25 } }).catch(() => null);
-        const list = res?.data?.data || res?.data || [];
-        const match = list.find((inv: any) => 
-          inv.registrationId === regId || 
-          inv.registration?._id === regId ||
-          inv.metadata?.registrationId === regId ||
-          inv.bookingId === regId
-        ) || list[0];
+        // Try finding matching invoice in allInvoices
+        const match = allInvoices.find((inv: any) => {
+          if (regId && invoiceMatchesRegistration(inv, { _id: regId, id: regId })) return true;
+          return false;
+        }) || allInvoices.find((inv: any) => isTournamentInvoice(inv)) || allInvoices[0];
 
         if (match) {
           targetInvoiceId = match._id || match.id;
         }
+      }
+
+      if (!targetInvoiceId) {
+        try {
+          const freshRes = await api.get('/invoices/my', { params: { limit: 25 } });
+          const freshList = normalizeInvoices(freshRes.data);
+          const freshMatch = freshList.find((inv: any) => {
+            if (regId && invoiceMatchesRegistration(inv, { _id: regId, id: regId })) return true;
+            return false;
+          }) || freshList[0];
+          if (freshMatch) {
+            targetInvoiceId = freshMatch._id || freshMatch.id;
+          }
+        } catch (_) {}
       }
 
       if (!targetInvoiceId) {
@@ -96,11 +207,19 @@ export default function MyTournamentsScreen() {
       } else {
         Alert.alert('Notice', 'Invoice PDF will be ready in a few moments.');
       }
-      setIsDownloadingInvoice(false);
     } catch (err: any) {
+      const status = err?.response?.status;
+      if (status === 400) {
+        Alert.alert(
+          'PDF Being Generated',
+          'Your invoice PDF is currently being prepared on the server. Please tap download again in a moment.'
+        );
+      } else {
+        const msg = err?.response?.data?.message || err?.message || 'Invoice PDF is being prepared.';
+        Alert.alert('Invoice', msg);
+      }
+    } finally {
       setIsDownloadingInvoice(false);
-      const msg = err?.response?.data?.message || err?.message || 'Invoice PDF is being prepared.';
-      Alert.alert('Invoice', msg);
     }
   };
 
@@ -191,6 +310,8 @@ export default function MyTournamentsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
+              await markPendingTournamentAsDeleted(regId);
+              setDeletedIds(prev => [...prev, regId]);
               await api.delete(`/novare/registrations/${regId}`).catch(() => 
                 api.post(`/novare/registrations/${regId}/cancel`).catch(() => null)
               );
@@ -198,7 +319,7 @@ export default function MyTournamentsScreen() {
               console.log('Delete registration API notice:', e);
             }
 
-            queryClient.setQueryData(['myTournamentRegistrations'], (old: any) => {
+            queryClient.setQueryData(['myTournamentRegistrations', user?.phone], (old: any) => {
               if (Array.isArray(old)) {
                 return old.filter((r: any) => (r._id || r.id) !== regId);
               }
@@ -210,10 +331,46 @@ export default function MyTournamentsScreen() {
               return old;
             });
 
-            queryClient.invalidateQueries({ queryKey: ['myTournamentRegistrations'] });
             setSelectedRegistrationId(null);
             Alert.alert('Registration Removed', 'The pending registration has been successfully removed.');
           }
+        }
+      ]
+    );
+  };
+
+  const handleClearAllPending = () => {
+    if (pendingRegistrations.length === 0) return;
+    Alert.alert(
+      'Clear All Pending Registrations',
+      `Are you sure you want to delete all ${pendingRegistrations.length} pending registration(s)?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete All',
+          style: 'destructive',
+          onPress: async () => {
+            const ids = pendingRegistrations.map((r: any) => r._id || r.id).filter(Boolean);
+            await markMultiplePendingTournamentsAsDeleted(ids);
+            setDeletedIds(prev => Array.from(new Set([...prev, ...ids])));
+            queryClient.invalidateQueries({ queryKey: ['myTournamentRegistrations'] });
+            Alert.alert('Cleared', 'All pending registrations have been deleted.');
+          }
+        }
+      ]
+    );
+  };
+
+  const handleCloseRazorpay = () => {
+    Alert.alert(
+      'Exit Checkout?',
+      'Are you sure you want to cancel payment? You can resume payment anytime from your pending list.',
+      [
+        { text: 'Keep Paying', style: 'cancel' },
+        { 
+          text: 'Exit', 
+          style: 'destructive',
+          onPress: () => setIsRazorpayModalVisible(false)
         }
       ]
     );
@@ -231,6 +388,7 @@ export default function MyTournamentsScreen() {
           try {
             await api.post(`/novare/registrations/${targetRegId}/verify-payment`, {
               transactionId: data.razorpay_payment_id,
+              paymentTransactionId: data.razorpay_payment_id,
               razorpay_payment_id: data.razorpay_payment_id,
               paymentOrderId: data.razorpay_order_id || razorpayOrder?.orderId,
               razorpay_order_id: data.razorpay_order_id || razorpayOrder?.orderId,
@@ -240,6 +398,10 @@ export default function MyTournamentsScreen() {
               registrationStatus: 'CONFIRMED',
               status: 'verified',
             });
+            await unmarkPendingTournamentAsDeleted(targetRegId);
+            await markTournamentAsConfirmed(targetRegId, activePayReg?.tournamentId?._id || activePayReg?.tournamentId);
+            setLocallyConfirmedIds(prev => [...prev, targetRegId]);
+            setDeletedIds(prev => prev.filter(id => id !== targetRegId));
           } catch (e) {
             console.warn('Payment verification error:', e);
           }
@@ -264,9 +426,9 @@ export default function MyTournamentsScreen() {
 
   const generateRazorpayHtml = () => {
     if (!razorpayOrder) return '';
-    const cleanPhone = (activePayReg?.phone || '').replace(/\D/g, '').slice(-10);
-    const cleanName = activePayReg?.childName || activePayReg?.participantName || activePayReg?.name || 'Athlete';
-    const cleanEmail = activePayReg?.email || '';
+    const cleanPhone = (activePayReg?.phone || user?.phone || '').replace(/\D/g, '').slice(-10);
+    const cleanName = activePayReg?.childName || activePayReg?.participantName || activePayReg?.name || user?.name || 'Athlete';
+    const cleanEmail = activePayReg?.email || user?.email || '';
     const isRealOrderId = !!(razorpayOrder.orderId && razorpayOrder.orderId.startsWith('order_') && !razorpayOrder.orderId.startsWith('order_tourn_'));
 
     return `
@@ -337,6 +499,11 @@ export default function MyTournamentsScreen() {
     `;
   };
 
+  const handleRefresh = () => {
+    refetch();
+    refetchInvoices();
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-[#EEF3F9]" edges={['top']}>
       {/* Header */}
@@ -356,9 +523,69 @@ export default function MyTournamentsScreen() {
         <Typography variant="h2" color="white" weight="bold" className="font-outfit-bold">
           My Tournaments
         </Typography>
-        <TouchableOpacity onPress={() => refetch()} className="p-2 -mr-2">
+        <TouchableOpacity onPress={handleRefresh} className="p-2 -mr-2">
           <Ionicons name="refresh" size={20} color="#FF5100" />
         </TouchableOpacity>
+      </View>
+
+      {/* Total Paid & Invoices Summary Header */}
+      <View className="px-4 py-2.5 bg-[#0F2C59] border-t border-white/10">
+        <View className="bg-white/10 rounded-2xl p-3 flex-row items-center justify-between border border-white/15">
+          <View className="flex-row items-center flex-1 mr-2">
+            <View className="w-10 h-10 rounded-xl bg-orange-500/20 border border-orange-500/30 items-center justify-center mr-3">
+              <Ionicons name="receipt-outline" size={20} color="#FF5100" />
+            </View>
+            <View>
+              <Typography variant="caption" color="light" className="font-outfit opacity-80 text-[11px] uppercase tracking-wider">
+                Total Tournaments Paid
+              </Typography>
+              <Typography variant="subtitle1" color="white" weight="bold" className="font-outfit-bold text-base">
+                ₹{totalPaidAmount.toLocaleString('en-IN')}
+              </Typography>
+            </View>
+          </View>
+
+          {allInvoices.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setShowInvoicesModal(true)}
+              className="px-3 py-2 bg-[#FF5100] rounded-xl flex-row items-center shadow-xs active:bg-orange-600"
+            >
+              <Ionicons name="document-text-outline" size={14} color="white" style={{ marginRight: 4 }} />
+              <Typography variant="caption" color="white" weight="bold" className="font-outfit-bold text-xs">
+                Invoices ({allInvoices.length})
+              </Typography>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      {/* Tabs: Confirmed vs Pending */}
+      <View className="px-4 pt-2 pb-2.5 bg-[#0F2C59]">
+        <View className="flex-row bg-white/10 p-1 rounded-2xl">
+          <TouchableOpacity
+            onPress={() => setTournamentTab('confirmed')}
+            className={`flex-1 py-2.5 rounded-xl items-center flex-row justify-center ${
+              tournamentTab === 'confirmed' ? 'bg-[#FF5100]' : 'bg-transparent'
+            }`}
+          >
+            <Ionicons name="checkmark-circle-outline" size={15} color="white" style={{ marginRight: 6 }} />
+            <Typography variant="caption" color="white" weight="bold" className="font-outfit-bold text-xs">
+              Confirmed ({confirmedRegistrations.length})
+            </Typography>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setTournamentTab('pending')}
+            className={`flex-1 py-2.5 rounded-xl items-center flex-row justify-center ${
+              tournamentTab === 'pending' ? 'bg-[#FF5100]' : 'bg-transparent'
+            }`}
+          >
+            <Ionicons name="time-outline" size={15} color="white" style={{ marginRight: 6 }} />
+            <Typography variant="caption" color="white" weight="bold" className="font-outfit-bold text-xs">
+              Pending ({pendingRegistrations.length})
+            </Typography>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {isLoading || isRefetching ? (
@@ -368,29 +595,44 @@ export default function MyTournamentsScreen() {
             Loading your tournament registrations...
           </Typography>
         </View>
-      ) : registrations.length === 0 ? (
+      ) : displayRegistrations.length === 0 ? (
         <View className="flex-1 px-8 pt-20 items-center justify-center">
           <View className="w-20 h-20 rounded-full bg-white shadow-sm items-center justify-center mb-4 border border-gray-100">
-            <Ionicons name="trophy-outline" size={38} color="#9CA3AF" />
+            <Ionicons 
+              name={tournamentTab === 'confirmed' ? 'trophy-outline' : 'checkmark-done-circle-outline'} 
+              size={38} 
+              color={tournamentTab === 'confirmed' ? '#9CA3AF' : '#10B981'} 
+            />
           </View>
           <Typography variant="h3" color="secondary" weight="bold" className="mb-2 font-outfit-bold text-center">
-            No Tournament Registrations
+            {tournamentTab === 'confirmed' ? 'No Confirmed Registrations' : 'No Pending Payments'}
           </Typography>
           <Typography variant="body2" color="muted" align="center" className="mb-6 font-outfit">
-            You haven't registered for any sports tournaments yet. Explore upcoming tournaments and register!
+            {tournamentTab === 'confirmed' 
+              ? "You don't have any confirmed tournament registrations yet. Explore tournaments to join the competition!" 
+              : "Great news! You don't have any pending payments or unpaid registrations."}
           </Typography>
-          <Button 
-            title="Explore Tournaments" 
-            onPress={() => {
-              try {
-                router.back();
-              } catch (e) {
-                router.replace('/');
-              }
-            }}
-            fullWidth={false}
-            className="px-6"
-          />
+          {tournamentTab === 'confirmed' ? (
+            <Button 
+              title="Explore Tournaments" 
+              onPress={() => {
+                try {
+                  router.back();
+                } catch (e) {
+                  router.replace('/');
+                }
+              }}
+              fullWidth={false}
+              className="px-6"
+            />
+          ) : (
+            <Button 
+              title="View Confirmed" 
+              onPress={() => setTournamentTab('confirmed')}
+              fullWidth={false}
+              className="px-6"
+            />
+          )}
         </View>
       ) : (
         <ScrollView 
@@ -398,14 +640,44 @@ export default function MyTournamentsScreen() {
           className="flex-1 px-4 pt-4"
           contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 40, 60) }}
         >
-          {registrations.map((reg: any, idx: number) => {
-            const regId = reg._id || reg.id || idx.toString();
-            const tournamentObj = reg.tournamentId || reg.tournament || {};
-            const tournamentName = tournamentObj.name || tournamentObj.title || reg.tournamentName || 'Tournament';
-            const categoryName = reg.categoryName || reg.category?.name || reg.category || 'Open Division';
+          {tournamentTab === 'pending' && pendingRegistrations.length > 0 && (
+            <View className="flex-row justify-between items-center mb-3 px-1">
+              <Typography variant="caption" color="muted" className="font-outfit">
+                {pendingRegistrations.length} Pending Registration{pendingRegistrations.length > 1 ? 's' : ''}
+              </Typography>
+              <TouchableOpacity
+                onPress={handleClearAllPending}
+                className="flex-row items-center px-2.5 py-1.5 bg-red-50 border border-red-200 rounded-xl active:bg-red-100 shadow-xs"
+              >
+                <Ionicons name="trash-outline" size={13} color="#EF4444" style={{ marginRight: 4 }} />
+                <Typography variant="caption" weight="bold" className="font-outfit-bold text-red-600 text-xs">
+                  Clear All Pending
+                </Typography>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {displayRegistrations.map((reg: any, idx: number) => {
+            const regId = String(reg._id || reg.id || idx.toString());
+            const tournamentObj = 
+              typeof reg.tournamentId === 'object' && reg.tournamentId !== null 
+                ? reg.tournamentId 
+                : (typeof reg.tournament === 'object' && reg.tournament !== null ? reg.tournament : {});
+            const tournamentName = 
+              tournamentObj.name || 
+              tournamentObj.title || 
+              reg.tournamentName || 
+              reg.title || 
+              'Tournament Registration';
+            const categoryName = 
+              reg.categoryName || 
+              reg.category?.name || 
+              reg.category || 
+              'Confirmed Entry';
             const isConfirmed = isRegConfirmed(reg);
             const dateStr = reg.createdAt ? new Date(reg.createdAt).toLocaleDateString() : '';
-            const fee = reg.amount || reg.fee || 0;
+            const fee = Number(reg.amount || reg.fee || 0);
+            const phoneDisplay = reg.phone || reg.mobileNumber || user?.phone || '';
 
             return (
               <TouchableOpacity
@@ -414,6 +686,7 @@ export default function MyTournamentsScreen() {
                 activeOpacity={0.8}
                 className="bg-white rounded-3xl p-5 mb-4 shadow-sm border border-gray-100"
               >
+                {/* Header: Trophy, Name, Category & Status Badge */}
                 <View className="flex-row items-center justify-between mb-3">
                   <View className="flex-row items-center flex-1 mr-2">
                     <View className="w-10 h-10 rounded-xl bg-[#FFF5F0] items-center justify-center mr-3">
@@ -435,24 +708,52 @@ export default function MyTournamentsScreen() {
                       weight="bold" 
                       className={`font-outfit-bold text-[10px] ${isConfirmed ? 'text-emerald-700' : 'text-amber-800'}`}
                     >
-                      {isConfirmed ? 'REGISTERED' : 'PAYMENT PENDING'}
+                      {isConfirmed ? (fee > 0 ? `PAID ₹${fee}` : 'REGISTERED') : 'PAYMENT PENDING'}
                     </Typography>
                   </View>
                 </View>
 
-                {reg.childName && (
-                  <View className="bg-gray-50 px-3 py-1.5 rounded-xl self-start mb-2 flex-row items-center">
-                    <Ionicons name="person-outline" size={12} color="#6B7280" className="mr-1" />
-                    <Typography variant="caption" color="secondary" weight="medium" className="font-outfit text-xs">
-                      Participant: {reg.childName}
-                    </Typography>
-                  </View>
-                )}
+                {/* Details Badges: Participant, Phone Number & Registration ID */}
+                <View className="flex-row flex-wrap items-center gap-1.5 mb-2.5">
+                  {(reg.childName || reg.participantName) ? (
+                    <View className="bg-gray-50 px-2.5 py-1 rounded-xl flex-row items-center border border-gray-100">
+                      <Ionicons name="person-outline" size={11} color="#6B7280" style={{ marginRight: 4 }} />
+                      <Typography variant="caption" color="secondary" weight="medium" className="font-outfit text-[11px]">
+                        {reg.childName || reg.participantName}
+                      </Typography>
+                    </View>
+                  ) : null}
 
-                <View className="flex-row items-center justify-between pt-3 border-t border-gray-100 mt-2">
-                  <Typography variant="caption" color="muted" className="font-outfit">
-                    {dateStr ? `Reg: ${dateStr}` : 'Registration'}
-                  </Typography>
+                  {phoneDisplay ? (
+                    <View className="bg-blue-50 px-2.5 py-1 rounded-xl flex-row items-center border border-blue-100">
+                      <Ionicons name="call-outline" size={11} color="#2563EB" style={{ marginRight: 4 }} />
+                      <Typography variant="caption" weight="medium" className="font-outfit text-blue-700 text-[11px]">
+                        +91 {phoneDisplay}
+                      </Typography>
+                    </View>
+                  ) : null}
+
+                  {regId && !regId.startsWith('synth_') && !regId.startsWith('tourn_reg_') && (
+                    <View className="bg-gray-50 px-2 py-1 rounded-xl flex-row items-center border border-gray-100">
+                      <Typography variant="caption" color="muted" className="font-outfit text-[10px]">
+                        ID: #{regId.length > 8 ? regId.slice(-8) : regId}
+                      </Typography>
+                    </View>
+                  )}
+                </View>
+
+                {/* Footer: Date / Invoice # & Action Buttons */}
+                <View className="flex-row items-center justify-between pt-3 border-t border-gray-100 mt-1">
+                  <View>
+                    <Typography variant="caption" color="muted" className="font-outfit text-xs">
+                      {dateStr ? `Reg: ${dateStr}` : 'Confirmed Entry'}
+                    </Typography>
+                    {reg.invoiceNumber ? (
+                      <Typography variant="caption" color="muted" className="font-outfit text-[11px] opacity-75">
+                        Invoice #{reg.invoiceNumber}
+                      </Typography>
+                    ) : null}
+                  </View>
 
                   <View className="flex-row items-center gap-2">
                     {isConfirmed ? (
@@ -461,11 +762,11 @@ export default function MyTournamentsScreen() {
                           e.stopPropagation();
                           handleDownloadInvoice(regId, reg.invoiceId);
                         }}
-                        className="px-2.5 py-1.5 bg-orange-50 border border-orange-200 rounded-lg flex-row items-center"
+                        className="px-2.5 py-1.5 bg-orange-50 border border-orange-200 rounded-lg flex-row items-center active:bg-orange-100"
                       >
                         <Ionicons name="download-outline" size={13} color="#FF5100" style={{ marginRight: 4 }} />
                         <Typography variant="caption" color="primary" weight="bold" className="font-outfit-bold text-[11px]">
-                          Invoice
+                          Invoice PDF
                         </Typography>
                       </TouchableOpacity>
                     ) : (
@@ -475,7 +776,7 @@ export default function MyTournamentsScreen() {
                             e.stopPropagation();
                             handleResumePayment(reg);
                           }}
-                          className="px-3 py-1.5 bg-primary rounded-xl flex-row items-center shadow-xs"
+                          className="px-3 py-1.5 bg-primary rounded-xl flex-row items-center shadow-xs active:bg-orange-600"
                         >
                           <Ionicons name="card-outline" size={13} color="white" style={{ marginRight: 4 }} />
                           <Typography variant="caption" color="white" weight="bold" className="font-outfit-bold text-xs">
@@ -488,9 +789,12 @@ export default function MyTournamentsScreen() {
                             e.stopPropagation();
                             handleDeleteRegistration(reg);
                           }}
-                          className="p-1.5 bg-red-50 border border-red-200 rounded-xl items-center justify-center shadow-xs"
+                          className="px-2.5 py-1.5 bg-red-50 border border-red-200 rounded-xl flex-row items-center justify-center shadow-xs active:bg-red-100"
                         >
-                          <Ionicons name="trash-outline" size={14} color="#EF4444" />
+                          <Ionicons name="trash-outline" size={13} color="#EF4444" style={{ marginRight: 4 }} />
+                          <Typography variant="caption" weight="bold" className="font-outfit-bold text-red-600 text-xs">
+                            Delete
+                          </Typography>
                         </TouchableOpacity>
                       </View>
                     )}
@@ -509,6 +813,101 @@ export default function MyTournamentsScreen() {
         </ScrollView>
       )}
 
+      {/* ALL INVOICES MODAL */}
+      <Modal
+        visible={showInvoicesModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowInvoicesModal(false)}
+      >
+        <View className="flex-1 bg-black/60 justify-end">
+          <TouchableOpacity 
+            className="flex-1" 
+            activeOpacity={1} 
+            onPress={() => setShowInvoicesModal(false)} 
+          />
+          <View 
+            className="bg-white rounded-t-[32px] px-6 pt-5 pb-8 shadow-2xl border-t border-gray-200 max-h-[85%]"
+            style={{ paddingBottom: Math.max(insets.bottom + 20, 32) }}
+          >
+            <View className="w-12 h-1 bg-gray-300 rounded-full self-center mb-4" />
+
+            <View className="flex-row justify-between items-center mb-4">
+              <View>
+                <Typography variant="h2" color="secondary" weight="bold" className="font-outfit-bold">
+                  Payment Invoices
+                </Typography>
+                <Typography variant="caption" color="muted" className="font-outfit">
+                  {allInvoices.length} Verified Invoice{allInvoices.length !== 1 ? 's' : ''} • Total ₹{totalPaidAmount.toLocaleString('en-IN')}
+                </Typography>
+              </View>
+              <TouchableOpacity 
+                onPress={() => setShowInvoicesModal(false)}
+                className="w-8 h-8 rounded-full bg-gray-100 items-center justify-center"
+              >
+                <Ionicons name="close" size={20} color="#0F2C59" />
+              </TouchableOpacity>
+            </View>
+
+            {allInvoices.length === 0 ? (
+              <View className="py-12 items-center justify-center">
+                <Ionicons name="receipt-outline" size={40} color="#9CA3AF" />
+                <Typography variant="body2" color="muted" className="font-outfit mt-2">
+                  No payment invoices found yet.
+                </Typography>
+              </View>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false} className="mt-1">
+                {allInvoices.map((inv: any, idx: number) => {
+                  const invId = inv._id || inv.id || idx.toString();
+                  const invNumber = inv.invoiceNumber || inv.number || `INV-${idx + 1}`;
+                  const title = inv.title || inv.tournamentName || inv.description || inv.name || 'Tournament Registration';
+                  const dateStr = inv.createdAt || inv.date ? new Date(inv.createdAt || inv.date).toLocaleDateString() : '';
+                  const amount = Number(inv.total || inv.amount || inv.totalAmount || 0);
+
+                  return (
+                    <View 
+                      key={invId}
+                      className="p-4 mb-3 rounded-2xl bg-gray-50 border border-gray-200 flex-row justify-between items-center"
+                    >
+                      <View className="flex-1 mr-3">
+                        <View className="flex-row items-center mb-1">
+                          <View className="bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md mr-2">
+                            <Typography variant="caption" weight="bold" className="font-outfit-bold text-emerald-700 text-[10px]">
+                              PAID
+                            </Typography>
+                          </View>
+                          <Typography variant="caption" color="secondary" weight="bold" className="font-outfit-bold text-xs">
+                            {invNumber}
+                          </Typography>
+                        </View>
+                        <Typography variant="subtitle2" color="secondary" weight="bold" className="font-outfit-bold" numberOfLines={1}>
+                          {title}
+                        </Typography>
+                        <Typography variant="caption" color="muted" className="font-outfit text-xs mt-0.5">
+                          {dateStr} • ₹{amount}
+                        </Typography>
+                      </View>
+
+                      <TouchableOpacity
+                        onPress={() => handleDownloadInvoice(undefined, invId)}
+                        disabled={isDownloadingInvoice}
+                        className="px-3 py-2 bg-orange-50 border border-orange-200 rounded-xl flex-row items-center active:bg-orange-100"
+                      >
+                        <Ionicons name="download-outline" size={15} color="#FF5100" style={{ marginRight: 4 }} />
+                        <Typography variant="caption" color="primary" weight="bold" className="font-outfit-bold text-xs">
+                          PDF
+                        </Typography>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
       {/* REGISTRATION DETAILS MODAL */}
       <Modal
         visible={!!selectedRegistrationId}
@@ -516,7 +915,7 @@ export default function MyTournamentsScreen() {
         animationType="slide"
         onRequestClose={() => setSelectedRegistrationId(null)}
       >
-        <View className="flex-1 bg-black/50 justify-end">
+        <View className="flex-1 bg-black/60 justify-end">
           <TouchableOpacity 
             className="flex-1" 
             activeOpacity={1} 
@@ -537,20 +936,25 @@ export default function MyTournamentsScreen() {
               </TouchableOpacity>
             </View>
 
-            {isLoadingDetail ? (
+            {isLoadingDetail && !detailObj ? (
               <ActivityIndicator size="small" color="#FF5100" style={{ paddingVertical: 20 }} />
             ) : detailObj ? (
               <View style={{ gap: 12 }}>
                 <View className="bg-orange-50 p-4 rounded-2xl border border-orange-100">
                   <Typography variant="subtitle1" color="secondary" weight="bold" className="font-outfit-bold">
-                    {detailObj.tournament?.name || detailObj.tournamentName || 'Tournament'}
+                    {detailObj.tournament?.name || detailObj.tournamentName || detailObj.title || 'Tournament Registration'}
                   </Typography>
                   <Typography variant="body2" color="muted" className="font-outfit mt-1">
-                    Category: <Typography weight="bold">{detailObj.categoryName || detailObj.category || 'Standard'}</Typography>
+                    Category: <Typography weight="bold">{detailObj.categoryName || detailObj.category?.name || detailObj.category || 'Standard'}</Typography>
                   </Typography>
                   <Typography variant="caption" color="secondary" className="font-outfit mt-1">
                     Registration ID: #{detailObj._id || detailObj.id}
                   </Typography>
+                  {detailObj.invoiceNumber ? (
+                    <Typography variant="caption" color="primary" weight="bold" className="font-outfit-bold mt-0.5">
+                      Invoice #{detailObj.invoiceNumber}
+                    </Typography>
+                  ) : null}
                 </View>
 
                 {detailObj.childName || detailObj.participantName ? (
@@ -562,11 +966,11 @@ export default function MyTournamentsScreen() {
                   </View>
                 ) : null}
 
-                {detailObj.email || detailObj.phone ? (
+                {(detailObj.phone || detailObj.mobileNumber || user?.phone) ? (
                   <View className="flex-row justify-between py-2 border-b border-gray-100">
-                    <Typography variant="body2" color="muted" className="font-outfit">Contact</Typography>
+                    <Typography variant="body2" color="muted" className="font-outfit">Registered Mobile</Typography>
                     <Typography variant="body2" color="secondary" weight="medium" className="font-outfit text-xs">
-                      {detailObj.phone ? `+91 ${detailObj.phone}` : ''} {detailObj.email ? `• ${detailObj.email}` : ''}
+                      +91 {detailObj.phone || detailObj.mobileNumber || user?.phone}
                     </Typography>
                   </View>
                 ) : null}
@@ -647,35 +1051,57 @@ export default function MyTournamentsScreen() {
       <Modal
         visible={isRazorpayModalVisible}
         animationType="slide"
-        onRequestClose={() => setIsRazorpayModalVisible(false)}
+        transparent={false}
+        onRequestClose={handleCloseRazorpay}
       >
-        <SafeAreaView className="flex-1 bg-white">
-          <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-100 bg-white">
-            <View>
-              <Typography variant="subtitle1" color="secondary" weight="bold" className="font-outfit-bold">
-                Complete Payment
-              </Typography>
-              <Typography variant="caption" color="muted" className="font-outfit text-xs">
-                Tournament Entry Checkout
-              </Typography>
+        <View style={{ flex: 1, backgroundColor: '#0F2C59', paddingTop: insets.top }}>
+          {/* Header */}
+          <View className="flex-row items-center justify-between px-4 py-3.5 bg-[#0F2C59] border-b border-white/10">
+            <View className="flex-row items-center flex-1 mr-3">
+              <View className="w-9 h-9 rounded-full bg-white/10 items-center justify-center mr-3 border border-white/15">
+                <Ionicons name="shield-checkmark" size={18} color="#FF5100" />
+              </View>
+              <View className="flex-1">
+                <Typography variant="subtitle1" color="white" weight="bold" className="font-outfit-bold text-sm">
+                  Complete Payment
+                </Typography>
+                <Typography variant="caption" color="light" className="font-outfit opacity-75 text-[11px]">
+                  Razorpay 256-bit Secure Checkout
+                </Typography>
+              </View>
             </View>
+
             <TouchableOpacity
-              onPress={() => setIsRazorpayModalVisible(false)}
-              className="w-8 h-8 rounded-full bg-gray-100 items-center justify-center"
+              onPress={handleCloseRazorpay}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              className="w-9 h-9 rounded-full bg-white/15 items-center justify-center active:bg-white/25"
             >
-              <Ionicons name="close" size={20} color="#0F2C59" />
+              <Ionicons name="close" size={20} color="white" />
             </TouchableOpacity>
           </View>
-          {razorpayOrder && (
-            <WebView
-              source={{ html: generateRazorpayHtml() }}
-              onMessage={handleRazorpayMessage}
-              javaScriptEnabled={true}
-              domStorageEnabled={true}
-              className="flex-1"
-            />
-          )}
-        </SafeAreaView>
+
+          {/* WebView Container */}
+          <View style={{ flex: 1, backgroundColor: '#F9FAFB', paddingBottom: insets.bottom }}>
+            {razorpayOrder && (
+              <WebView
+                source={{ html: generateRazorpayHtml() }}
+                onMessage={handleRazorpayMessage}
+                javaScriptEnabled={true}
+                domStorageEnabled={true}
+                style={{ flex: 1, backgroundColor: '#F9FAFB' }}
+                startInLoadingState={true}
+                renderLoading={() => (
+                  <View className="absolute inset-0 items-center justify-center bg-[#F9FAFB]">
+                    <ActivityIndicator size="large" color="#FF5100" />
+                    <Typography variant="body2" color="secondary" weight="bold" className="font-outfit-bold mt-3">
+                      Connecting to Razorpay...
+                    </Typography>
+                  </View>
+                )}
+              />
+            )}
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );

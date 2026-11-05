@@ -443,6 +443,8 @@ export default function ProfileScreen() {
 
   const standardMenuItems = [
     { id: 'book_session', title: 'Book Another Session', icon: 'calendar-outline', route: null },
+    { id: 'community', title: 'Academy Communities & Passes', icon: 'business-outline', route: '/(individual)/community' },
+    { id: 'complaints', title: 'Community Complaints & Issues', icon: 'alert-circle-outline', route: '/(individual)/community?tab=complaints' },
     { id: 'tournaments', title: 'My Tournament Registrations', icon: 'trophy-outline', route: '/my-tournaments' },
     { id: 'referral', title: 'Refer & Share App', icon: 'share-social-outline', route: null },
     { id: 'settings', title: 'Settings & Preferences', icon: 'settings-outline', route: '/settings' },
@@ -451,6 +453,8 @@ export default function ProfileScreen() {
 
   const parentMenuItems = [
     { id: 'book_session', title: 'Book Another Session', icon: 'calendar-outline', route: null },
+    { id: 'community', title: 'Academy Communities & Passes', icon: 'business-outline', route: '/(parent)/community' },
+    { id: 'complaints', title: 'Community Complaints & Issues', icon: 'alert-circle-outline', route: '/(parent)/community?tab=complaints' },
     { id: 'family', title: 'My Family Members', icon: 'people-outline', route: '/(parent)/family-tree' },
     { id: 'tournaments', title: 'My Tournament Registrations', icon: 'trophy-outline', route: '/my-tournaments' },
     { id: 'referral', title: 'Refer & Share App', icon: 'share-social-outline', route: null },
@@ -460,6 +464,7 @@ export default function ProfileScreen() {
 
   const coachMenuItems = [
     { id: 'wallet', title: 'Wallet & Withdrawals', icon: 'wallet-outline', route: '/(coach)/wallet' },
+    { id: 'community_coach', title: 'My Community Batches', icon: 'business-outline', route: '/(coach)/community' },
     { id: 'locations', title: 'Coaching Locations', icon: 'location-outline', route: '/locations' },
     { id: 'referral', title: 'Refer & Share App', icon: 'share-social-outline', route: null },
     { id: 'settings', title: 'Settings & Preferences', icon: 'settings-outline', route: '/settings' },
@@ -477,6 +482,30 @@ export default function ProfileScreen() {
           color: "#FF5100",
           backgroundColor: '#FFF5EB',
           borderColor: '#FFD7BA'
+        };
+      case 'community':
+        return {
+          title: "Academy Communities & Passes",
+          desc: "View active subscriptions, schedules, and digital training passes",
+          color: "#4A90E2",
+          backgroundColor: '#EFF6FF',
+          borderColor: '#BFDBFE'
+        };
+      case 'complaints':
+        return {
+          title: "Community Complaints & Issues",
+          desc: "Track reported session disruptions, missed coaching, and review notes",
+          color: "#E11D48",
+          backgroundColor: '#FFF1F2',
+          borderColor: '#FECDD3'
+        };
+      case 'community_coach':
+        return {
+          title: "My Community Batches",
+          desc: "View assigned coaching programs, daily GPS attendance, and rosters",
+          color: "#4A90E2",
+          backgroundColor: '#EFF6FF',
+          borderColor: '#BFDBFE'
         };
       case 'tournaments':
         return {

@@ -1,12 +1,30 @@
-import { Tabs } from 'expo-router';
+import React, { useEffect } from 'react';
+import { Tabs, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Platform } from 'react-native';
+import { Platform, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuthStore } from '@/store';
 
 export default function CoachTabLayout() {
+  const router = useRouter();
+  const { user, token } = useAuthStore();
   const insets = useSafeAreaInsets();
   const bottomPadding = Platform.OS === 'android' ? Math.max(insets.bottom, 16) : Math.max(insets.bottom, 12);
   const barHeight = 58 + bottomPadding;
+
+  // Strict Role Boundary Guard: Players and Parents can NEVER access coach portal
+  useEffect(() => {
+    if (token && user && user.role !== 'coach') {
+      Alert.alert(
+        'Access Denied (Role Boundary)',
+        'This portal is strictly reserved for registered coaching partners.'
+      );
+      const target = user.role === 'parent' 
+        ? '/(parent)/(parent-tabs)/parent-dashboard' 
+        : '/(individual)/(individual-tabs)/individual-dashboard';
+      router.replace(target as any);
+    }
+  }, [user, token, router]);
 
   return (
     <Tabs 

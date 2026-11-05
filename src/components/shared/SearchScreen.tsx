@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
-import { View, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Button, TextInput } from '@/components/ui';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/services/api';
+import { useAuthStore } from '@/store';
 
 interface CoachItem {
   _id: string;
@@ -26,9 +27,21 @@ interface CoachItem {
 
 export default function FindCoachScreen() {
   const router = useRouter();
+  const { user } = useAuthStore();
   const { sport } = useLocalSearchParams<{ sport?: string }>();
   const [activeFilter, setActiveFilter] = useState(sport || 'All');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Strict Role Guard: Coaches cannot access player coach booking screens
+  useEffect(() => {
+    if (user?.role === 'coach') {
+      Alert.alert(
+        'Access Denied (Role Boundary)',
+        'Coaches cannot search and book other coaches. Please use your coach dashboard.'
+      );
+      router.replace('/(coach)/(coach-tabs)/coach-dashboard');
+    }
+  }, [user, router]);
 
   React.useEffect(() => {
     if (sport) {

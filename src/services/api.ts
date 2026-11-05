@@ -5,7 +5,7 @@ import { safeStorage } from './storage';
 // Default base URL pointing to live HTTPS API domain
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api.getarenova.com/api';
 
-export const RAZORPAY_KEY_ID = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_TYbWhPnXGMgB0p';
+export const RAZORPAY_KEY_ID = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID || 'rzp_live_ToWiCACQpuVBCX';
 
 export const api = axios.create({
   baseURL: BASE_URL,
