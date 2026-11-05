@@ -32,10 +32,10 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '@/services/queryClient';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
-  const { hydrateAuth } = useAuthStore();
+  const { hydrateAuth, isLoading } = useAuthStore();
 
   const [fontsLoaded] = useFonts({
     Outfit_400Regular,
@@ -46,15 +46,22 @@ export default function RootLayout() {
 
   useEffect(() => {
     hydrateAuth();
+    // Safety fallback timeout to prevent app hanging on splash screen
+    const timer = setTimeout(() => {
+      if (useAuthStore.getState().isLoading) {
+        useAuthStore.setState({ isLoading: false });
+      }
+    }, 2500);
+    return () => clearTimeout(timer);
   }, [hydrateAuth]);
 
   useEffect(() => {
-    if (fontsLoaded) {
-      SplashScreen.hideAsync();
+    if (fontsLoaded && !isLoading) {
+      SplashScreen.hideAsync().catch(() => {});
     }
-  }, [fontsLoaded]);
+  }, [fontsLoaded, isLoading]);
 
-  if (!fontsLoaded) {
+  if (!fontsLoaded || isLoading) {
     return null;
   }
 

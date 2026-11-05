@@ -1,11 +1,30 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Image } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Typography, Button } from '@/components/ui';
+import { useAuthStore } from '@/store';
 
 export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
+  const { token, user, isLoading } = useAuthStore();
+
+  useEffect(() => {
+    if (!isLoading && token) {
+      const role = user?.role || 'individual';
+      if (role === 'coach') {
+        router.replace(user?.status === 'active' ? '/(coach)/(coach-tabs)/coach-dashboard' : '/(coach)/onboarding');
+      } else if (role === 'parent') {
+        router.replace('/(parent)/(parent-tabs)/parent-dashboard');
+      } else {
+        router.replace('/(individual)/(individual-tabs)/individual-dashboard');
+      }
+    }
+  }, [token, user, isLoading]);
+
+  if (isLoading || token) {
+    return null;
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-[#EEF3F9]">

@@ -70,12 +70,10 @@ export default function OTPScreen() {
       return response.data;
     },
     onSuccess: async (data) => {
-      if (!data.token && !data.jwt && !data.access_token && !(data.data && data.data.token)) {
-        alert("Debug: " + JSON.stringify(data));
-      }
-      
       const realToken = data.token || data.jwt || data.access_token || (data.data && data.data.token);
-      setToken(realToken);
+      if (realToken) {
+        setToken(realToken);
+      }
       
       const userObj = data.user || data.data?.user;
       let resolvedStatus = 'active';
