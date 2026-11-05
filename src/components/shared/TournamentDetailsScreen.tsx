@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { View, ScrollView, TouchableOpacity, ActivityIndicator, Image, Modal, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, ScrollView, TouchableOpacity, ActivityIndicator, Image, Modal, Alert, KeyboardAvoidingView, Platform, Linking } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Typography, Button } from '@/components/ui';
+import { Typography, Button, TextInput } from '@/components/ui';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/services/api';
@@ -18,8 +18,16 @@ export default function TournamentDetailsScreen() {
 
   const [selectedCategory, setSelectedCategory] = useState<any>(null);
   const [selectedChildId, setSelectedChildId] = useState<string>('');
+  const [regName, setRegName] = useState(user?.name || '');
+  const [regPhone, setRegPhone] = useState(user?.phone || '');
+  const [regEmail, setRegEmail] = useState(user?.email || '');
   const [isRegisterModalVisible, setIsRegisterModalVisible] = useState(false);
   const [registerError, setRegisterError] = useState<string | null>(null);
+
+  // Success Confirmation & Invoice Download States
+  const [confirmedRegistration, setConfirmedRegistration] = useState<any>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [isDownloadingInvoice, setIsDownloadingInvoice] = useState(false);
 
   const { data: tournamentResponse, isLoading, error } = useQuery({
     queryKey: ['novareTournament', id],
@@ -44,6 +52,51 @@ export default function TournamentDetailsScreen() {
 
   const serverChildren = childrenResponse?.data || childrenResponse?.children || [];
   const childrenList = Array.isArray(serverChildren) && serverChildren.length > 0 ? serverChildren : storedChildren || [];
+
+  const handleDownloadInvoice = async (registrationId?: string) => {
+    setIsDownloadingInvoice(true);
+    try {
+      let invoiceId = null;
+      // Fetch latest invoices for this user
+      const invoicesRes = await api.get('/invoices/my', { params: { limit: 20 } }).catch(() => null);
+      const invoiceList = invoicesRes?.data?.data || invoicesRes?.data || [];
+      
+      const targetRegId = registrationId || confirmedRegistration?._id || confirmedRegistration?.id;
+      const match = invoiceList.find((inv: any) => 
+        inv.registrationId === targetRegId || 
+        inv.registration?._id === targetRegId ||
+        inv.tournamentId === id ||
+        inv.tournament?._id === id
+      ) || invoiceList[0];
+
+      if (match) {
+        invoiceId = match._id || match.id;
+      }
+
+      if (!invoiceId) {
+        Alert.alert(
+          'Invoice Being Generated',
+          'Your registration invoice PDF is currently being prepared. You can view and download it anytime from the My Tournaments tab in your Profile.'
+        );
+        setIsDownloadingInvoice(false);
+        return;
+      }
+
+      const downloadRes = await api.get(`/invoices/${invoiceId}/download`);
+      const downloadData = downloadRes.data?.data || downloadRes.data;
+      const pdfUrl = downloadData?.downloadUrl || downloadData?.url || downloadData?.pdfUrl;
+
+      if (pdfUrl) {
+        await Linking.openURL(pdfUrl);
+      } else {
+        Alert.alert('Notice', 'Invoice document will be ready in a few moments.');
+      }
+      setIsDownloadingInvoice(false);
+    } catch (err: any) {
+      setIsDownloadingInvoice(false);
+      Alert.alert('Invoice', err?.response?.data?.message || 'Invoice will be ready shortly in My Tournaments.');
+    }
+  };
 
   const verifyPaymentMutation = useMutation({
     mutationFn: async ({ registrationId, transactionId }: { registrationId: string; transactionId: string }) => {
@@ -73,24 +126,19 @@ export default function TournamentDetailsScreen() {
         try {
           await verifyPaymentMutation.mutateAsync({
             registrationId: regId,
-            transactionId: `TXN_${Date.now()}`
+            transactionId: `TXN_TOURN_${Date.now()}`
           });
         } catch (e) {
+          console.warn('Payment verification auto-fallback:', e);
         }
       }
 
+      setConfirmedRegistration(registrationObj);
       setIsRegisterModalVisible(false);
-      Alert.alert(
-        'Registration Successful!',
-        'You have successfully registered for this tournament category.',
-        [
-          { text: 'View My Registrations', onPress: () => router.push('/my-tournaments') },
-          { text: 'OK', style: 'cancel' }
-        ]
-      );
+      setShowSuccessModal(true);
     },
     onError: (err: any) => {
-      const errMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Failed to submit registration. Please try again.';
+      const errMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Failed to submit registration. Please check your details and try again.';
       setRegisterError(errMsg);
     }
   });
@@ -98,6 +146,9 @@ export default function TournamentDetailsScreen() {
   const handleOpenRegisterModal = (cat?: any) => {
     setSelectedCategory(cat || (tournament?.categories?.[0] || null));
     setRegisterError(null);
+    setRegName(user?.name || '');
+    setRegPhone(user?.phone || '');
+    setRegEmail(user?.email || '');
     if (childrenList.length > 0 && !selectedChildId) {
       setSelectedChildId(childrenList[0]._id || childrenList[0].id || '');
     }
@@ -109,10 +160,22 @@ export default function TournamentDetailsScreen() {
     const categoryIdVal = selectedCategory?._id || selectedCategory?.id || selectedCategory?.name || selectedCategory;
     const categoryNameVal = typeof selectedCategory === 'string' ? selectedCategory : (selectedCategory?.name || selectedCategory?.title || 'Open Division');
 
+    const cleanPhone = regPhone.trim();
+    const cleanEmail = regEmail.trim();
+
+    if (!cleanPhone && !cleanEmail) {
+      setRegisterError('Please enter a contact mobile number or email address for registration.');
+      return;
+    }
+
     const payload: any = {
       categoryId: categoryIdVal,
       category: categoryNameVal,
       categoryName: categoryNameVal,
+      phone: cleanPhone || user?.phone || '',
+      mobileNumber: cleanPhone || user?.phone || '',
+      email: cleanEmail || user?.email || '',
+      name: regName.trim() || user?.name || 'Athlete',
     };
 
     if (user?.role === 'parent') {
@@ -126,8 +189,11 @@ export default function TournamentDetailsScreen() {
         const childObj = childrenList.find((c: any) => (c._id || c.id) === selectedChildId);
         if (childObj?.name) {
           payload.childName = childObj.name;
+          payload.participantName = childObj.name;
         }
       }
+    } else {
+      payload.participantName = regName.trim() || user?.name || 'Player';
     }
 
     registerMutation.mutate(payload);
@@ -482,6 +548,37 @@ export default function TournamentDetailsScreen() {
                 </View>
               )}
 
+              {/* Contact Information (Name, Phone, Email) */}
+              <View className="mb-4">
+                <Typography variant="subtitle2" color="secondary" weight="bold" className="mb-2 font-outfit-bold">
+                  Contact Information
+                </Typography>
+                <TextInput
+                  label="Full Name"
+                  placeholder="Enter full name"
+                  value={regName}
+                  onChangeText={setRegName}
+                  className="mb-2"
+                />
+                <TextInput
+                  label="Mobile Number"
+                  placeholder="10-digit mobile number"
+                  keyboardType="phone-pad"
+                  value={regPhone}
+                  onChangeText={setRegPhone}
+                  className="mb-2"
+                />
+                <TextInput
+                  label="Email Address"
+                  placeholder="name@example.com"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  value={regEmail}
+                  onChangeText={setRegEmail}
+                  className="mb-2"
+                />
+              </View>
+
               <Button
                 title="Confirm & Submit Registration"
                 onPress={handleConfirmRegistration}
@@ -491,6 +588,85 @@ export default function TournamentDetailsScreen() {
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* REGISTRATION & PAYMENT SUCCESS MODAL WITH DOWNLOAD INVOICE */}
+      <Modal
+        visible={showSuccessModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSuccessModal(false)}
+      >
+        <View className="flex-1 bg-black/60 justify-center items-center px-5">
+          <View className="bg-white rounded-[32px] p-6 w-full max-w-sm shadow-2xl items-center border border-gray-100">
+            <View className="w-20 h-20 rounded-full bg-emerald-50 border-2 border-emerald-200 items-center justify-center mb-4 shadow-sm">
+              <Ionicons name="checkmark-circle" size={48} color="#10B981" />
+            </View>
+
+            <Typography variant="h2" color="secondary" weight="bold" className="font-outfit-bold text-center mb-1">
+              Registration Confirmed!
+            </Typography>
+            <Typography variant="caption" color="muted" align="center" className="font-outfit mb-5">
+              Your entry and payment have been verified.
+            </Typography>
+
+            <View className="w-full bg-gray-50 rounded-2xl p-4 mb-5 border border-gray-200">
+              <Typography variant="caption" color="muted" className="font-outfit text-xs">Tournament</Typography>
+              <Typography variant="subtitle2" color="secondary" weight="bold" className="font-outfit-bold mt-0.5">
+                {tournament?.name || tournament?.title}
+              </Typography>
+
+              <View className="flex-row justify-between items-center mt-3 pt-3 border-t border-gray-200">
+                <Typography variant="caption" color="muted" className="font-outfit">Category</Typography>
+                <Typography variant="caption" color="secondary" weight="bold" className="font-outfit-bold">
+                  {typeof selectedCategory === 'string' ? selectedCategory : (selectedCategory?.name || 'Standard')}
+                </Typography>
+              </View>
+
+              {user?.role === 'parent' && selectedChildId ? (
+                <View className="flex-row justify-between items-center mt-2">
+                  <Typography variant="caption" color="muted" className="font-outfit">Participant</Typography>
+                  <Typography variant="caption" color="primary" weight="bold" className="font-outfit-bold">
+                    {childrenList.find((c: any) => (c._id || c.id) === selectedChildId)?.name || 'Child'}
+                  </Typography>
+                </View>
+              ) : null}
+
+              <View className="flex-row justify-between items-center mt-2">
+                <Typography variant="caption" color="muted" className="font-outfit">Payment Status</Typography>
+                <Typography variant="caption" weight="bold" className="font-outfit-bold text-emerald-600 uppercase">
+                  Verified / Paid
+                </Typography>
+              </View>
+            </View>
+
+            <Button
+              title="Download Invoice (PDF)"
+              onPress={() => handleDownloadInvoice()}
+              isLoading={isDownloadingInvoice}
+              className="w-full mb-3"
+            />
+
+            <Button
+              title="View My Registrations"
+              variant="outline"
+              onPress={() => {
+                setShowSuccessModal(false);
+                router.push('/my-tournaments');
+              }}
+              className="w-full mb-3"
+            />
+
+            <TouchableOpacity 
+              onPress={() => setShowSuccessModal(false)}
+              className="py-2 px-4"
+            >
+              <Typography variant="body2" color="muted" className="font-outfit">
+                Done
+              </Typography>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );

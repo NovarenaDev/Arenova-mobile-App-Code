@@ -633,6 +633,24 @@ export default function LoginScreen() {
                       Have a password? Log in with password instead
                     </Typography>
                   </TouchableOpacity>
+                  <View className="flex-row justify-between items-center mt-3">
+                    <TouchableOpacity onPress={() => setAuthMode('email')}>
+                      <Typography variant="caption" color="secondary" weight="medium" className="font-outfit">
+                        Login with Password
+                      </Typography>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => {
+                      setForgotEmail(email);
+                      setForgotStep(1);
+                      setForgotError(null);
+                      setForgotSuccess(null);
+                      setShowForgotPasswordModal(true);
+                    }}>
+                      <Typography variant="caption" color="primary" weight="bold" className="font-outfit-bold">
+                        Forgot password?
+                      </Typography>
+                    </TouchableOpacity>
+                  </View>
                 </>
               ) : (
                 <View className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
@@ -799,7 +817,7 @@ export default function LoginScreen() {
 
             {forgotError && (
               <View className="mb-4 bg-red-50 border border-red-200 rounded-xl p-3 flex-row items-start">
-                <Ionicons name="alert-circle" size={18} color="#EF4444" className="mr-2 mt-0.5" />
+                <Ionicons name="alert-circle" size={18} color="#EF4444" style={{ marginRight: 8, marginTop: 2 }} />
                 <Typography variant="caption" className="flex-1 text-red-600 font-outfit">
                   {forgotError}
                 </Typography>
@@ -808,7 +826,7 @@ export default function LoginScreen() {
 
             {forgotSuccess && (
               <View className="mb-4 bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex-row items-start">
-                <Ionicons name="checkmark-circle" size={18} color="#10B981" className="mr-2 mt-0.5" />
+                <Ionicons name="checkmark-circle" size={18} color="#10B981" style={{ marginRight: 8, marginTop: 2 }} />
                 <Typography variant="caption" className="flex-1 text-emerald-700 font-outfit">
                   {forgotSuccess}
                 </Typography>

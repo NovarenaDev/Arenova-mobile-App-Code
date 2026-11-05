@@ -26,6 +26,8 @@ export default function PaymentScreen() {
   const { 
     slotId, 
     childId, 
+    childIds,
+    attendeeCount,
     coachId, 
     studentName, 
     date, 
@@ -37,6 +39,8 @@ export default function PaymentScreen() {
   } = useLocalSearchParams<{ 
     slotId?: string; 
     childId?: string; 
+    childIds?: string;
+    attendeeCount?: string;
     coachId?: string;
     studentName?: string;
     date?: string;
@@ -59,9 +63,21 @@ export default function PaymentScreen() {
     setIsProcessing(true);
 
     try {
-      const orderPayload: any = { slotId };
+      const orderPayload: any = { 
+        slotId,
+        amount: computedTotal
+      };
       if (childId) {
         orderPayload.childId = childId;
+      }
+      if (childIds) {
+        orderPayload.childIds = childIds.split(',').filter(Boolean);
+      }
+      if (attendeeCount) {
+        orderPayload.attendeeCount = Number(attendeeCount);
+      }
+      if (studentName) {
+        orderPayload.studentName = studentName;
       }
 
       const orderRes = await api.post('/bookings/create-order', orderPayload);
@@ -99,9 +115,16 @@ export default function PaymentScreen() {
           paymentOrderId: data.razorpay_order_id || razorpayOrder?.orderId,
           paymentTransactionId: data.razorpay_payment_id,
           paymentSignature: data.razorpay_signature,
+          amount: computedTotal
         };
         if (childId) {
           verifyPayload.childId = childId;
+        }
+        if (childIds) {
+          verifyPayload.childIds = childIds.split(',').filter(Boolean);
+        }
+        if (studentName) {
+          verifyPayload.studentName = studentName;
         }
 
         const verifyRes = await api.post('/bookings/verify-payment', verifyPayload);

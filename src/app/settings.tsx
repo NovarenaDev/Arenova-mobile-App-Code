@@ -45,17 +45,36 @@ export default function SettingsScreen() {
     setIsSendingOtp(true);
 
     try {
+      const cleanEmail = user?.email ? user.email.trim().toLowerCase() : '';
+      let sent = false;
+
+      // Try email-based password reset OTP first if user has email
+      if (cleanEmail && cleanEmail.includes('@')) {
+        try {
+          const res = await api.post('/auth/forgot-password', {
+            email: cleanEmail
+          });
+          sent = true;
+          setIsSendingOtp(false);
+          setOtpSent(true);
+          setPasswordSuccess(res.data?.message || `6-digit verification code sent to ${cleanEmail}.`);
+          return;
+        } catch (emailErr: any) {
+          // If 404 or fails, fallback to phone OTP
+        }
+      }
+
       const cleanPhone = user?.phone ? user.phone.replace(/[^0-9]/g, '').slice(-10) : '';
       const endpoint = user?.role === 'coach' ? '/auth/coach/send-otp' : '/auth/send-otp';
 
-      await api.post(endpoint, {
+      const res = await api.post(endpoint, {
         phone: cleanPhone || user?.email,
         purpose: 'reset'
       });
 
       setIsSendingOtp(false);
       setOtpSent(true);
-      setPasswordSuccess(`6-digit verification code sent to ${cleanPhone ? `+91 ${cleanPhone}` : user?.email || 'your device'}.`);
+      setPasswordSuccess(res.data?.message || `6-digit verification code sent to ${cleanPhone ? `+91 ${cleanPhone}` : user?.email || 'your device'}.`);
     } catch (err: any) {
       setIsSendingOtp(false);
       const msg = err?.response?.data?.message || err?.message || 'Failed to send verification code. Please try again.';
@@ -94,9 +113,11 @@ export default function SettingsScreen() {
 
     try {
       if (passwordMode === 'otp') {
+        const cleanEmail = user?.email ? user.email.trim().toLowerCase() : '';
         const cleanPhone = user?.phone ? user.phone.replace(/[^0-9]/g, '').slice(-10) : '';
+        
         await api.post('/auth/reset-password', {
-          email: user?.email || undefined,
+          email: cleanEmail || undefined,
           phone: cleanPhone || undefined,
           otp: otpCode.trim(),
           newPassword: cleanNew
@@ -116,7 +137,7 @@ export default function SettingsScreen() {
           updated = true;
         } catch (e1: any) {
           const status = e1?.response?.status;
-          if (status === 404 || status === 405) {
+          if (status === 404 || status === 405 || status === 400) {
             try {
               await api.post('/auth/set-password', {
                 password: cleanNew,
@@ -125,7 +146,7 @@ export default function SettingsScreen() {
               updated = true;
             } catch (e2: any) {
               const status2 = e2?.response?.status;
-              if (status2 === 404 || status2 === 405) {
+              if (status2 === 404 || status2 === 405 || status2 === 400) {
                 const profileEndpoint = user?.role === 'coach' ? '/coaches/my/profile' : '/users/me';
                 await api.put(profileEndpoint, { password: cleanNew });
                 updated = true;

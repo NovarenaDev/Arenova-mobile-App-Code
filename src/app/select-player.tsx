@@ -40,8 +40,16 @@ export default function SelectPlayerScreen() {
   serverChildren.forEach(c => childrenMap.set(c._id || c.name, c));
   const children = Array.from(childrenMap.values());
 
+  const isParent = user?.role === 'parent';
+
   const players: { id: string; name: string; role: string; color: string; isChild: boolean }[] = [
-    { id: 'self', name: user?.name || 'Myself (Account Owner)', role: 'Account Owner', color: 'bg-blue-100', isChild: false }
+    { 
+      id: 'self', 
+      name: user?.name ? `${user.name} (Myself / Parent)` : 'Myself (Parent)', 
+      role: isParent ? 'Parent / Family Member' : 'Player (Self)', 
+      color: 'bg-blue-100', 
+      isChild: false 
+    }
   ];
 
   // Always show all available children in the list
@@ -62,12 +70,12 @@ export default function SelectPlayerScreen() {
     if (children.length > 0) {
       return [children[0]._id || children[0].id];
     }
-    return ['self'];
+    return isParent ? [] : ['self'];
   });
 
   // Keep selection updated when children load
   React.useEffect(() => {
-    if (children.length > 0 && (selectedPlayerIds.length === 0 || (selectedPlayerIds.length === 1 && selectedPlayerIds[0] === 'self'))) {
+    if (children.length > 0 && selectedPlayerIds.length === 0) {
       setSelectedPlayerIds([children[0]._id || children[0].id]);
     }
   }, [children.length]);
@@ -75,9 +83,7 @@ export default function SelectPlayerScreen() {
   const togglePlayer = (id: string) => {
     setSelectedPlayerIds(prev => {
       if (prev.includes(id)) {
-        // Keep at least one attendee if possible
-        const next = prev.filter(p => p !== id);
-        return next;
+        return prev.filter(p => p !== id);
       } else {
         return [...prev, id];
       }
@@ -92,19 +98,47 @@ export default function SelectPlayerScreen() {
 
   const handleContinue = () => {
     if (selectedPlayerIds.length === 0) {
-      Alert.alert('Selection Required', 'Please select at least one attendee (Myself or Child).');
+      Alert.alert('Selection Required', 'Please select at least one attendee to proceed.');
       return;
     }
 
     const selectedPlayers = players.filter(p => selectedPlayerIds.includes(p.id));
-    const firstChild = selectedPlayers.find(p => p.isChild);
+    const selectedChildren = selectedPlayers.filter(p => p.isChild);
+    const hasSelfSelected = selectedPlayerIds.includes('self');
+
+    // Strict Parent Module Rule:
+    // If in parent mode and the parent selects ONLY 'self' without at least one child:
+    if (isParent && hasSelfSelected && selectedChildren.length === 0) {
+      Alert.alert(
+        'Child Selection Required',
+        'In parent module, you must select at least one child. If you want to book a coaching session solely for yourself, please use an Individual Player account.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    if (isParent && selectedChildren.length === 0) {
+      Alert.alert(
+        'Child Profile Required',
+        'In parent module, sessions must include at least one child. Please add or select your child profile to proceed.',
+        [
+          { text: 'Add Child', onPress: () => router.push('/(parent)/family/add-child') },
+          { text: 'Cancel', style: 'cancel' }
+        ]
+      );
+      return;
+    }
+
+    const firstChild = selectedChildren[0];
     const attendeeNames = selectedPlayers.map(p => p.name).join(', ');
+    const allChildIds = selectedChildren.map(c => c.id).join(',');
 
     router.push({
       pathname: '/session-summary',
       params: {
         ...searchParams,
         childId: firstChild ? firstChild.id : '',
+        childIds: allChildIds,
         studentName: attendeeNames,
         attendeeCount: attendeeCount.toString(),
         sessionFee: subtotal.toString(),
@@ -134,6 +168,15 @@ export default function SelectPlayerScreen() {
         <Typography variant="caption" color="muted" className="mb-4 font-outfit">
           Select yourself, your child, or multiple children. The session fee is calculated dynamically per attendee.
         </Typography>
+
+        {isParent && (
+          <View style={{ backgroundColor: '#EFF6FF', borderRadius: 16, padding: 12, marginBottom: 16, borderWidth: 1, borderColor: '#BFDBFE', flexDirection: 'row', alignItems: 'center' }}>
+            <Ionicons name="information-circle" size={20} color="#2563EB" style={{ marginRight: 8 }} />
+            <Typography variant="caption" style={{ color: '#1E40AF', flex: 1 }} className="font-outfit text-xs leading-4">
+              Family Booking: You can participate together with your child by selecting 'Myself (Parent)' along with your child. In Parent mode, at least one child must be included.
+            </Typography>
+          </View>
+        )}
 
         {isLoading ? (
           <View style={{ paddingVertical: 40, justifyContent: 'center', alignItems: 'center' }}>

@@ -22,6 +22,8 @@ export default function SessionSummaryScreen() {
     coachId,
     slotId,
     childId,
+    childIds,
+    attendeeCount,
     price,
     coachName,
     coachSport,
@@ -35,6 +37,8 @@ export default function SessionSummaryScreen() {
     coachId?: string;
     slotId?: string;
     childId?: string;
+    childIds?: string;
+    attendeeCount?: string;
     price?: string;
     coachName?: string;
     coachSport?: string;
@@ -675,6 +679,8 @@ export default function SessionSummaryScreen() {
               params: {
                 slotId,
                 childId: childId || '',
+                childIds: childIds || '',
+                attendeeCount: attendeeCount || '1',
                 coachId: coachId || '',
                 studentName: resolvedStudentName,
                 date: resolvedDate,

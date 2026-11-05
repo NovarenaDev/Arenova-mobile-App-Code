@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, ScrollView, TouchableOpacity, ActivityIndicator, Modal } from 'react-native';
+import { View, ScrollView, TouchableOpacity, ActivityIndicator, Modal, Alert, Linking } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Button } from '@/components/ui';
@@ -11,6 +11,7 @@ export default function MyTournamentsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [selectedRegistrationId, setSelectedRegistrationId] = useState<string | null>(null);
+  const [isDownloadingInvoice, setIsDownloadingInvoice] = useState(false);
 
   const { data: registrationsResponse, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['myTournamentRegistrations'],
@@ -35,6 +36,53 @@ export default function MyTournamentsScreen() {
     : (registrationsResponse?.registrations || registrationsResponse?.data || []);
 
   const detailObj = detailResponse;
+
+  const handleDownloadInvoice = async (regId?: string, invoiceIdParam?: string) => {
+    setIsDownloadingInvoice(true);
+    try {
+      let targetInvoiceId = invoiceIdParam;
+
+      if (!targetInvoiceId) {
+        // Query user's invoice records
+        const res = await api.get('/invoices/my', { params: { limit: 25 } }).catch(() => null);
+        const list = res?.data?.data || res?.data || [];
+        const match = list.find((inv: any) => 
+          inv.registrationId === regId || 
+          inv.registration?._id === regId ||
+          inv.metadata?.registrationId === regId ||
+          inv.bookingId === regId
+        ) || list[0];
+
+        if (match) {
+          targetInvoiceId = match._id || match.id;
+        }
+      }
+
+      if (!targetInvoiceId) {
+        Alert.alert(
+          'Invoice Being Prepared',
+          'Your registration invoice PDF is currently being generated. Please check back in a few moments.'
+        );
+        setIsDownloadingInvoice(false);
+        return;
+      }
+
+      const downloadRes = await api.get(`/invoices/${targetInvoiceId}/download`);
+      const downloadData = downloadRes.data?.data || downloadRes.data;
+      const pdfUrl = downloadData?.downloadUrl || downloadData?.url || downloadData?.pdfUrl;
+
+      if (pdfUrl) {
+        await Linking.openURL(pdfUrl);
+      } else {
+        Alert.alert('Notice', 'Invoice PDF will be ready in a few moments.');
+      }
+      setIsDownloadingInvoice(false);
+    } catch (err: any) {
+      setIsDownloadingInvoice(false);
+      const msg = err?.response?.data?.message || err?.message || 'Invoice PDF is being prepared.';
+      Alert.alert('Invoice', msg);
+    }
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-[#EEF3F9]" edges={['top']}>
@@ -143,15 +191,29 @@ export default function MyTournamentsScreen() {
                   </View>
                 )}
 
-                <View className="flex-row items-center justify-between pt-2 border-t border-gray-100 mt-1">
+                <View className="flex-row items-center justify-between pt-3 border-t border-gray-100 mt-2">
                   <Typography variant="caption" color="muted" className="font-outfit">
                     {dateStr ? `Registered on ${dateStr}` : 'Active Registration'}
                   </Typography>
-                  <View className="flex-row items-center">
-                    <Typography variant="caption" color="primary" weight="bold" className="font-outfit-bold mr-1">
-                      View Details
-                    </Typography>
-                    <Ionicons name="chevron-forward" size={14} color="#FF5100" />
+                  <View className="flex-row items-center gap-2">
+                    <TouchableOpacity
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleDownloadInvoice(regId, reg.invoiceId);
+                      }}
+                      className="px-2.5 py-1 bg-orange-50 border border-orange-200 rounded-lg flex-row items-center"
+                    >
+                      <Ionicons name="download-outline" size={13} color="#FF5100" style={{ marginRight: 4 }} />
+                      <Typography variant="caption" color="primary" weight="bold" className="font-outfit-bold text-[11px]">
+                        Invoice
+                      </Typography>
+                    </TouchableOpacity>
+                    <View className="flex-row items-center">
+                      <Typography variant="caption" color="primary" weight="bold" className="font-outfit-bold mr-1">
+                        Details
+                      </Typography>
+                      <Ionicons name="chevron-forward" size={14} color="#FF5100" />
+                    </View>
                   </View>
                 </View>
               </TouchableOpacity>
@@ -204,6 +266,24 @@ export default function MyTournamentsScreen() {
                   </Typography>
                 </View>
 
+                {detailObj.childName || detailObj.participantName ? (
+                  <View className="flex-row justify-between py-2 border-b border-gray-100">
+                    <Typography variant="body2" color="muted" className="font-outfit">Participant</Typography>
+                    <Typography variant="body2" color="secondary" weight="bold" className="font-outfit-bold">
+                      {detailObj.childName || detailObj.participantName}
+                    </Typography>
+                  </View>
+                ) : null}
+
+                {detailObj.email || detailObj.phone ? (
+                  <View className="flex-row justify-between py-2 border-b border-gray-100">
+                    <Typography variant="body2" color="muted" className="font-outfit">Contact</Typography>
+                    <Typography variant="body2" color="secondary" weight="medium" className="font-outfit text-xs">
+                      {detailObj.phone ? `+91 ${detailObj.phone}` : ''} {detailObj.email ? `• ${detailObj.email}` : ''}
+                    </Typography>
+                  </View>
+                ) : null}
+
                 <View className="flex-row justify-between py-2 border-b border-gray-100">
                   <Typography variant="body2" color="muted" className="font-outfit">Status</Typography>
                   <Typography variant="body2" color="secondary" weight="bold" className="font-outfit-bold uppercase text-emerald-600">
@@ -214,17 +294,23 @@ export default function MyTournamentsScreen() {
                 {detailObj.paymentStatus && (
                   <View className="flex-row justify-between py-2 border-b border-gray-100">
                     <Typography variant="body2" color="muted" className="font-outfit">Payment Status</Typography>
-                    <Typography variant="body2" color="secondary" weight="bold" className="font-outfit-bold uppercase">
+                    <Typography variant="body2" color="secondary" weight="bold" className="font-outfit-bold uppercase text-emerald-600">
                       {detailObj.paymentStatus}
                     </Typography>
                   </View>
                 )}
 
                 <Button
+                  title="Download Invoice (PDF)"
+                  onPress={() => handleDownloadInvoice(detailObj._id || detailObj.id, detailObj.invoiceId)}
+                  isLoading={isDownloadingInvoice}
+                  className="mt-4 mb-2"
+                />
+
+                <Button
                   title="Close"
                   variant="white"
                   onPress={() => setSelectedRegistrationId(null)}
-                  className="mt-4"
                 />
               </View>
             ) : (
