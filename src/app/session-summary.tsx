@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Modal, TextInput, Linking } from 'react-native';
+import { View, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Modal, TextInput, Linking, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Button, ConfirmModal } from '@/components/ui';
@@ -493,133 +493,146 @@ export default function SessionSummaryScreen() {
 
       {/* Customer Dispute Modal */}
       <Modal visible={showDisputeModal} transparent animationType="slide" onRequestClose={() => setShowDisputeModal(false)}>
-        <View className="flex-1 bg-black/60 justify-end">
-          <View className="bg-white rounded-t-3xl p-6">
-            <Typography variant="h3" color="secondary" weight="bold" className="font-outfit-bold mb-2">
-              Report Session Issue
-            </Typography>
-            <Typography variant="caption" color="muted" className="font-outfit mb-4">
-              Submit your report for review by Super Admin.
-            </Typography>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View className="flex-1 bg-black/60 justify-end">
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+              <View className="bg-white rounded-t-3xl p-6">
+                <Typography variant="h3" color="secondary" weight="bold" className="font-outfit-bold mb-2">
+                  Report Session Issue
+                </Typography>
+                <Typography variant="caption" color="muted" className="font-outfit mb-4">
+                  Submit your report for review by Super Admin.
+                </Typography>
 
-            <Typography variant="caption" weight="bold" color="secondary" className="mb-2 font-outfit-bold">
-              Issue Type
-            </Typography>
-            <View className="flex-row gap-2 mb-4">
-              {(['COACH_ABSENCE', 'EARLY_DEPARTURE', 'OTHER'] as const).map(t => (
-                <TouchableOpacity
-                  key={t}
-                  onPress={() => setDisputeType(t)}
-                  className={`flex-1 py-2 rounded-xl items-center border ${disputeType === t ? 'bg-[#FFECE2] border-[#FF5100]' : 'bg-gray-50 border-gray-200'}`}
-                >
-                  <Typography variant="caption" weight="bold" color={disputeType === t ? 'primary' : 'muted'} className="text-[10px] font-outfit-bold">
-                    {t === 'COACH_ABSENCE' ? 'Coach Absent' : t === 'EARLY_DEPARTURE' ? 'Left Early' : 'Other'}
-                  </Typography>
-                </TouchableOpacity>
-              ))}
-            </View>
+                <Typography variant="caption" weight="bold" color="secondary" className="mb-2 font-outfit-bold">
+                  Issue Type
+                </Typography>
+                <View className="flex-row gap-2 mb-4">
+                  {(['COACH_ABSENCE', 'EARLY_DEPARTURE', 'OTHER'] as const).map(t => (
+                    <TouchableOpacity
+                      key={t}
+                      onPress={() => setDisputeType(t)}
+                      className={`flex-1 py-2 rounded-xl items-center border ${disputeType === t ? 'bg-[#FFECE2] border-[#FF5100]' : 'bg-gray-50 border-gray-200'}`}
+                    >
+                      <Typography variant="caption" weight="bold" color={disputeType === t ? 'primary' : 'muted'} className="text-[10px] font-outfit-bold">
+                        {t === 'COACH_ABSENCE' ? 'Coach Absent' : t === 'EARLY_DEPARTURE' ? 'Left Early' : 'Other'}
+                      </Typography>
+                    </TouchableOpacity>
+                  ))}
+                </View>
 
-            <Typography variant="caption" weight="bold" color="secondary" className="mb-2 font-outfit-bold">
-              Reason / Explanation (Required)
-            </Typography>
-            <TextInput
-              className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm min-h-[90px] mb-5 font-outfit"
-              placeholder="Explain what happened during the session..."
-              multiline
-              maxLength={2000}
-              value={disputeReason}
-              onChangeText={setDisputeReason}
-            />
-
-            <View className="flex-row gap-3">
-              <View className="flex-1">
-                <Button title="Cancel" variant="outline" onPress={() => setShowDisputeModal(false)} />
-              </View>
-              <View className="flex-1">
-                <Button 
-                  title="Submit Report" 
-                  disabled={!disputeReason.trim() || disputeMutation.isPending}
-                  isLoading={disputeMutation.isPending}
-                  onPress={() => disputeMutation.mutate({ type: disputeType, reason: disputeReason.trim() })}
+                <Typography variant="caption" weight="bold" color="secondary" className="mb-2 font-outfit-bold">
+                  Reason / Explanation (Required)
+                </Typography>
+                <TextInput
+                  className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm min-h-[90px] mb-5 font-outfit"
+                  placeholder="Explain what happened during the session..."
+                  multiline
+                  maxLength={2000}
+                  value={disputeReason}
+                  onChangeText={setDisputeReason}
                 />
+
+                <View className="flex-row gap-3">
+                  <View className="flex-1">
+                    <Button title="Cancel" variant="outline" onPress={() => setShowDisputeModal(false)} />
+                  </View>
+                  <View className="flex-1">
+                    <Button 
+                      title="Submit Report" 
+                      disabled={!disputeReason.trim() || disputeMutation.isPending}
+                      isLoading={disputeMutation.isPending}
+                      onPress={() => disputeMutation.mutate({ type: disputeType, reason: disputeReason.trim() })}
+                    />
+                  </View>
+                </View>
               </View>
-            </View>
+            </KeyboardAvoidingView>
           </View>
-        </View>
+        </TouchableWithoutFeedback>
       </Modal>
 
       {/* Coach Cancel Group Modal */}
       <Modal visible={showCoachCancelModal} transparent animationType="slide" onRequestClose={() => setShowCoachCancelModal(false)}>
-        <View className="flex-1 bg-black/60 justify-end">
-          <View className="bg-white rounded-t-3xl p-6">
-            <Typography variant="h3" color="secondary" weight="bold" className="font-outfit-bold mb-2">
-              Cancel Entire Group Session
-            </Typography>
-            <Typography variant="caption" color="muted" className="font-outfit mb-4">
-              This cancels the scheduled group and queues full refunds for eligible paid participants.
-            </Typography>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View className="flex-1 bg-black/60 justify-end">
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+              <View className="bg-white rounded-t-3xl p-6">
+                <Typography variant="h3" color="secondary" weight="bold" className="font-outfit-bold mb-2">
+                  Cancel Entire Group Session
+                </Typography>
+                <Typography variant="caption" color="muted" className="font-outfit mb-4">
+                  This cancels the scheduled group and queues full refunds for eligible paid participants.
+                </Typography>
 
-            <Typography variant="caption" weight="bold" color="secondary" className="mb-2 font-outfit-bold">
-              Reason for Cancellation
-            </Typography>
-            <TextInput
-              className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm min-h-[80px] mb-5 font-outfit"
-              placeholder="e.g. Court unavailable or emergency..."
-              multiline
-              value={coachCancelReason}
-              onChangeText={setCoachCancelReason}
-            />
-
-            <View className="flex-row gap-3">
-              <View className="flex-1">
-                <Button title="Keep Session" variant="outline" onPress={() => setShowCoachCancelModal(false)} />
-              </View>
-              <View className="flex-1">
-                <Button 
-                  title="Confirm Cancel" 
-                  variant="primary"
-                  disabled={!coachCancelReason.trim() || coachCancelMutation.isPending}
-                  isLoading={coachCancelMutation.isPending}
-                  onPress={() => coachCancelMutation.mutate(coachCancelReason.trim())}
+                <Typography variant="caption" weight="bold" color="secondary" className="mb-2 font-outfit-bold">
+                  Reason for Cancellation
+                </Typography>
+                <TextInput
+                  className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm min-h-[80px] mb-5 font-outfit"
+                  placeholder="e.g. Court unavailable or emergency..."
+                  multiline
+                  value={coachCancelReason}
+                  onChangeText={setCoachCancelReason}
                 />
+
+                <View className="flex-row gap-3">
+                  <View className="flex-1">
+                    <Button title="Keep Session" variant="outline" onPress={() => setShowCoachCancelModal(false)} />
+                  </View>
+                  <View className="flex-1">
+                    <Button 
+                      title="Confirm Cancel" 
+                      variant="primary"
+                      disabled={!coachCancelReason.trim() || coachCancelMutation.isPending}
+                      isLoading={coachCancelMutation.isPending}
+                      onPress={() => coachCancelMutation.mutate(coachCancelReason.trim())}
+                    />
+                  </View>
+                </View>
               </View>
-            </View>
+            </KeyboardAvoidingView>
           </View>
-        </View>
+        </TouchableWithoutFeedback>
       </Modal>
 
       {/* Coach No-Players Modal */}
       <Modal visible={showNoPlayersModal} transparent animationType="slide" onRequestClose={() => setShowNoPlayersModal(false)}>
-        <View className="flex-1 bg-black/60 justify-end">
-          <View className="bg-white rounded-t-3xl p-6">
-            <Typography variant="h3" color="secondary" weight="bold" className="font-outfit-bold mb-2">
-              Report No Players Arrived
-            </Typography>
-            <Typography variant="caption" color="muted" className="font-outfit mb-4">
-              Submit this attendance report after scheduled end time if no players arrived and no OTP was provided.
-            </Typography>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View className="flex-1 bg-black/60 justify-end">
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+              <View className="bg-white rounded-t-3xl p-6">
+                <Typography variant="h3" color="secondary" weight="bold" className="font-outfit-bold mb-2">
+                  Report No Players Arrived
+                </Typography>
+                <Typography variant="caption" color="muted" className="font-outfit mb-4">
+                  Submit this attendance report after scheduled end time if no players arrived and no OTP was provided.
+                </Typography>
 
-            <TextInput
-              className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm min-h-[80px] mb-5 font-outfit"
-              value={noPlayersReason}
-              onChangeText={setNoPlayersReason}
-            />
-
-            <View className="flex-row gap-3">
-              <View className="flex-1">
-                <Button title="Back" variant="outline" onPress={() => setShowNoPlayersModal(false)} />
-              </View>
-              <View className="flex-1">
-                <Button 
-                  title="Submit Report" 
-                  disabled={!noPlayersReason.trim() || coachNoPlayersMutation.isPending}
-                  isLoading={coachNoPlayersMutation.isPending}
-                  onPress={() => coachNoPlayersMutation.mutate(noPlayersReason.trim())}
+                <TextInput
+                  className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm min-h-[80px] mb-5 font-outfit"
+                  placeholder="Note regarding player absence..."
+                  value={noPlayersReason}
+                  onChangeText={setNoPlayersReason}
                 />
+
+                <View className="flex-row gap-3">
+                  <View className="flex-1">
+                    <Button title="Back" variant="outline" onPress={() => setShowNoPlayersModal(false)} />
+                  </View>
+                  <View className="flex-1">
+                    <Button 
+                      title="Submit Report" 
+                      disabled={!noPlayersReason.trim() || coachNoPlayersMutation.isPending}
+                      isLoading={coachNoPlayersMutation.isPending}
+                      onPress={() => coachNoPlayersMutation.mutate(noPlayersReason.trim())}
+                    />
+                  </View>
+                </View>
               </View>
-            </View>
+            </KeyboardAvoidingView>
           </View>
-        </View>
+        </TouchableWithoutFeedback>
       </Modal>
 
       {/* Bottom Actions */}
