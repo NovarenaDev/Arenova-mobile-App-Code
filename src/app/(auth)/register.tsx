@@ -111,6 +111,9 @@ export default function RegisterScreen() {
     if (message.includes('auth/network-request-failed')) {
       return 'Network error. Please check your internet connection.';
     }
+    if (status === 429 || message.toLowerCase().includes('too many') || message.toLowerCase().includes('rate limit')) {
+      return 'Too many requests sent in a short time. Please wait a few minutes before trying again.';
+    }
     let clean = message.replace(/^Firebase:\s*/i, '');
     clean = clean.replace(/^Error:\s*/i, '');
     clean = clean.replace(/\(auth\/[^)]+\)\.?/g, '');

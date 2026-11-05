@@ -97,8 +97,8 @@ export default function LoginScreen() {
     if (message.includes('auth/network-request-failed')) {
       return 'Network error. Please check your internet connection and try again.';
     }
-    if (message.includes('auth/too-many-requests')) {
-      return 'Too many login attempts. Please try again later.';
+    if (message.toLowerCase().includes('too many') || message.toLowerCase().includes('rate limit') || err?.response?.status === 429) {
+      return 'Too many requests sent in a short time. Please wait a few minutes before trying again.';
     }
     let clean = message.replace(/^Firebase:\s*/i, '');
     clean = clean.replace(/^Error:\s*/i, '');
@@ -357,6 +357,8 @@ export default function LoginScreen() {
         setScreenError(role === 'coach'
           ? 'This mobile number is not registered as a coach yet. Please register your account first.'
           : 'This mobile number is not registered yet. Please register your account first.');
+      } else if (status === 429) {
+        setScreenError(backendMessage || 'Too many OTP requests from this number or device. Please wait a few minutes before trying again.');
       } else if (status === 403 || status === 401) {
         setScreenError(backendMessage || 'Account access restricted. Please check your account role or contact support.');
       } else {
@@ -396,6 +398,8 @@ export default function LoginScreen() {
         setScreenError(role === 'coach'
           ? 'This mobile number is not registered as a coach yet. Please register your account first.'
           : 'This mobile number is not registered yet. Please register your account first.');
+      } else if (status === 429) {
+        setScreenError(backendMessage || 'Too many OTP verification attempts. Please wait a few minutes before trying again.');
       } else if (status === 403 || status === 401) {
         setScreenError(backendMessage || 'Account access restricted. Please contact support.');
       } else {
