@@ -1,16 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, ScrollView, TouchableOpacity, ActivityIndicator, Modal, Alert, Linking } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Button } from '@/components/ui';
 import { useRouter, useNavigation } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
-import { api } from '@/services/api';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { api, RAZORPAY_KEY_ID } from '@/services/api';
 
 export default function BookingsScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
   const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
 
   useEffect(() => {
@@ -29,6 +31,17 @@ export default function BookingsScreen() {
   // Tournaments Detail & Invoice States
   const [selectedReg, setSelectedReg] = useState<any | null>(null);
   const [isDownloadingInvoice, setIsDownloadingInvoice] = useState(false);
+
+  // Resume Payment States
+  const [activePayReg, setActivePayReg] = useState<any | null>(null);
+  const [isRazorpayModalVisible, setIsRazorpayModalVisible] = useState(false);
+  const [isResumingPayment, setIsResumingPayment] = useState(false);
+  const [razorpayOrder, setRazorpayOrder] = useState<{
+    orderId: string;
+    amount: number;
+    keyId: string;
+    currency?: string;
+  } | null>(null);
 
   // 1. Coaching Bookings Query
   const { 
@@ -75,6 +88,164 @@ export default function BookingsScreen() {
   const rawTournaments = Array.isArray(tournamentsResponse)
     ? tournamentsResponse
     : (tournamentsResponse?.registrations || tournamentsResponse?.data || []);
+
+  const isRegConfirmed = (reg: any) => {
+    const paymentStatus = String(reg?.paymentStatus || '').toUpperCase();
+    const registrationStatus = String(reg?.registrationStatus || reg?.status || '').toUpperCase();
+    const isPaid = paymentStatus === 'PAID' || paymentStatus === 'COMPLETED' || paymentStatus === 'VERIFIED';
+    return isPaid && (registrationStatus === 'CONFIRMED' || registrationStatus === 'VERIFIED');
+  };
+
+  const handleResumePayment = async (reg: any) => {
+    if (!reg) return;
+    setActivePayReg(reg);
+    setIsResumingPayment(true);
+
+    const regId = reg._id || reg.id;
+    const fee = Number(reg.amount || reg.fee || reg.category?.fee || 0);
+
+    let orderId = reg.orderId || reg.order?.id || reg.order?.orderId;
+    let amountPaise = reg.order?.amount || (fee > 0 ? Math.round(fee * 100) : 100);
+    let keyId = reg.order?.key || RAZORPAY_KEY_ID;
+
+    if (!orderId && fee > 0) {
+      try {
+        const orderRes = await api.post('/bookings/create-order', {
+          amount: fee,
+          tournamentId: reg.tournamentId?._id || reg.tournamentId || reg.tournament?._id || reg.tournament,
+          registrationId: regId,
+          type: 'tournament_registration'
+        });
+        const orderData = orderRes.data?.data || orderRes.data;
+        if (orderData?.orderId || orderData?.id) {
+          orderId = orderData.orderId || orderData.id;
+        }
+        if (orderData?.amountInPaise || orderData?.amount) {
+          amountPaise = orderData.amountInPaise || orderData.amount;
+        }
+        if (orderData?.gatewayKeyId || orderData?.keyId) {
+          keyId = orderData.gatewayKeyId || orderData.keyId;
+        }
+      } catch (e) {
+        console.log('Order creation fallback:', e);
+        orderId = `order_tourn_${Date.now()}`;
+      }
+    }
+
+    setRazorpayOrder({
+      orderId: orderId || `order_tourn_${Date.now()}`,
+      amount: amountPaise,
+      keyId,
+      currency: 'INR'
+    });
+
+    setIsResumingPayment(false);
+    setIsRazorpayModalVisible(true);
+  };
+
+  const handleRazorpayMessage = async (event: any) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+
+      if (data.status === 'success') {
+        setIsRazorpayModalVisible(false);
+        const targetRegId = activePayReg?._id || activePayReg?.id || selectedReg?._id || selectedReg?.id;
+
+        if (targetRegId) {
+          try {
+            await api.post(`/novare/registrations/${targetRegId}/verify-payment`, {
+              transactionId: data.razorpay_payment_id,
+              razorpay_payment_id: data.razorpay_payment_id,
+              paymentOrderId: data.razorpay_order_id || razorpayOrder?.orderId,
+              razorpay_order_id: data.razorpay_order_id || razorpayOrder?.orderId,
+              paymentSignature: data.razorpay_signature,
+              razorpay_signature: data.razorpay_signature,
+              paymentStatus: 'PAID',
+              registrationStatus: 'CONFIRMED',
+              status: 'verified',
+            });
+          } catch (e) {
+            console.warn('Payment verification error:', e);
+          }
+        }
+
+        queryClient.invalidateQueries({ queryKey: ['myTournamentRegistrations'] });
+        queryClient.invalidateQueries({ queryKey: ['invoices'] });
+        setSelectedReg(null);
+
+        Alert.alert('Payment Successful!', 'Your tournament entry has been verified and registered.');
+      } else if (data.status === 'cancelled') {
+        setIsRazorpayModalVisible(false);
+        Alert.alert('Payment Cancelled', 'Payment was cancelled. You can complete it whenever you are ready.');
+      } else if (data.status === 'failed') {
+        setIsRazorpayModalVisible(false);
+        Alert.alert('Payment Failed', data.error?.description || 'Transaction failed. Please retry.');
+      }
+    } catch (e) {
+      setIsRazorpayModalVisible(false);
+    }
+  };
+
+  const generateRazorpayHtml = () => {
+    if (!razorpayOrder) return '';
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+        <style>
+          body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; height: 100vh; font-family: -apple-system, sans-serif; background-color: #f9fafb; }
+          .loader-container { text-align: center; }
+          .spinner { width: 44px; height: 44px; border: 4px solid #E5E7EB; border-radius: 50%; border-left-color: #FF5100; animation: spin 1s linear infinite; margin: 0 auto 16px auto; }
+          @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        </style>
+        <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+      </head>
+      <body>
+        <div class="loader-container">
+          <div class="spinner"></div>
+          <h3 style="margin: 0; font-size: 16px; color: #0F2C59;">Connecting to Secure Payment Gateway...</h3>
+        </div>
+        <script>
+          var options = {
+            "key": ${JSON.stringify(razorpayOrder.keyId)},
+            "amount": ${razorpayOrder.amount},
+            "currency": "INR",
+            "name": "Arenova Tournaments",
+            "description": "Tournament Registration",
+            "order_id": ${JSON.stringify(razorpayOrder.orderId)},
+            "handler": function (response){
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                status: 'success',
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_signature: response.razorpay_signature
+              }));
+            },
+            "modal": {
+              "ondismiss": function(){
+                window.ReactNativeWebView.postMessage(JSON.stringify({ status: 'cancelled' }));
+              }
+            },
+            "theme": {
+              "color": "#FF5100"
+            }
+          };
+          var rzp = new Razorpay(options);
+          rzp.on('payment.failed', function (response){
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              status: 'failed',
+              error: response.error
+            }));
+          });
+          window.onload = function() {
+            rzp.open();
+          };
+        </script>
+      </body>
+      </html>
+    `;
+  };
 
   const handleDownloadInvoice = async (regId?: string, invoiceIdParam?: string) => {
     setIsDownloadingInvoice(true);
@@ -388,8 +559,8 @@ export default function BookingsScreen() {
                 const tournamentName = tournamentObj.name || tournamentObj.title || reg.tournamentName || 'Tournament';
                 const categoryName = reg.categoryName || reg.category?.name || reg.category || 'Open Division';
                 const participantName = reg.childName || reg.participantName || reg.name || 'Child';
-                const status = (reg.paymentStatus || reg.status || 'verified').toUpperCase();
-                const isPaid = status === 'VERIFIED' || status === 'COMPLETED' || status === 'PAID';
+                const confirmed = isRegConfirmed(reg);
+                const fee = Number(reg.amount || reg.fee || reg.category?.fee || 0);
                 const dateStr = reg.createdAt ? new Date(reg.createdAt).toLocaleDateString() : '';
 
                 return (
@@ -412,13 +583,13 @@ export default function BookingsScreen() {
                         </View>
                       </View>
 
-                      <View className={`px-2.5 py-1 rounded-full border ${isPaid ? 'bg-emerald-50 border-emerald-200' : 'bg-orange-50 border-orange-200'}`}>
+                      <View className={`px-2.5 py-1 rounded-full border ${confirmed ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
                         <Typography 
                           variant="caption" 
                           weight="bold" 
-                          className={`font-outfit-bold text-[10px] ${isPaid ? 'text-emerald-700' : 'text-orange-700'}`}
+                          className={`font-outfit-bold text-[10px] ${confirmed ? 'text-emerald-700' : 'text-amber-700'}`}
                         >
-                          {isPaid ? 'PAID / VERIFIED' : status}
+                          {confirmed ? 'REGISTERED' : 'PAYMENT PENDING'}
                         </Typography>
                       </View>
                     </View>
@@ -459,15 +630,28 @@ export default function BookingsScreen() {
                       </Typography>
 
                       <View className="flex-row items-center gap-2">
-                        <TouchableOpacity
-                          onPress={() => handleDownloadInvoice(regId, reg.invoiceId)}
-                          className="px-3 py-1.5 bg-orange-50 border border-orange-200 rounded-xl flex-row items-center shadow-xs"
-                        >
-                          <Ionicons name="download-outline" size={14} color="#FF5100" style={{ marginRight: 4 }} />
-                          <Typography variant="caption" color="primary" weight="bold" className="font-outfit-bold text-xs">
-                            Invoice
-                          </Typography>
-                        </TouchableOpacity>
+                        {confirmed ? (
+                          <TouchableOpacity
+                            onPress={() => handleDownloadInvoice(regId, reg.invoiceId)}
+                            className="px-3 py-1.5 bg-orange-50 border border-orange-200 rounded-xl flex-row items-center shadow-xs"
+                          >
+                            <Ionicons name="download-outline" size={14} color="#FF5100" style={{ marginRight: 4 }} />
+                            <Typography variant="caption" color="primary" weight="bold" className="font-outfit-bold text-xs">
+                              Invoice
+                            </Typography>
+                          </TouchableOpacity>
+                        ) : (
+                          <TouchableOpacity
+                            onPress={() => handleResumePayment(reg)}
+                            disabled={isResumingPayment}
+                            className="px-3 py-1.5 bg-[#FF5100] rounded-xl flex-row items-center shadow-xs"
+                          >
+                            <Ionicons name="card-outline" size={14} color="white" style={{ marginRight: 4 }} />
+                            <Typography variant="caption" color="white" weight="bold" className="font-outfit-bold text-xs">
+                              Pay Now {fee > 0 ? `(₹${fee})` : ''}
+                            </Typography>
+                          </TouchableOpacity>
+                        )}
 
                         <TouchableOpacity
                           onPress={() => setSelectedReg(reg)}
@@ -519,82 +703,161 @@ export default function BookingsScreen() {
               </TouchableOpacity>
             </View>
 
-            {selectedReg && (
-              <View className="space-y-4">
-                <View className="bg-orange-50/70 p-4 rounded-2xl border border-orange-100">
-                  <Typography variant="caption" color="primary" weight="bold" className="font-outfit-bold uppercase text-[10px] tracking-wider">
-                    Confirmed Registration
-                  </Typography>
-                  <Typography variant="subtitle1" color="secondary" weight="bold" className="font-outfit-bold mt-0.5">
-                    {selectedReg.tournament?.name || selectedReg.tournamentName || selectedReg.tournamentId?.name || 'Tournament'}
-                  </Typography>
-                  <Typography variant="body2" color="muted" className="font-outfit mt-1">
-                    Category: <Typography weight="bold">{selectedReg.categoryName || selectedReg.category || 'Standard'}</Typography>
-                  </Typography>
-                  <Typography variant="caption" color="secondary" className="font-outfit mt-1">
-                    Registration ID: #{selectedReg._id || selectedReg.id}
-                  </Typography>
-                </View>
+            {selectedReg && (() => {
+              const modalRegConfirmed = isRegConfirmed(selectedReg);
+              const modalFee = Number(selectedReg.amount || selectedReg.fee || selectedReg.category?.fee || 0);
 
-                <View className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
-                  <View className="flex-row justify-between py-1.5 border-b border-gray-200/60">
-                    <Typography variant="body2" color="muted" className="font-outfit">Participant (Child)</Typography>
-                    <Typography variant="body2" color="primary" weight="bold" className="font-outfit-bold">
-                      {selectedReg.childName || selectedReg.participantName || selectedReg.name || 'Child'}
+              return (
+                <View style={{ gap: 16 }}>
+                  <View className={`p-4 rounded-2xl border ${modalRegConfirmed ? 'bg-orange-50/70 border-orange-100' : 'bg-amber-50 border-amber-200'}`}>
+                    <Typography 
+                      variant="caption" 
+                      weight="bold" 
+                      className={`font-outfit-bold uppercase text-[10px] tracking-wider ${modalRegConfirmed ? 'text-primary' : 'text-amber-800'}`}
+                    >
+                      {modalRegConfirmed ? 'CONFIRMED REGISTRATION' : 'PAYMENT PENDING'}
                     </Typography>
+                    <Typography variant="subtitle1" color="secondary" weight="bold" className="font-outfit-bold mt-0.5">
+                      {selectedReg.tournament?.name || selectedReg.tournamentName || selectedReg.tournamentId?.name || 'Tournament'}
+                    </Typography>
+                    <Typography variant="body2" color="muted" className="font-outfit mt-1">
+                      Category: <Typography weight="bold">{selectedReg.categoryName || selectedReg.category || 'Standard'}</Typography>
+                    </Typography>
+                    <Typography variant="caption" color="secondary" className="font-outfit mt-1">
+                      Registration ID: #{selectedReg._id || selectedReg.id}
+                    </Typography>
+                    {!modalRegConfirmed && (
+                      <Typography variant="caption" className="text-amber-700 font-outfit mt-1">
+                        Complete payment to confirm registration for your child in this tournament.
+                      </Typography>
+                    )}
                   </View>
 
-                  {selectedReg.partnerName ? (
+                  <View className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
                     <View className="flex-row justify-between py-1.5 border-b border-gray-200/60">
-                      <Typography variant="body2" color="muted" className="font-outfit">Partner / Team</Typography>
-                      <Typography variant="body2" color="secondary" weight="medium" className="font-outfit">
-                        {selectedReg.partnerName}
+                      <Typography variant="body2" color="muted" className="font-outfit">Participant (Child)</Typography>
+                      <Typography variant="body2" color="primary" weight="bold" className="font-outfit-bold">
+                        {selectedReg.childName || selectedReg.participantName || selectedReg.name || 'Child'}
                       </Typography>
                     </View>
-                  ) : null}
 
-                  {selectedReg.phone ? (
-                    <View className="flex-row justify-between py-1.5 border-b border-gray-200/60">
-                      <Typography variant="body2" color="muted" className="font-outfit">Mobile</Typography>
-                      <Typography variant="body2" color="secondary" weight="medium" className="font-outfit">
-                        +91 {selectedReg.phone}
+                    {selectedReg.partnerName ? (
+                      <View className="flex-row justify-between py-1.5 border-b border-gray-200/60">
+                        <Typography variant="body2" color="muted" className="font-outfit">Partner / Team</Typography>
+                        <Typography variant="body2" color="secondary" weight="medium" className="font-outfit">
+                          {selectedReg.partnerName}
+                        </Typography>
+                      </View>
+                    ) : null}
+
+                    {selectedReg.phone ? (
+                      <View className="flex-row justify-between py-1.5 border-b border-gray-200/60">
+                        <Typography variant="body2" color="muted" className="font-outfit">Mobile</Typography>
+                        <Typography variant="body2" color="secondary" weight="medium" className="font-outfit">
+                          +91 {selectedReg.phone}
+                        </Typography>
+                      </View>
+                    ) : null}
+
+                    {selectedReg.email ? (
+                      <View className="flex-row justify-between py-1.5 border-b border-gray-200/60">
+                        <Typography variant="body2" color="muted" className="font-outfit">Email</Typography>
+                        <Typography variant="body2" color="secondary" weight="medium" className="font-outfit">
+                          {selectedReg.email}
+                        </Typography>
+                      </View>
+                    ) : null}
+
+                    <View className="flex-row justify-between py-1.5">
+                      <Typography variant="body2" color="muted" className="font-outfit">Payment Status</Typography>
+                      <Typography 
+                        variant="body2" 
+                        weight="bold" 
+                        className={`font-outfit-bold uppercase ${modalRegConfirmed ? 'text-emerald-600' : 'text-amber-600'}`}
+                      >
+                        {modalRegConfirmed ? (selectedReg.paymentStatus || 'PAID') : 'PENDING'}
                       </Typography>
                     </View>
-                  ) : null}
-
-                  {selectedReg.email ? (
-                    <View className="flex-row justify-between py-1.5 border-b border-gray-200/60">
-                      <Typography variant="body2" color="muted" className="font-outfit">Email</Typography>
-                      <Typography variant="body2" color="secondary" weight="medium" className="font-outfit">
-                        {selectedReg.email}
-                      </Typography>
-                    </View>
-                  ) : null}
-
-                  <View className="flex-row justify-between py-1.5">
-                    <Typography variant="body2" color="muted" className="font-outfit">Payment Status</Typography>
-                    <Typography variant="body2" weight="bold" className="font-outfit-bold uppercase text-emerald-600">
-                      {selectedReg.paymentStatus || selectedReg.status || 'VERIFIED'}
-                    </Typography>
                   </View>
+
+                  {modalRegConfirmed ? (
+                    <Button
+                      title="Download Invoice (PDF)"
+                      onPress={() => handleDownloadInvoice(selectedReg._id || selectedReg.id, selectedReg.invoiceId)}
+                      isLoading={isDownloadingInvoice}
+                      className="mt-1"
+                    />
+                  ) : (
+                    <Button
+                      title={`Pay Now (₹${modalFee})`}
+                      onPress={() => handleResumePayment(selectedReg)}
+                      isLoading={isResumingPayment}
+                      className="mt-1"
+                    />
+                  )}
+
+                  <Button
+                    title="Close"
+                    variant="white"
+                    onPress={() => setSelectedReg(null)}
+                  />
                 </View>
-
-                <Button
-                  title="Download Invoice (PDF)"
-                  onPress={() => handleDownloadInvoice(selectedReg._id || selectedReg.id, selectedReg.invoiceId)}
-                  isLoading={isDownloadingInvoice}
-                  className="mt-3 mb-2"
-                />
-
-                <Button
-                  title="Close"
-                  variant="white"
-                  onPress={() => setSelectedReg(null)}
-                />
-              </View>
-            )}
+              );
+            })()}
           </View>
         </View>
+      </Modal>
+
+      {/* Razorpay WebView Modal */}
+      <Modal
+        visible={isRazorpayModalVisible}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={() => setIsRazorpayModalVisible(false)}
+      >
+        <SafeAreaView className="flex-1 bg-white" edges={['top', 'bottom']}>
+          <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-100 bg-[#0F2C59]">
+            <View className="flex-row items-center">
+              <View className="w-8 h-8 rounded-full bg-[#FF5100]/20 items-center justify-center mr-3">
+                <Ionicons name="shield-checkmark" size={18} color="#FF5100" />
+              </View>
+              <View>
+                <Typography variant="subtitle2" color="white" weight="bold" className="font-outfit-bold">
+                  Arenova Secure Payment
+                </Typography>
+                <Typography variant="caption" className="text-gray-300 font-outfit text-xs">
+                  Razorpay Payment Gateway
+                </Typography>
+              </View>
+            </View>
+            <TouchableOpacity
+              onPress={() => {
+                setIsRazorpayModalVisible(false);
+                Alert.alert('Payment Cancelled', 'Payment cancelled. You can resume it anytime.');
+              }}
+              className="p-1 rounded-full bg-white/10"
+            >
+              <Ionicons name="close" size={20} color="white" />
+            </TouchableOpacity>
+          </View>
+          <WebView
+            originWhitelist={['*']}
+            source={{ html: generateRazorpayHtml() }}
+            onMessage={handleRazorpayMessage}
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+            startInLoadingState={true}
+            renderLoading={() => (
+              <View className="absolute inset-0 justify-center items-center bg-white z-50">
+                <ActivityIndicator size="large" color="#FF5100" />
+                <Typography variant="body2" color="secondary" className="mt-3 font-outfit">
+                  Loading secure checkout...
+                </Typography>
+              </View>
+            )}
+            className="flex-1"
+          />
+        </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );

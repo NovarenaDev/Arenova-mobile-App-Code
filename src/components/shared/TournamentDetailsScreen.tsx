@@ -208,20 +208,37 @@ export default function TournamentDetailsScreen() {
     try {
       // 1. Submit Registration
       const regRes = await api.post(`/novare/tournaments/${id}/register`, payload);
-      const regData = regRes.data?.data || regRes.data?.registration || regRes.data;
-      const regId = regData?._id || regData?.id;
+      const resPayload = regRes.data;
+      const regData = resPayload?.data || resPayload?.registration || resPayload;
+
+      // Extract Registration ID comprehensively from any potential response nesting
+      const regId = 
+        regData?._id || 
+        regData?.id || 
+        regData?.registration?._id || 
+        regData?.registration?.id || 
+        regData?.registrationId || 
+        resPayload?.registration?._id || 
+        resPayload?.registration?.id || 
+        resPayload?.registrationId || 
+        resPayload?._id || 
+        resPayload?.id;
 
       if (!regId) {
-        throw new Error('Registration could not be created. Please try again.');
+        throw new Error(resPayload?.message || 'Registration could not be created. Please try again.');
       }
 
       setPendingRegistrationId(regId);
       const regSummary = {
-        ...regData,
+        ...(typeof regData === 'object' ? regData : {}),
+        _id: regId,
+        id: regId,
         tournamentName: tournament?.name || tournament?.title,
         categoryName: categoryNameVal,
         amount: fee,
         participantName: participantDisplayName,
+        paymentStatus: 'PENDING',
+        registrationStatus: 'PENDING_PAYMENT',
       };
       setConfirmedRegistration(regSummary);
 
@@ -230,7 +247,8 @@ export default function TournamentDetailsScreen() {
         try {
           await api.post(`/novare/registrations/${regId}/verify-payment`, {
             transactionId: 'FREE_ENTRY',
-            paymentStatus: 'completed',
+            paymentStatus: 'PAID',
+            registrationStatus: 'CONFIRMED',
             status: 'verified'
           });
         } catch (e) {}
@@ -242,37 +260,67 @@ export default function TournamentDetailsScreen() {
         return;
       }
 
-      // 3. Paid Tournament -> Initialize Razorpay Order
-      let orderId = `order_tourn_${Date.now()}`;
-      let amountPaise = Math.round(fee * 100);
-      let keyId = RAZORPAY_KEY_ID;
+      // 3. Paid Tournament -> Extract Order Details from /register response
+      const orderObj = 
+        resPayload?.order || 
+        resPayload?.data?.order || 
+        resPayload?.razorpayOrder || 
+        resPayload?.data?.razorpayOrder || 
+        regData?.order || 
+        regData?.razorpayOrder || 
+        {};
 
-      try {
-        const orderRes = await api.post('/bookings/create-order', {
-          amount: fee,
-          tournamentId: id,
-          registrationId: regId,
-          type: 'tournament_registration'
-        });
-        const orderData = orderRes.data?.data || orderRes.data;
-        if (orderData?.orderId || orderData?.id) {
-          orderId = orderData.orderId || orderData.id;
+      let orderId = 
+        orderObj.id || 
+        orderObj.orderId || 
+        resPayload?.orderId || 
+        resPayload?.data?.orderId || 
+        regData?.orderId;
+
+      let amountPaise = 
+        orderObj.amount || 
+        orderObj.amountInPaise || 
+        (orderObj.amountInRupees ? Math.round(orderObj.amountInRupees * 100) : null) || 
+        Math.round(fee * 100);
+
+      let keyId = 
+        orderObj.key || 
+        orderObj.keyId || 
+        resPayload?.keyId || 
+        resPayload?.data?.keyId || 
+        resPayload?.gatewayKeyId || 
+        RAZORPAY_KEY_ID;
+
+      // Fallback if backend /register response did not contain order details directly
+      if (!orderId) {
+        try {
+          const orderRes = await api.post('/bookings/create-order', {
+            amount: fee,
+            tournamentId: id,
+            registrationId: regId,
+            type: 'tournament_registration'
+          });
+          const orderData = orderRes.data?.data || orderRes.data;
+          if (orderData?.orderId || orderData?.id) {
+            orderId = orderData.orderId || orderData.id;
+          }
+          if (orderData?.amountInPaise || orderData?.amount) {
+            amountPaise = orderData.amountInPaise || orderData.amount;
+          }
+          if (orderData?.gatewayKeyId || orderData?.keyId) {
+            keyId = orderData.gatewayKeyId || orderData.keyId;
+          }
+        } catch (orderErr) {
+          console.log('Order creation fallback to client-side order ID:', orderErr);
+          orderId = `order_tourn_${Date.now()}`;
         }
-        if (orderData?.amountInPaise || orderData?.amount) {
-          amountPaise = orderData.amountInPaise || orderData.amount;
-        }
-        if (orderData?.gatewayKeyId || orderData?.keyId) {
-          keyId = orderData.gatewayKeyId || orderData.keyId;
-        }
-      } catch (orderErr) {
-        console.log('Order creation fallback to client-side order ID:', orderErr);
       }
 
       setRazorpayOrder({
-        orderId,
+        orderId: orderId || `order_tourn_${Date.now()}`,
         amount: amountPaise,
         keyId,
-        currency: 'INR'
+        currency: orderObj.currency || 'INR'
       });
 
       setIsProcessingPayment(false);
@@ -280,7 +328,38 @@ export default function TournamentDetailsScreen() {
       setIsRazorpayModalVisible(true);
     } catch (err: any) {
       setIsProcessingPayment(false);
-      const errMsg = err?.response?.data?.message || err?.message || 'Failed to initialize tournament registration. Please try again.';
+      const resData = err?.response?.data;
+      const errMsg = resData?.message || err?.message || 'Failed to initialize tournament registration. Please try again.';
+
+      // If user already has a pending registration for this tournament
+      const existingReg = resData?.data?.registration || resData?.registration || resData?.data;
+      const existingRegId = existingReg?._id || existingReg?.id;
+      if (existingRegId) {
+        setPendingRegistrationId(existingRegId);
+        Alert.alert(
+          'Registration Found',
+          'You already have a pending registration for this category. Would you like to complete payment now?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Pay Now', 
+              onPress: () => {
+                const orderId = existingReg?.orderId || `order_tourn_${Date.now()}`;
+                setRazorpayOrder({
+                  orderId,
+                  amount: Math.round(fee * 100),
+                  keyId: RAZORPAY_KEY_ID,
+                  currency: 'INR'
+                });
+                setIsRegisterModalVisible(false);
+                setIsRazorpayModalVisible(true);
+              } 
+            }
+          ]
+        );
+        return;
+      }
+
       setRegisterError(errMsg);
     }
   };
@@ -295,9 +374,13 @@ export default function TournamentDetailsScreen() {
 
         const verifyPayload = {
           transactionId: data.razorpay_payment_id,
+          razorpay_payment_id: data.razorpay_payment_id,
           paymentOrderId: data.razorpay_order_id || razorpayOrder?.orderId,
+          razorpay_order_id: data.razorpay_order_id || razorpayOrder?.orderId,
           paymentSignature: data.razorpay_signature,
-          paymentStatus: 'completed',
+          razorpay_signature: data.razorpay_signature,
+          paymentStatus: 'PAID',
+          registrationStatus: 'CONFIRMED',
           status: 'verified',
         };
 
@@ -316,7 +399,8 @@ export default function TournamentDetailsScreen() {
           setConfirmedRegistration({
             ...confirmedRegistration,
             transactionId: data.razorpay_payment_id,
-            paymentStatus: 'completed',
+            paymentStatus: 'PAID',
+            registrationStatus: 'CONFIRMED',
           });
         }
 
@@ -324,9 +408,12 @@ export default function TournamentDetailsScreen() {
         setShowSuccessModal(true);
       } else if (data.status === 'cancelled') {
         setIsRazorpayModalVisible(false);
-        setIsRegisterModalVisible(true);
-        setRegStep(2);
-        Alert.alert('Payment Cancelled', 'You cancelled the payment transaction. Your registration details have been saved, so you can retry payment whenever you are ready.');
+        setIsRegisterModalVisible(false);
+        queryClient.invalidateQueries({ queryKey: ['myTournamentRegistrations'] });
+        Alert.alert(
+          'Payment Pending', 
+          'Your registration has been created with status Payment Pending. You can complete your payment anytime from your Activity tab or My Tournaments.'
+        );
       } else if (data.status === 'failed') {
         setIsRazorpayModalVisible(false);
         setIsRegisterModalVisible(true);
