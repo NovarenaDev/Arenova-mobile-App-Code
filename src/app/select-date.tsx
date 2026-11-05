@@ -28,22 +28,21 @@ export default function SelectDateScreen() {
   const { user } = useAuthStore();
   const { coachId } = useLocalSearchParams<{ coachId?: string }>();
   
-  const [selectedDate, setSelectedDate] = useState('');
-  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
-
   const today = new Date().toISOString().split('T')[0];
+  const [selectedDate, setSelectedDate] = useState(today);
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
 
   const { data: coachResponse, isLoading: isLoadingCoach } = useQuery({
     queryKey: ['coachProfile', coachId],
     queryFn: async () => {
       if (!coachId) return null;
       const res = await api.get(`/coaches/${coachId}`);
-      return res.data;
+      return res.data?.data || res.data;
     },
     enabled: !!coachId
   });
 
-  const coach = coachResponse?.data || null;
+  const coach = coachResponse?.data || coachResponse || null;
   const coachName = coach?.name || `${coach?.firstName || ''} ${coach?.lastName || ''}`.trim() || 'Coach';
   const coachSport = coach?.sport || coach?.sports?.[0] || 'Sports';
 
@@ -51,15 +50,80 @@ export default function SelectDateScreen() {
     queryKey: ['coachSlots', coachId, selectedDate],
     queryFn: async () => {
       if (!coachId || !selectedDate) return null;
-      const res = await api.get(`/slots/coaches/${coachId}/slots`, {
-        params: { date: selectedDate }
-      });
-      return res.data;
+      try {
+        const res = await api.get(`/slots/coaches/${coachId}/slots`, {
+          params: { date: selectedDate }
+        });
+        return res.data;
+      } catch (err: any) {
+        // Fallback 1: try /coaches/:id/slots
+        try {
+          const res2 = await api.get(`/coaches/${coachId}/slots`, {
+            params: { date: selectedDate }
+          });
+          return res2.data;
+        } catch (err2) {
+          // Fallback 2: try /coach-app/slots
+          try {
+            const res3 = await api.get('/coach-app/slots', {
+              params: { coachId, date: selectedDate }
+            });
+            return res3.data;
+          } catch {
+            return null;
+          }
+        }
+      }
     },
     enabled: !!coachId && !!selectedDate
   });
 
-  const slots: Slot[] = slotsResponse?.data || [];
+  // Extract slots list with full format tolerance
+  const rawSlotsList = Array.isArray(slotsResponse)
+    ? slotsResponse
+    : (Array.isArray(slotsResponse?.data)
+      ? slotsResponse.data
+      : (slotsResponse?.data?.slots || slotsResponse?.slots || []));
+
+  let slots: Slot[] = Array.isArray(rawSlotsList) ? rawSlotsList : [];
+
+  // Fallback: If no date-specific slots exist, derive from coach's recurring availability for this day of week
+  if (slots.length === 0 && coach?.availability && Array.isArray(coach.availability)) {
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const [y, m, d] = selectedDate.split('-').map(Number);
+    const dateObj = new Date(y, m - 1, d);
+    const dayName = dayNames[dateObj.getDay()];
+
+    const matchingAvail = coach.availability.filter((a: any) => 
+      a.day && a.day.toLowerCase() === dayName.toLowerCase()
+    );
+
+    if (matchingAvail.length > 0) {
+      slots = matchingAvail.map((a: any, idx: number) => ({
+        _id: a._id || a.id || `avail_${selectedDate}_${idx}`,
+        id: a._id || a.id || `avail_${selectedDate}_${idx}`,
+        startTime: a.startTime,
+        endTime: a.endTime,
+        price: a.price || coach?.pricePerSession || coach?.fee || 500,
+        pricePerPerson: a.price || coach?.pricePerSession || coach?.fee || 500,
+        capacity: a.capacity || 10,
+        bookedCount: 0
+      }));
+    }
+  }
+
+  const formatSlotTime = (timeStr: string) => {
+    if (!timeStr) return '';
+    if (timeStr.includes('AM') || timeStr.includes('PM')) return timeStr;
+    const parts = timeStr.split(':');
+    if (parts.length < 2) return timeStr;
+    const h = parseInt(parts[0], 10);
+    const m = parts[1];
+    if (isNaN(h)) return timeStr;
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const displayHour = h % 12 || 12;
+    return `${displayHour}:${m} ${ampm}`;
+  };
 
   const handleSelectSlot = () => {
     if (!selectedDate) {
@@ -221,7 +285,7 @@ export default function SelectDateScreen() {
                         weight="bold"
                         className="font-outfit-bold"
                       >
-                        {slot.startTime}
+                        {formatSlotTime(slot.startTime)}
                       </Typography>
                       {displayPrice !== undefined && (
                         <Typography 

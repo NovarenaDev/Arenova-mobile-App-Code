@@ -578,38 +578,43 @@ function ParentBannerCarousel({ router }: { router: any }) {
 
   const [activeBannerIndex, setActiveBannerIndex] = React.useState(0);
   const bannerScrollRef = React.useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const BANNER_CARD_GAP = 14;
+  const bannerCardWidth = require('react-native').Dimensions.get('window').width - 48;
 
   useEffect(() => {
     const timer = setInterval(() => {
       const nextIndex = (activeBannerIndex + 1) % parentBanners.length;
-      const width = require('react-native').Dimensions.get('window').width - 48;
-      bannerScrollRef.current?.scrollTo({ x: nextIndex * width, animated: true });
+      bannerScrollRef.current?.scrollTo({ x: nextIndex * (bannerCardWidth + BANNER_CARD_GAP), animated: true });
       setActiveBannerIndex(nextIndex);
-    }, 3500);
+    }, 4000);
     return () => clearInterval(timer);
-  }, [activeBannerIndex, parentBanners.length]);
+  }, [activeBannerIndex, parentBanners.length, bannerCardWidth]);
 
   return (
     <View className="mt-6 mx-6 relative">
       <ScrollView
         ref={bannerScrollRef}
         horizontal
-        pagingEnabled
+        decelerationRate="fast"
+        snapToInterval={bannerCardWidth + BANNER_CARD_GAP}
+        snapToAlignment="start"
         showsHorizontalScrollIndicator={false}
         onScroll={(e) => {
-          const slideSize = e.nativeEvent.layoutMeasurement.width;
-          if (slideSize > 0) {
-            const index = e.nativeEvent.contentOffset.x / slideSize;
-            setActiveBannerIndex(Math.round(index));
-          }
+          const scrollX = e.nativeEvent.contentOffset.x;
+          const index = Math.round(scrollX / (bannerCardWidth + BANNER_CARD_GAP));
+          setActiveBannerIndex(index);
         }}
         scrollEventThrottle={16}
       >
-        {parentBanners.map((banner) => (
+        {parentBanners.map((banner, index) => (
           <View 
             key={banner.id}
             className={`${banner.color} rounded-3xl p-5 shadow-sm overflow-hidden relative justify-between`}
-            style={{ width: require('react-native').Dimensions.get('window').width - 48, minHeight: 150 }}
+            style={{ 
+              width: bannerCardWidth, 
+              minHeight: 150,
+              marginRight: index < parentBanners.length - 1 ? BANNER_CARD_GAP : 0
+            }}
           >
             <View className="w-2/3 z-10">
               <Typography variant="h3" color="white" weight="bold" className="mb-1 font-outfit-bold text-lg">

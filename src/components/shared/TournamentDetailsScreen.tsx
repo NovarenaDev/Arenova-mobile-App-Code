@@ -275,24 +275,44 @@ export default function TournamentDetailsScreen() {
         orderObj.orderId || 
         resPayload?.orderId || 
         resPayload?.data?.orderId || 
-        regData?.orderId;
+        regData?.orderId || 
+        '';
 
-      let amountPaise = 
-        orderObj.amount || 
-        orderObj.amountInPaise || 
-        (orderObj.amountInRupees ? Math.round(orderObj.amountInRupees * 100) : null) || 
-        Math.round(fee * 100);
+      let amountPaise = 0;
+      if (orderObj.amountInPaise) {
+        amountPaise = Number(orderObj.amountInPaise);
+      } else if (orderObj.amount) {
+        const rawAmt = Number(orderObj.amount);
+        if (fee > 0 && Math.abs(rawAmt - fee) < 1) {
+          amountPaise = Math.round(fee * 100);
+        } else if (rawAmt >= fee * 100) {
+          amountPaise = Math.round(rawAmt);
+        } else {
+          amountPaise = Math.round(rawAmt * 100);
+        }
+      } else if (fee > 0) {
+        amountPaise = Math.round(fee * 100);
+      } else {
+        amountPaise = 100;
+      }
 
       let keyId = 
         orderObj.key || 
         orderObj.keyId || 
-        resPayload?.keyId || 
-        resPayload?.data?.keyId || 
+        orderObj.razorpayKeyId || 
+        orderObj.gatewayKeyId || 
+        resPayload?.razorpayKeyId || 
         resPayload?.gatewayKeyId || 
+        resPayload?.keyId || 
+        resPayload?.data?.razorpayKeyId || 
+        resPayload?.data?.gatewayKeyId || 
+        resPayload?.data?.keyId || 
+        regData?.razorpayKeyId || 
+        regData?.gatewayKeyId || 
         RAZORPAY_KEY_ID;
 
       // Fallback if backend /register response did not contain order details directly
-      if (!orderId) {
+      if (!orderId || !orderId.startsWith('order_') || orderId.startsWith('order_tourn_')) {
         try {
           const orderRes = await api.post('/bookings/create-order', {
             amount: fee,
@@ -307,17 +327,16 @@ export default function TournamentDetailsScreen() {
           if (orderData?.amountInPaise || orderData?.amount) {
             amountPaise = orderData.amountInPaise || orderData.amount;
           }
-          if (orderData?.gatewayKeyId || orderData?.keyId) {
-            keyId = orderData.gatewayKeyId || orderData.keyId;
+          if (orderData?.gatewayKeyId || orderData?.razorpayKeyId || orderData?.keyId) {
+            keyId = orderData.gatewayKeyId || orderData.razorpayKeyId || orderData.keyId;
           }
         } catch (orderErr) {
-          console.log('Order creation fallback to client-side order ID:', orderErr);
-          orderId = `order_tourn_${Date.now()}`;
+          console.log('Order creation notice:', orderErr);
         }
       }
 
       setRazorpayOrder({
-        orderId: orderId || `order_tourn_${Date.now()}`,
+        orderId: orderId || '',
         amount: amountPaise,
         keyId,
         currency: orderObj.currency || 'INR'
@@ -429,11 +448,16 @@ export default function TournamentDetailsScreen() {
 
   const generateRazorpayHtml = () => {
     if (!razorpayOrder) return '';
+    const cleanPhone = (regPhone || user?.phone || '').replace(/\D/g, '').slice(-10);
+    const cleanName = regName || user?.name || 'Athlete';
+    const cleanEmail = regEmail || user?.email || '';
+    const isRealOrderId = !!(razorpayOrder.orderId && razorpayOrder.orderId.startsWith('order_') && !razorpayOrder.orderId.startsWith('order_tourn_'));
+
     return `
       <!DOCTYPE html>
       <html>
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <style>
           body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; height: 100vh; font-family: -apple-system, sans-serif; background-color: #f9fafb; }
           .loader-container { text-align: center; }
@@ -454,13 +478,12 @@ export default function TournamentDetailsScreen() {
             "currency": "INR",
             "name": "Arenova Tournaments",
             "description": ${JSON.stringify(tournament?.name || 'Tournament Registration')},
-            "order_id": ${JSON.stringify(razorpayOrder.orderId)},
             "handler": function (response){
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 status: 'success',
                 razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_signature: response.razorpay_signature
+                razorpay_order_id: response.razorpay_order_id || ${JSON.stringify(razorpayOrder.orderId)},
+                razorpay_signature: response.razorpay_signature || ''
               }));
             },
             "modal": {
@@ -469,14 +492,19 @@ export default function TournamentDetailsScreen() {
               }
             },
             "prefill": {
-              "name": ${JSON.stringify(regName || user?.name || 'Athlete')},
-              "email": ${JSON.stringify(regEmail || user?.email || '')},
-              "contact": ${JSON.stringify(regPhone || user?.phone || '')}
+              "name": ${JSON.stringify(cleanName)},
+              "email": ${JSON.stringify(cleanEmail)},
+              "contact": ${JSON.stringify(cleanPhone)}
             },
             "theme": {
               "color": "#FF5100"
             }
           };
+
+          if (${JSON.stringify(isRealOrderId)}) {
+            options.order_id = ${JSON.stringify(razorpayOrder.orderId)};
+          }
+
           var rzp1 = new Razorpay(options);
           rzp1.on('payment.failed', function (response){
             window.ReactNativeWebView.postMessage(JSON.stringify({

@@ -112,12 +112,37 @@ export default function MyTournamentsScreen() {
     const regId = reg._id || reg.id;
     const fee = Number(reg.amount || reg.fee || reg.category?.fee || 0);
 
-    // Order Details from registration or create order
-    let orderId = reg.orderId || reg.order?.id || reg.order?.orderId;
-    let amountPaise = reg.order?.amount || (fee > 0 ? Math.round(fee * 100) : 100);
-    let keyId = reg.order?.key || RAZORPAY_KEY_ID;
+    const orderObj = reg.order || reg.razorpayOrder || {};
+    let orderId = orderObj.id || orderObj.orderId || reg.orderId || reg.order?.id || '';
 
-    if (!orderId && fee > 0) {
+    let amountPaise = 0;
+    if (orderObj.amountInPaise) {
+      amountPaise = Number(orderObj.amountInPaise);
+    } else if (orderObj.amount) {
+      const rawAmt = Number(orderObj.amount);
+      if (fee > 0 && Math.abs(rawAmt - fee) < 1) {
+        amountPaise = Math.round(fee * 100);
+      } else if (rawAmt >= fee * 100) {
+        amountPaise = Math.round(rawAmt);
+      } else {
+        amountPaise = Math.round(rawAmt * 100);
+      }
+    } else if (fee > 0) {
+      amountPaise = Math.round(fee * 100);
+    } else {
+      amountPaise = 100;
+    }
+
+    let keyId = 
+      orderObj.key || 
+      orderObj.keyId || 
+      orderObj.razorpayKeyId || 
+      orderObj.gatewayKeyId || 
+      reg.keyId || 
+      reg.razorpayKeyId || 
+      RAZORPAY_KEY_ID;
+
+    if (!orderId || !orderId.startsWith('order_') || orderId.startsWith('order_tourn_')) {
       try {
         const orderRes = await api.post('/bookings/create-order', {
           amount: fee,
@@ -132,17 +157,16 @@ export default function MyTournamentsScreen() {
         if (orderData?.amountInPaise || orderData?.amount) {
           amountPaise = orderData.amountInPaise || orderData.amount;
         }
-        if (orderData?.gatewayKeyId || orderData?.keyId) {
-          keyId = orderData.gatewayKeyId || orderData.keyId;
+        if (orderData?.gatewayKeyId || orderData?.razorpayKeyId || orderData?.keyId) {
+          keyId = orderData.gatewayKeyId || orderData.razorpayKeyId || orderData.keyId;
         }
       } catch (e) {
-        console.log('Order creation fallback:', e);
-        orderId = `order_tourn_${Date.now()}`;
+        console.log('Order creation fallback notice:', e);
       }
     }
 
     setRazorpayOrder({
-      orderId: orderId || `order_tourn_${Date.now()}`,
+      orderId: orderId || '',
       amount: amountPaise,
       keyId,
       currency: 'INR'
@@ -150,6 +174,49 @@ export default function MyTournamentsScreen() {
 
     setIsResumingPayment(false);
     setIsRazorpayModalVisible(true);
+  };
+
+  const handleDeleteRegistration = (regItem: any) => {
+    if (!regItem) return;
+    const regId = regItem._id || regItem.id;
+    const tournName = regItem.tournament?.name || regItem.tournamentName || regItem.tournamentId?.name || 'Tournament';
+
+    Alert.alert(
+      'Delete Pending Registration',
+      `Are you sure you want to remove your pending registration for ${tournName}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.delete(`/novare/registrations/${regId}`).catch(() => 
+                api.post(`/novare/registrations/${regId}/cancel`).catch(() => null)
+              );
+            } catch (e) {
+              console.log('Delete registration API notice:', e);
+            }
+
+            queryClient.setQueryData(['myTournamentRegistrations'], (old: any) => {
+              if (Array.isArray(old)) {
+                return old.filter((r: any) => (r._id || r.id) !== regId);
+              }
+              if (old && typeof old === 'object') {
+                const list = old.registrations || old.data || [];
+                const filtered = list.filter((r: any) => (r._id || r.id) !== regId);
+                return { ...old, registrations: filtered, data: filtered };
+              }
+              return old;
+            });
+
+            queryClient.invalidateQueries({ queryKey: ['myTournamentRegistrations'] });
+            setSelectedRegistrationId(null);
+            Alert.alert('Registration Removed', 'The pending registration has been successfully removed.');
+          }
+        }
+      ]
+    );
   };
 
   const handleRazorpayMessage = async (event: any) => {
@@ -197,11 +264,16 @@ export default function MyTournamentsScreen() {
 
   const generateRazorpayHtml = () => {
     if (!razorpayOrder) return '';
+    const cleanPhone = (activePayReg?.phone || '').replace(/\D/g, '').slice(-10);
+    const cleanName = activePayReg?.childName || activePayReg?.participantName || activePayReg?.name || 'Athlete';
+    const cleanEmail = activePayReg?.email || '';
+    const isRealOrderId = !!(razorpayOrder.orderId && razorpayOrder.orderId.startsWith('order_') && !razorpayOrder.orderId.startsWith('order_tourn_'));
+
     return `
       <!DOCTYPE html>
       <html>
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <style>
           body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; height: 100vh; font-family: -apple-system, sans-serif; background-color: #f9fafb; }
           .loader-container { text-align: center; }
@@ -222,13 +294,12 @@ export default function MyTournamentsScreen() {
             "currency": "INR",
             "name": "Arenova Tournaments",
             "description": "Tournament Registration",
-            "order_id": ${JSON.stringify(razorpayOrder.orderId)},
             "handler": function (response){
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 status: 'success',
                 razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_signature: response.razorpay_signature
+                razorpay_order_id: response.razorpay_order_id || ${JSON.stringify(razorpayOrder.orderId)},
+                razorpay_signature: response.razorpay_signature || ''
               }));
             },
             "modal": {
@@ -236,10 +307,20 @@ export default function MyTournamentsScreen() {
                 window.ReactNativeWebView.postMessage(JSON.stringify({ status: 'cancelled' }));
               }
             },
+            "prefill": {
+              "name": ${JSON.stringify(cleanName)},
+              "email": ${JSON.stringify(cleanEmail)},
+              "contact": ${JSON.stringify(cleanPhone)}
+            },
             "theme": {
               "color": "#FF5100"
             }
           };
+
+          if (${JSON.stringify(isRealOrderId)}) {
+            options.order_id = ${JSON.stringify(razorpayOrder.orderId)};
+          }
+
           var rzp1 = new Razorpay(options);
           rzp1.on('payment.failed', function (response){
             window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -388,18 +469,30 @@ export default function MyTournamentsScreen() {
                         </Typography>
                       </TouchableOpacity>
                     ) : (
-                      <TouchableOpacity
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          handleResumePayment(reg);
-                        }}
-                        className="px-3 py-1.5 bg-primary rounded-xl flex-row items-center shadow-xs"
-                      >
-                        <Ionicons name="card-outline" size={13} color="white" style={{ marginRight: 4 }} />
-                        <Typography variant="caption" color="white" weight="bold" className="font-outfit-bold text-xs">
-                          {fee > 0 ? `Pay ₹${fee}` : 'Complete'}
-                        </Typography>
-                      </TouchableOpacity>
+                      <View className="flex-row items-center gap-1.5">
+                        <TouchableOpacity
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            handleResumePayment(reg);
+                          }}
+                          className="px-3 py-1.5 bg-primary rounded-xl flex-row items-center shadow-xs"
+                        >
+                          <Ionicons name="card-outline" size={13} color="white" style={{ marginRight: 4 }} />
+                          <Typography variant="caption" color="white" weight="bold" className="font-outfit-bold text-xs">
+                            {fee > 0 ? `Pay ₹${fee}` : 'Complete'}
+                          </Typography>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            handleDeleteRegistration(reg);
+                          }}
+                          className="p-1.5 bg-red-50 border border-red-200 rounded-xl items-center justify-center shadow-xs"
+                        >
+                          <Ionicons name="trash-outline" size={14} color="#EF4444" />
+                        </TouchableOpacity>
+                      </View>
                     )}
 
                     <View className="flex-row items-center">
@@ -508,15 +601,31 @@ export default function MyTournamentsScreen() {
                     className="mt-3 mb-2"
                   />
                 ) : (
-                  <Button
-                    title={detailObj.amount ? `Pay Now (₹${detailObj.amount}) & Confirm` : 'Complete Payment'}
-                    onPress={() => {
-                      setSelectedRegistrationId(null);
-                      handleResumePayment(detailObj);
-                    }}
-                    isLoading={isResumingPayment}
-                    className="mt-3 mb-2"
-                  />
+                  <>
+                    <Button
+                      title={detailObj.amount ? `Pay Now (₹${detailObj.amount}) & Confirm` : 'Complete Payment'}
+                      onPress={() => {
+                        setSelectedRegistrationId(null);
+                        handleResumePayment(detailObj);
+                      }}
+                      isLoading={isResumingPayment}
+                      className="mt-3 mb-2"
+                    />
+
+                    <TouchableOpacity
+                      onPress={() => {
+                        const target = detailObj;
+                        setSelectedRegistrationId(null);
+                        handleDeleteRegistration(target);
+                      }}
+                      className="py-3 px-4 rounded-2xl border border-red-200 bg-red-50 flex-row items-center justify-center mb-2"
+                    >
+                      <Ionicons name="trash-outline" size={16} color="#EF4444" style={{ marginRight: 6 }} />
+                      <Typography variant="body2" weight="bold" className="font-outfit-bold text-red-600">
+                        Delete Pending Registration
+                      </Typography>
+                    </TouchableOpacity>
+                  </>
                 )}
 
                 <Button
