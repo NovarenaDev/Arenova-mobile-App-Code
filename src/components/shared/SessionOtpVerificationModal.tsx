@@ -9,7 +9,8 @@ import {
   KeyboardAvoidingView, 
   Platform, 
   TouchableWithoutFeedback, 
-  Keyboard 
+  Keyboard,
+  Text 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Button } from '@/components/ui';
@@ -174,7 +175,7 @@ export function SessionOtpVerificationModal({ visible, onClose, session, onSucce
                     <View className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 mb-4">
                       <View className="flex-row items-center justify-between mb-1.5">
                         <View className="flex-row items-center flex-1 mr-2">
-                          <Ionicons name="person-circle-outline" size={18} color="#0F2C59" className="mr-1.5" />
+                          <Ionicons name="person-circle-outline" size={18} color="#0F2C59" style={{ marginRight: 6 }} />
                           <Typography variant="subtitle2" color="secondary" weight="bold" className="font-outfit-bold text-sm" numberOfLines={1}>
                             {session?.studentName || 'Registered Student'}
                           </Typography>
@@ -189,7 +190,7 @@ export function SessionOtpVerificationModal({ visible, onClose, session, onSucce
                       </View>
 
                       <View className="flex-row items-center">
-                        <Ionicons name="time-outline" size={14} color="#64748B" className="mr-1" />
+                        <Ionicons name="time-outline" size={14} color="#64748B" style={{ marginRight: 4 }} />
                         <Typography variant="caption" color="muted" className="font-outfit text-xs">
                           {session?.date || 'Today'} {session?.time ? `• ${session.time}` : ''}
                         </Typography>
@@ -201,11 +202,17 @@ export function SessionOtpVerificationModal({ visible, onClose, session, onSucce
                       Ask the player or parent for the 4-digit code shown on their booking card to verify attendance.
                     </Typography>
 
-                    {/* 4-Digit OTP Boxes */}
+                    {/* 4-Digit OTP Boxes (uses native styles to avoid CSS-interop className calculation on each keystroke) */}
                     <TouchableOpacity 
-                      activeOpacity={1} 
+                      activeOpacity={0.9} 
                       onPress={handleBoxPress}
-                      className="flex-row justify-center items-center gap-3 mb-4"
+                      style={{
+                        flexDirection: 'row',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        gap: 12,
+                        marginBottom: 16
+                      }}
                     >
                       {[0, 1, 2, 3].map((index) => {
                         const digit = otp[index] || '';
@@ -215,23 +222,34 @@ export function SessionOtpVerificationModal({ visible, onClose, session, onSucce
                         return (
                           <View
                             key={index}
-                            className={`w-14 h-16 rounded-2xl border-2 items-center justify-center ${
-                              isFocusedBox
-                                ? 'border-[#0F2C59] bg-blue-50/50 shadow-sm'
-                                : isFilled
-                                ? 'border-[#0F2C59] bg-white'
-                                : 'border-gray-200 bg-gray-50/60'
-                            }`}
+                            style={{
+                              width: 56,
+                              height: 64,
+                              borderRadius: 16,
+                              borderWidth: 2,
+                              borderColor: isFocusedBox ? '#0F2C59' : isFilled ? '#0F2C59' : '#E2E8F0',
+                              backgroundColor: isFocusedBox ? '#EFF6FF' : isFilled ? '#FFFFFF' : '#F8FAFC',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              elevation: isFocusedBox ? 2 : 0,
+                              shadowColor: '#0F2C59',
+                              shadowOffset: { width: 0, height: 2 },
+                              shadowOpacity: isFocusedBox ? 0.12 : 0,
+                              shadowRadius: 4
+                            }}
                           >
-                            <Typography 
-                              variant="h2" 
-                              weight="bold" 
-                              className={`font-outfit-bold text-2xl ${
-                                isFilled ? 'text-[#0F2C59]' : 'text-gray-300'
-                              }`}
+                            <Text
+                              style={{
+                                fontFamily: 'Outfit_700Bold',
+                                fontSize: 26,
+                                fontWeight: '700',
+                                color: isFilled ? '#0F2C59' : '#CBD5E1',
+                                textAlign: 'center',
+                                includeFontPadding: false
+                              }}
                             >
                               {isFilled ? digit : '•'}
-                            </Typography>
+                            </Text>
                           </View>
                         );
                       })}
