@@ -6,6 +6,8 @@ import { Typography, Button } from '@/components/ui';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/services/api';
+import { useAuthStore } from '@/store';
+import { resolveSessionTime, resolveSessionDate, resolveSessionSport, resolveSessionLocation, resolveStudentName, formatSingleTime } from '@/utils/sessionFormatter';
 import { SessionOtpVerificationModal } from '@/components/shared/SessionOtpVerificationModal';
 
 export default function CoachActivityScreen() {
@@ -57,87 +59,21 @@ export default function CoachActivityScreen() {
 
   const allSessions = Array.isArray(sessionsResponse) ? sessionsResponse : [];
 
-  const formatSessionDate = (dateStr: string) => {
-    if (!dateStr) return 'Scheduled Date';
-    const date = new Date(dateStr);
-    if (!isNaN(date.getTime())) {
-      return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
-    }
-    return dateStr;
-  };
-
-  const formatSessionTime = (timeStr: string) => {
-    if (!timeStr) return '07:00 AM - 08:00 AM';
-    if (timeStr.includes('AM') || timeStr.includes('PM')) return timeStr;
-    const parts = timeStr.split(':');
-    if (parts.length >= 2) {
-      const hours = parseInt(parts[0]);
-      const minutes = parseInt(parts[1]);
-      if (!isNaN(hours) && !isNaN(minutes)) {
-        const ampm = hours >= 12 ? 'PM' : 'AM';
-        const formattedHours = hours % 12 || 12;
-        return `${formattedHours}:${minutes < 10 ? '0' + minutes : minutes} ${ampm}`;
-      }
-    }
-    return timeStr;
-  };
-
   const mapSessionToUI = (session: any) => {
     const id = session._id || session.id || Math.random().toString();
-    const studentName = 
-      session.child?.name ||
-      session.player?.name ||
-      session.childName ||
-      session.playerName ||
-      (Array.isArray(session.children) && session.children.length > 0 ? session.children.map((c: any) => c.name || c).join(', ') : '') ||
-      session.studentName || 
-      session.student?.name || 
-      session.participant?.name || 
-      session.bookedBy?.name || 
-      (session.bookedBy?.firstName ? `${session.bookedBy.firstName} ${session.bookedBy.lastName || ''}`.trim() : '') ||
-      session.user?.name || 
-      (session.user?.firstName ? `${session.user.firstName} ${session.user.lastName || ''}`.trim() : '') ||
-      'Student';
-
-    const sportTitle = 
-      session.sport || 
-      session.sportName || 
-      session.slot?.sport || 
-      session.slot?.title || 
-      session.title || 
-      'Coaching Session';
-
-    const rawDate = 
+    const coachUser = useAuthStore.getState().user;
+    const studentName = resolveStudentName(session);
+    const sportTitle = resolveSessionSport(session, coachUser);
+    const dateFormatted = resolveSessionDate(
       session.slot?.date || 
       session.date || 
       session.slotDate || 
       session.startDate || 
       session.bookingDate || 
-      session.createdAt || 
-      '';
-
-    const rawTime = 
-      session.slot?.startTime || 
-      session.startTime || 
-      session.time || 
-      session.slotTime || 
-      session.slot?.time || 
-      '';
-
-    const locationName = 
-      (typeof session.location === 'string' ? session.location : session.location?.name || session.location?.address) || 
-      session.slot?.location || 
-      session.venue || 
-      session.slot?.venue || 
-      session.stadium || 
-      session.slot?.stadium || 
-      (session.stadium?.name ? session.stadium.name : '') ||
-      (session.slot?.stadium?.name ? session.slot.stadium.name : '') ||
-      (session.venue?.name ? session.venue.name : '') ||
-      (session.locationName ? session.locationName : '') ||
-      session.arena || 
-      session.address || 
-      'Central Sports Complex • Field A';
+      session.createdAt
+    );
+    const timeFormatted = resolveSessionTime(session);
+    const locationName = resolveSessionLocation(session, coachUser);
 
     const numericPrice = 
       session.amountInr || 
@@ -178,9 +114,9 @@ export default function CoachActivityScreen() {
       sport: sportTitle,
       subtitle: `${sportTitle} • ${priceText}`,
       price: numericPrice.toString(),
-      date: formatSessionDate(rawDate),
-      time: formatSessionTime(rawTime),
-      rawDate,
+      date: dateFormatted,
+      time: timeFormatted,
+      rawDate: session.slot?.date || session.date || '',
       status: uiStatus,
       rawStatus: normStatus,
       location: locationName,
@@ -405,7 +341,8 @@ export default function CoachActivityScreen() {
                       date: booking.date,
                       time: booking.time,
                       location: booking.location,
-                      price: booking.price
+                      price: booking.price,
+                      coachSport: booking.sport
                     }
                   })}
                   className="px-3 py-2.5 rounded-xl bg-blue-50 border border-blue-200 items-center justify-center active:opacity-80"
@@ -447,7 +384,8 @@ export default function CoachActivityScreen() {
                         date: booking.date,
                         time: booking.time,
                         location: booking.location,
-                        price: booking.price
+                        price: booking.price,
+                        coachSport: booking.sport
                       }
                     })}
                   />

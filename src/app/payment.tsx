@@ -35,6 +35,7 @@ export default function PaymentScreen() {
     price, 
     coachName, 
     coachSport,
+    location,
     totalAmount 
   } = useLocalSearchParams<{ 
     slotId?: string; 
@@ -48,6 +49,7 @@ export default function PaymentScreen() {
     price?: string;
     coachName?: string;
     coachSport?: string;
+    location?: string;
     totalAmount?: string;
   }>();
 
@@ -149,6 +151,7 @@ export default function PaymentScreen() {
             sport: coachSport || 'Sports',
             date: date || 'Scheduled Date',
             time: time || 'Scheduled Time',
+            location: location || '',
             amount: computedTotal.toString(),
             txnId: data.razorpay_payment_id
           }

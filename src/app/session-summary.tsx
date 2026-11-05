@@ -8,6 +8,7 @@ import { useAuthStore } from '@/store';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/services/api';
 import { SessionOtpVerificationModal } from '@/components/shared/SessionOtpVerificationModal';
+import { resolveSessionTime, resolveSessionDate, resolveSessionSport, resolveSessionLocation, resolveStudentName } from '@/utils/sessionFormatter';
 
 export default function SessionSummaryScreen() {
   const insets = useSafeAreaInsets();
@@ -131,65 +132,34 @@ export default function SessionSummaryScreen() {
     return dStr;
   };
 
-  const resolvedDate = 
-    date || 
-    formatDateStr(existingBooking?.slot?.date) || 
-    formatDateStr(existingBooking?.date) || 
-    formatDateStr(existingBooking?.slotDate) || 
-    formatDateStr(existingBooking?.startDate) || 
-    formatDateStr(existingBooking?.bookingDate) || 
-    formatDateStr(existingBooking?.createdAt) || 
-    'Scheduled Date';
+  const coachUser = isCoach ? user : existingBooking?.coach;
 
-  const resolvedTime = 
-    time || 
-    existingBooking?.slot?.startTime || 
-    existingBooking?.startTime || 
-    existingBooking?.time || 
-    existingBooking?.slotTime || 
-    existingBooking?.slot?.time || 
-    'Scheduled Time';
+  const resolvedDate = date && date !== 'Scheduled Date' 
+    ? resolveSessionDate(date) 
+    : resolveSessionDate(
+        existingBooking?.slot?.date || 
+        existingBooking?.date || 
+        existingBooking?.slotDate || 
+        existingBooking?.startDate || 
+        existingBooking?.bookingDate || 
+        existingBooking?.createdAt
+      );
 
-  const resolvedLocation = 
-    location || 
-    (typeof existingBooking?.location === 'string' ? existingBooking.location : existingBooking?.location?.name || existingBooking?.location?.address) ||
-    existingBooking?.slot?.location || 
-    existingBooking?.venue || 
-    existingBooking?.slot?.venue || 
-    existingBooking?.stadium || 
-    existingBooking?.slot?.stadium || 
-    (existingBooking?.stadium?.name ? existingBooking.stadium.name : '') ||
-    (existingBooking?.slot?.stadium?.name ? existingBooking.slot.stadium.name : '') ||
-    (existingBooking?.venue?.name ? existingBooking.venue.name : '') ||
-    existingBooking?.locationName || 
-    existingBooking?.arena || 
-    existingBooking?.address || 
-    'Arena Sports Complex';
+  const resolvedTime = time && time !== 'Scheduled Time' && !time.includes('07:00 AM - 08:00 AM')
+    ? resolveSessionTime({ time })
+    : resolveSessionTime(existingBooking);
 
-  const resolvedStudentName = 
-    existingBooking?.child?.name ||
-    existingBooking?.player?.name ||
-    existingBooking?.childName ||
-    existingBooking?.playerName ||
-    (Array.isArray(existingBooking?.children) && existingBooking.children.length > 0 ? existingBooking.children.map((c: any) => c.name || c).join(', ') : '') ||
-    existingBooking?.student?.name || 
-    existingBooking?.studentName || 
-    studentName || 
-    existingBooking?.participant?.name || 
-    existingBooking?.bookedBy?.name || 
-    (existingBooking?.bookedBy?.firstName ? `${existingBooking.bookedBy.firstName} ${existingBooking.bookedBy.lastName || ''}`.trim() : '') ||
-    existingBooking?.user?.name || 
-    (existingBooking?.user?.firstName ? `${existingBooking.user.firstName} ${existingBooking.user.lastName || ''}`.trim() : '') ||
-    'Attendee';
+  const resolvedLocation = location && location !== 'Assigned Training Court' && location !== 'Arena Sports Complex' && !location.includes('Central Sports Complex')
+    ? location
+    : resolveSessionLocation(existingBooking, coachUser);
 
-  const resolvedSport = 
-    coachSport || 
-    existingBooking?.slot?.title || 
-    existingBooking?.slot?.sport || 
-    existingBooking?.sport || 
-    existingBooking?.sportName || 
-    existingBooking?.title || 
-    'Sports Coaching';
+  const resolvedStudentName = studentName && studentName !== 'Attendee' && studentName !== 'Student'
+    ? studentName
+    : resolveStudentName(existingBooking);
+
+  const resolvedSport = coachSport && coachSport !== 'Sports Coaching' && coachSport !== 'Sports' && coachSport !== 'Coaching Session'
+    ? coachSport
+    : resolveSessionSport(existingBooking, coachUser);
 
   const resolvedPrice = 
     price || 

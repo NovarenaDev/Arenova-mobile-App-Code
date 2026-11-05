@@ -44,7 +44,8 @@ export default function SelectDateScreen() {
 
   const coach = coachResponse?.data || coachResponse || null;
   const coachName = coach?.name || `${coach?.firstName || ''} ${coach?.lastName || ''}`.trim() || 'Coach';
-  const coachSport = coach?.sport || coach?.sports?.[0] || 'Sports';
+  const coachSport = coach?.sport || coach?.sports?.[0] || 'Badminton';
+  const coachLocation = (typeof coach?.location === 'string' ? coach.location : coach?.location?.name || coach?.location?.city || coach?.address?.city || coach?.city || 'Training Venue');
 
   const { data: slotsResponse, isLoading: isLoadingSlots } = useQuery({
     queryKey: ['coachSlots', coachId, selectedDate],
@@ -149,7 +150,8 @@ export default function SelectDateScreen() {
           time: timeFormatted,
           price: slotPrice,
           coachName,
-          coachSport
+          coachSport,
+          location: coachLocation
         }
       });
     } else {
@@ -163,6 +165,7 @@ export default function SelectDateScreen() {
           price: slotPrice,
           coachName,
           coachSport,
+          location: coachLocation,
           studentName: user?.name || 'Myself'
         }
       });

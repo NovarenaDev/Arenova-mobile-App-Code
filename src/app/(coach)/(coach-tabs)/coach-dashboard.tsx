@@ -7,6 +7,7 @@ import { useRouter, useNavigation } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store';
+import { resolveSessionTime, resolveSessionDate, resolveSessionSport, resolveSessionLocation, resolveStudentName, formatSingleTime } from '@/utils/sessionFormatter';
 
 export default function CoachDashboard() {
   const router = useRouter();
@@ -208,87 +209,21 @@ export default function CoachDashboard() {
   const metrics = dashboardData?.data?.metrics;
   const avgRating = metrics?.averageRating ?? 0;
 
-  const formatSessionDate = (dateStr: string) => {
-    if (!dateStr) return 'Scheduled Date';
-    const date = new Date(dateStr);
-    if (!isNaN(date.getTime())) {
-      return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
-    }
-    return dateStr;
-  };
-
-  const formatSessionTime = (timeStr: string) => {
-    if (!timeStr) return '07:00 AM - 08:00 AM';
-    if (timeStr.includes('AM') || timeStr.includes('PM')) return timeStr;
-    const parts = timeStr.split(':');
-    if (parts.length >= 2) {
-      const hours = parseInt(parts[0]);
-      const minutes = parseInt(parts[1]);
-      if (!isNaN(hours) && !isNaN(minutes)) {
-        const ampm = hours >= 12 ? 'PM' : 'AM';
-        const formattedHours = hours % 12 || 12;
-        return `${formattedHours}:${minutes < 10 ? '0' + minutes : minutes} ${ampm}`;
-      }
-    }
-    return timeStr;
-  };
-
   const mapSessionToUI = (session: any) => {
     const id = session._id || session.id || Math.random().toString();
-    const studentName = 
-      session.child?.name ||
-      session.player?.name ||
-      session.childName ||
-      session.playerName ||
-      (Array.isArray(session.children) && session.children.length > 0 ? session.children.map((c: any) => c.name || c).join(', ') : '') ||
-      session.studentName || 
-      session.student?.name || 
-      session.participant?.name || 
-      session.bookedBy?.name || 
-      (session.bookedBy?.firstName ? `${session.bookedBy.firstName} ${session.bookedBy.lastName || ''}`.trim() : '') ||
-      session.user?.name || 
-      (session.user?.firstName ? `${session.user.firstName} ${session.user.lastName || ''}`.trim() : '') ||
-      'Student';
-
-    const sportTitle = 
-      session.sport || 
-      session.sportName || 
-      session.slot?.sport || 
-      session.slot?.title || 
-      session.title || 
-      'Coaching Session';
-
-    const rawDate = 
+    const coachUser = useAuthStore.getState().user;
+    const studentName = resolveStudentName(session);
+    const sportTitle = resolveSessionSport(session, coachUser);
+    const dateFormatted = resolveSessionDate(
       session.slot?.date || 
       session.date || 
       session.slotDate || 
       session.startDate || 
       session.bookingDate || 
-      session.createdAt || 
-      '';
-
-    const rawTime = 
-      session.slot?.startTime || 
-      session.startTime || 
-      session.time || 
-      session.slotTime || 
-      session.slot?.time || 
-      '';
-
-    const locationName = 
-      (typeof session.location === 'string' ? session.location : session.location?.name || session.location?.address) || 
-      session.slot?.location || 
-      session.venue || 
-      session.slot?.venue || 
-      session.stadium || 
-      session.slot?.stadium || 
-      (session.stadium?.name ? session.stadium.name : '') ||
-      (session.slot?.stadium?.name ? session.slot.stadium.name : '') ||
-      (session.venue?.name ? session.venue.name : '') ||
-      (session.locationName ? session.locationName : '') ||
-      session.arena || 
-      session.address || 
-      'Central Sports Complex • Field A';
+      session.createdAt
+    );
+    const timeFormatted = resolveSessionTime(session);
+    const locationName = resolveSessionLocation(session, coachUser);
 
     const numericPrice = 
       session.amountInr || 
@@ -329,9 +264,9 @@ export default function CoachDashboard() {
       sport: sportTitle,
       subtitle: `${sportTitle} • ${priceText}`,
       price: numericPrice.toString(),
-      startedAt: session.startedAt ? formatSessionTime(session.startedAt) : undefined,
-      date: formatSessionDate(rawDate),
-      time: formatSessionTime(rawTime),
+      startedAt: session.startedAt ? formatSingleTime(session.startedAt) : undefined,
+      date: dateFormatted,
+      time: timeFormatted,
       location: locationName,
       status: uiStatus,
       rawStatus: normStatus,
@@ -713,7 +648,8 @@ export default function CoachDashboard() {
                               date: session.date,
                               time: session.time,
                               location: session.location,
-                              price: session.price
+                              price: session.price,
+                              coachSport: session.sport
                             }
                           })}
                           className="px-4 py-3 rounded-2xl bg-blue-50 border border-blue-200 items-center justify-center active:opacity-80"
@@ -734,7 +670,8 @@ export default function CoachDashboard() {
                             date: session.date,
                             time: session.time,
                             location: session.location,
-                            price: session.price
+                            price: session.price,
+                            coachSport: session.sport
                           }
                         })}
                         className="w-full py-3 rounded-2xl bg-[#0F2C59] items-center justify-center shadow-xs active:opacity-80 mt-2"
@@ -831,7 +768,8 @@ export default function CoachDashboard() {
                         date: session.date,
                         time: session.time,
                         location: session.location,
-                        price: session.price
+                        price: session.price,
+                        coachSport: session.sport
                       }
                     })}
                     className="w-full py-3 rounded-2xl bg-[#0F2C59] items-center justify-center shadow-xs active:opacity-80"

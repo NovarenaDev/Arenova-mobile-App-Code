@@ -18,6 +18,7 @@ export default function BookingConfirmedScreen() {
     sport, 
     date, 
     time, 
+    location,
     amount, 
     txnId 
   } = useLocalSearchParams<{
@@ -28,6 +29,7 @@ export default function BookingConfirmedScreen() {
     sport?: string;
     date?: string;
     time?: string;
+    location?: string;
     amount?: string;
     txnId?: string;
   }>();
@@ -37,6 +39,7 @@ export default function BookingConfirmedScreen() {
   const displaySport = sport || 'Sports';
   const displayDate = date || 'Confirmed Date';
   const displayTime = time || 'Scheduled Slot';
+  const displayLocation = location || 'Training Venue';
   const displayAmount = amount || '400';
   const displayTxnId = txnId || ("TXN" + Math.random().toString(36).substring(2, 10).toUpperCase());
 
@@ -133,7 +136,7 @@ export default function BookingConfirmedScreen() {
                   Location
                 </Typography>
                 <Typography variant="body2" color="text" weight="bold" className="font-outfit-bold">
-                  Sports Arena
+                  {displayLocation}
                 </Typography>
               </View>
             </View>
