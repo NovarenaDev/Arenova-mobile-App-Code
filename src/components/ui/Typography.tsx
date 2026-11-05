@@ -14,6 +14,40 @@ interface TypographyProps extends TextProps {
   children: React.ReactNode;
 }
 
+const sanitizeTypographyChildren = (child: React.ReactNode): React.ReactNode => {
+  if (child === null || child === undefined || typeof child === 'boolean') {
+    return child;
+  }
+  if (typeof child === 'string' || typeof child === 'number') {
+    return child;
+  }
+  if (React.isValidElement(child)) {
+    return child;
+  }
+  if (Array.isArray(child)) {
+    return React.Children.map(child, sanitizeTypographyChildren);
+  }
+  if (typeof child === 'object') {
+    const obj: any = child;
+    if (obj.city || obj.street || obj.addressLine1 || obj.address) {
+      const parts = [
+        obj.addressLine1 || obj.street || (typeof obj.address === 'string' ? obj.address : null),
+        obj.city,
+        obj.state,
+        obj.postalCode || obj.zipCode,
+      ].filter(Boolean);
+      return parts.join(', ') || obj.city || '';
+    }
+    if (typeof obj.name === 'string') return obj.name;
+    if (typeof obj.title === 'string') return obj.title;
+    if (typeof obj.label === 'string') return obj.label;
+    if (typeof obj.value === 'string') return obj.value;
+    if (typeof obj.message === 'string') return obj.message;
+    return '';
+  }
+  return String(child);
+};
+
 const getVariantClasses = (variant: TypographyVariant) => {
   switch (variant) {
     case 'h1': return 'text-4xl font-bold'; // 36px
@@ -67,6 +101,7 @@ export const Typography: React.FC<TypographyProps> = ({
   }
 
   const alignClass = `text-${align}`;
+  const safeChildren = sanitizeTypographyChildren(children);
 
   return (
     <Text
@@ -74,7 +109,7 @@ export const Typography: React.FC<TypographyProps> = ({
       style={[{ includeFontPadding: false, paddingRight: 4 }, props.style]}
       {...props}
     >
-      {children}
+      {safeChildren}
     </Text>
   );
 };

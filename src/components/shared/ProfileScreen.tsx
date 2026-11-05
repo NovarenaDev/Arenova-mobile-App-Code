@@ -30,6 +30,52 @@ interface MenuDetail {
   borderColor: string;
 }
 
+const sanitizeString = (val: any, fallback = 'N/A'): string => {
+  if (val === null || val === undefined) return fallback;
+  if (typeof val === 'string') return val.trim() || fallback;
+  if (typeof val === 'number') return String(val);
+  if (typeof val === 'boolean') return val ? 'Yes' : 'No';
+  if (typeof val === 'object') {
+    if (val.city || val.street || val.addressLine1 || val.address || val.formattedAddress) {
+      const parts = [
+        val.addressLine1 || val.street || (typeof val.address === 'string' ? val.address : null),
+        val.city,
+        val.state,
+        val.postalCode || val.zipCode,
+        val.country
+      ].filter(Boolean);
+      if (parts.length > 0) return parts.join(', ');
+      if (val.city) return String(val.city);
+    }
+    if (typeof val.name === 'string') return val.name;
+    if (typeof val.title === 'string') return val.title;
+    if (typeof val.label === 'string') return val.label;
+    if (typeof val.value === 'string') return val.value;
+    return fallback;
+  }
+  return fallback;
+};
+
+const resolveLocationStr = (raw: any): string => {
+  if (!raw) return 'N/A';
+  if (typeof raw === 'string') return raw.trim() || 'N/A';
+  if (typeof raw === 'object') {
+    if (typeof raw.city === 'string' && raw.city.trim()) {
+      return [raw.street || raw.addressLine1, raw.city, raw.state].filter(Boolean).join(', ');
+    }
+    if (typeof raw.address === 'string' && raw.address.trim()) {
+      return raw.address.trim();
+    }
+    if (typeof raw.formattedAddress === 'string') {
+      return raw.formattedAddress;
+    }
+    if (Array.isArray(raw.coordinates)) {
+      return 'Current Location';
+    }
+  }
+  return 'N/A';
+};
+
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
@@ -109,11 +155,12 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     if (profile && user?.role === 'coach') {
-      setName(profile.name || '');
-      setPhone(profile.phone || profile.phoneNumber || '');
+      setName(sanitizeString(profile.name, ''));
+      setPhone(sanitizeString(profile.phone || profile.phoneNumber, ''));
       setExperience(profile.profile?.experience ? profile.profile.experience.toString() : '');
-      setLocation(profile.profile?.address?.city || '');
-      setDescription(profile.profile?.description || profile.profile?.bio || '');
+      const cLoc = resolveLocationStr(profile.profile?.address?.city || profile.profile?.address || user?.location);
+      setLocation(cLoc === 'N/A' ? '' : cLoc);
+      setDescription(sanitizeString(profile.profile?.description || profile.profile?.bio, ''));
       const rawSports = profile.profile?.sports;
       setSports(Array.isArray(rawSports) ? rawSports.join(', ') : (typeof rawSports === 'string' ? rawSports : ''));
       const rawAv = profile.avatar || profile.profile?.avatar;
@@ -123,11 +170,11 @@ export default function ProfileScreen() {
       }
     } else if (userProfile && user?.role !== 'coach') {
       const uName = userProfile.name || (userProfile.firstName ? `${userProfile.firstName} ${userProfile.lastName || ''}`.trim() : user?.name || '');
-      setName(typeof uName === 'string' ? uName : '');
+      setName(sanitizeString(uName, ''));
       const uPhone = userProfile.phone || userProfile.phoneNumber || user?.phone || '';
-      setPhone(typeof uPhone === 'string' ? uPhone : '');
-      const uLoc = userProfile.address || userProfile.location || user?.location || '';
-      setLocation(typeof uLoc === 'string' ? uLoc : '');
+      setPhone(sanitizeString(uPhone, ''));
+      const uLoc = resolveLocationStr(userProfile.address || userProfile.location || user?.location);
+      setLocation(uLoc === 'N/A' ? '' : uLoc);
       const rawAv = userProfile.avatar;
       const avUrl = typeof rawAv === 'string' ? rawAv : rawAv?.url;
       if (avUrl && typeof avUrl === 'string') {
@@ -145,26 +192,43 @@ export default function ProfileScreen() {
       ? rawSports.split(',').map((s: string) => s.trim()).filter(Boolean)
       : [];
 
+  const rawLoc = user?.role === 'coach' 
+    ? (profile?.profile?.address?.city || profile?.profile?.address || user?.location) 
+    : (userProfile?.address || userProfile?.location || user?.location);
+
   const displayProfile = {
-    name: user?.role === 'coach' 
-      ? (profile?.name || user?.name || 'Coach Name') 
-      : (userProfile?.name || (userProfile?.firstName ? `${userProfile.firstName} ${userProfile.lastName || ''}`.trim() : user?.name || (user?.role === 'parent' ? 'Parent Profile' : 'Player Profile'))),
-    email: user?.role === 'coach' 
-      ? (profile?.email || user?.email || 'N/A') 
-      : (userProfile?.email || user?.email || 'N/A'),
-    phone: user?.role === 'coach' 
-      ? (profile?.phone || profile?.phoneNumber || user?.phone || '') 
-      : (userProfile?.phone || userProfile?.phoneNumber || user?.phone || ''),
-    location: user?.role === 'coach' 
-      ? (profile?.profile?.address?.city || user?.location || 'N/A') 
-      : (userProfile?.address || user?.location || 'N/A'),
-    experience: user?.role === 'coach' 
-      ? (profile?.profile?.experience ? `${profile.profile.experience} Years` : (user?.experience || 'N/A')) 
-      : (user?.experience || 'N/A'),
+    name: sanitizeString(
+      user?.role === 'coach' 
+        ? (profile?.name || user?.name) 
+        : (userProfile?.name || (userProfile?.firstName ? `${userProfile.firstName} ${userProfile.lastName || ''}`.trim() : user?.name)),
+      user?.role === 'parent' ? 'Parent Profile' : (user?.role === 'coach' ? 'Coach Name' : 'Player Profile')
+    ),
+    email: sanitizeString(
+      user?.role === 'coach' 
+        ? (profile?.email || user?.email) 
+        : (userProfile?.email || user?.email),
+      'N/A'
+    ),
+    phone: sanitizeString(
+      user?.role === 'coach' 
+        ? (profile?.phone || profile?.phoneNumber || user?.phone) 
+        : (userProfile?.phone || userProfile?.phoneNumber || user?.phone),
+      ''
+    ),
+    location: resolveLocationStr(rawLoc),
+    experience: sanitizeString(
+      user?.role === 'coach' 
+        ? (profile?.profile?.experience ? `${profile.profile.experience} Years` : user?.experience) 
+        : user?.experience,
+      'N/A'
+    ),
     sports: resolvedSports,
-    description: user?.role === 'coach' 
-      ? (profile?.profile?.description || profile?.profile?.bio || user?.description || 'N/A') 
-      : (user?.description || 'N/A'),
+    description: sanitizeString(
+      user?.role === 'coach' 
+        ? (profile?.profile?.description || profile?.profile?.bio || user?.description) 
+        : user?.description,
+      'N/A'
+    ),
   };
 
   const descriptionWordCount = typeof description === 'string' && description.trim() !== '' ? description.trim().split(/\s+/).length : 0;
@@ -756,7 +820,7 @@ export default function ProfileScreen() {
                       <View className="flex-1">
                         <Typography variant="caption" color="muted" className="font-outfit">Location/City</Typography>
                         <Typography variant="body2" color="secondary" weight="medium" className="mt-0.5 font-outfit">
-                          {displayProfile.location}
+                          {resolveLocationStr(displayProfile.location)}
                         </Typography>
                       </View>
                     </View>
@@ -782,7 +846,7 @@ export default function ProfileScreen() {
                       <View className="flex-1">
                         <Typography variant="caption" color="muted" className="font-outfit">Coaching Experience</Typography>
                         <Typography variant="body2" color="secondary" weight="medium" className="mt-0.5 font-outfit">
-                          {displayProfile.experience}
+                          {sanitizeString(displayProfile.experience, 'N/A')}
                         </Typography>
                       </View>
                     </View>
