@@ -1,0 +1,12 @@
+diff --git a/node_modules/ws/index.js b/node_modules/ws/index.js
+index 722c786..18ffc9f 100644
+--- a/node_modules/ws/index.js
++++ b/node_modules/ws/index.js
+@@ -6,5 +6,7 @@ WebSocket.createWebSocketStream = require('./lib/stream');
+ WebSocket.Server = require('./lib/websocket-server');
+ WebSocket.Receiver = require('./lib/receiver');
+ WebSocket.Sender = require('./lib/sender');
++WebSocket.WebSocket = WebSocket;
++WebSocket.WebSocketServer = WebSocket.Server;
+ 
+ module.exports = WebSocket;
