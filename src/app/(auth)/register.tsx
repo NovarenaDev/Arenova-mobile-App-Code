@@ -120,7 +120,6 @@ export default function RegisterScreen() {
     return clean.trim();
   };
 
-  // Fetch sports dynamically from backend
   const { data: sportsResponse } = useQuery({
     queryKey: ['activeSports'],
     queryFn: async () => {
@@ -202,7 +201,6 @@ export default function RegisterScreen() {
           }
         }
       } else {
-        // Coach Email Registration
         if (!email.trim()) {
           newErrors.email = 'Email is required';
         } else if (!validateEmail(email)) {
@@ -253,7 +251,6 @@ export default function RegisterScreen() {
         }
       }
     } else {
-      // Parent / Athlete registration
       const cleanPhone = formatPhoneForApi(phone);
       if (!cleanPhone) {
         newErrors.phone = 'Phone number is required';
@@ -377,7 +374,6 @@ export default function RegisterScreen() {
           }
         }
       } else {
-        // Coach Email Verification
         const cleanEmail = email.trim().toLowerCase();
         try {
           const emailRes = await api.post('/auth/coach/verify-email-otp', {
@@ -742,7 +738,6 @@ export default function RegisterScreen() {
                 )}
               </View>
 
-              {/* Coach Registration Method Toggle */}
               <View className="flex-row bg-gray-200 rounded-full p-1 mb-6">
                 <TouchableOpacity 
                   onPress={() => {
@@ -947,7 +942,6 @@ export default function RegisterScreen() {
             </View>
           )}
 
-          {/* Verification View */}
           {registrationPhase === 'verify' && (
             <View className="mb-8">
               <View className="items-center mb-6">
@@ -973,7 +967,6 @@ export default function RegisterScreen() {
                 </TouchableOpacity>
               </View>
 
-              {/* OTP Card */}
               <View className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 mb-6">
                 <View className="flex-row items-center justify-between mb-3">
                   <View className="flex-row items-center flex-1">
@@ -1036,7 +1029,6 @@ export default function RegisterScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Modern Welcome Success Modal Card */}
       <Modal
         visible={showWelcomeModal}
         transparent
@@ -1061,7 +1053,6 @@ export default function RegisterScreen() {
               borderColor: 'rgba(255, 81, 0, 0.15)'
             }}
           >
-            {/* Top Success Badge */}
             <View 
               style={{ 
                 width: 72, 
@@ -1078,7 +1069,6 @@ export default function RegisterScreen() {
               <Ionicons name="checkmark-circle" size={44} color="#10B981" />
             </View>
 
-            {/* Title & Role */}
             <Typography variant="h2" color="secondary" weight="bold" className="font-outfit-bold text-2xl text-center mb-1">
               Welcome to Arenova!
             </Typography>
@@ -1095,7 +1085,6 @@ export default function RegisterScreen() {
                 : 'Your profile is active! You can now explore top coaches and book your training sessions.'}
             </Typography>
 
-            {/* User Details Summary Card */}
             <View className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 mb-6 space-y-2.5">
               <View className="flex-row items-center justify-between">
                 <Typography variant="caption" color="muted" className="font-outfit">Full Name</Typography>
@@ -1117,7 +1106,6 @@ export default function RegisterScreen() {
               </View>
             </View>
 
-            {/* Home Navigation Button */}
             <TouchableOpacity
               style={{ 
                 width: '100%', 

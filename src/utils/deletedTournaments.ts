@@ -3,9 +3,6 @@ import { safeStorage } from '@/services/storage';
 const STORAGE_KEY = 'deleted_pending_tournament_registrations';
 const CONFIRMED_KEY = 'locally_confirmed_tournament_registrations';
 
-/**
- * Retrieves the list of pending tournament registration IDs that the user has chosen to delete.
- */
 export const getDeletedPendingTournamentIds = async (): Promise<string[]> => {
   try {
     const raw = await safeStorage.getItem(STORAGE_KEY);
@@ -17,9 +14,6 @@ export const getDeletedPendingTournamentIds = async (): Promise<string[]> => {
   }
 };
 
-/**
- * Persists a deleted pending registration ID so it never reappears on the frontend.
- */
 export const markPendingTournamentAsDeleted = async (regId: string): Promise<void> => {
   if (!regId) return;
   try {
@@ -33,9 +27,6 @@ export const markPendingTournamentAsDeleted = async (regId: string): Promise<voi
   }
 };
 
-/**
- * Persists multiple deleted pending registration IDs at once (e.g., Clear All Pending).
- */
 export const markMultiplePendingTournamentsAsDeleted = async (regIds: string[]): Promise<void> => {
   if (!regIds || regIds.length === 0) return;
   try {
@@ -47,9 +38,6 @@ export const markMultiplePendingTournamentsAsDeleted = async (regIds: string[]):
   }
 };
 
-/**
- * Clears a registration from deleted list if user successfully pays/registers for it later.
- */
 export const unmarkPendingTournamentAsDeleted = async (regId: string): Promise<void> => {
   if (!regId) return;
   try {
@@ -61,9 +49,6 @@ export const unmarkPendingTournamentAsDeleted = async (regId: string): Promise<v
   }
 };
 
-/**
- * Retrieves registration and tournament IDs that have been confirmed through checkout.
- */
 export const getConfirmedTournamentIds = async (): Promise<string[]> => {
   try {
     const raw = await safeStorage.getItem(CONFIRMED_KEY);
@@ -75,10 +60,6 @@ export const getConfirmedTournamentIds = async (): Promise<string[]> => {
   }
 };
 
-/**
- * Marks a tournament registration as confirmed in local storage so it displays in Confirmed tab
- * even if the backend database status update is delayed.
- */
 export const markTournamentAsConfirmed = async (regId: string, tournamentId?: string): Promise<void> => {
   try {
     const list = await getConfirmedTournamentIds();
@@ -92,5 +73,3 @@ export const markTournamentAsConfirmed = async (regId: string, tournamentId?: st
 };
 
 export * from './tournamentHelpers';
-
-

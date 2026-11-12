@@ -145,7 +145,6 @@ export default function NotificationsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#EEF3F9]">
-      {/* Header */}
       <View className="px-4 py-4 flex-row items-center justify-between bg-white border-b border-gray-100 shadow-sm z-10">
         <View className="flex-row items-center">
           <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2 mr-2">
@@ -169,7 +168,6 @@ export default function NotificationsScreen() {
         )}
       </View>
 
-      {/* Tabs */}
       <View className="flex-row bg-white border-b border-gray-100 px-4">
         <TouchableOpacity 
           onPress={() => setFilter('all')} 
@@ -226,7 +224,6 @@ export default function NotificationsScreen() {
                 }}
                 className={`bg-white rounded-2xl p-4 flex-row mb-4 shadow-sm border relative overflow-hidden ${!item.isRead ? 'border-primary/20 bg-white' : 'border-transparent'}`}
               >
-                {/* Unread indicator dot */}
                 {!item.isRead && (
                   <View className="absolute top-4 left-4 w-2.5 h-2.5 rounded-full bg-primary z-10" />
                 )}
@@ -257,7 +254,6 @@ export default function NotificationsScreen() {
                   </Typography>
                 </View>
                 
-                {/* Delete button */}
                 <TouchableOpacity 
                   onPress={() => setNotificationToDelete(item._id)}
                   className="p-1 justify-center items-center"
@@ -292,7 +288,6 @@ export default function NotificationsScreen() {
           ListEmptyComponent={renderEmptyComponent}
         />
       )}
-      {/* Modern Confirm Modal for Mark All Read */}
       <ConfirmModal
         visible={isMarkAllModalVisible}
         onClose={() => setIsMarkAllModalVisible(false)}
@@ -309,7 +304,6 @@ export default function NotificationsScreen() {
         isLoading={markAllReadMutation.isPending}
       />
 
-      {/* Modern Confirm Modal for Delete Notification */}
       <ConfirmModal
         visible={!!notificationToDelete}
         onClose={() => setNotificationToDelete(null)}

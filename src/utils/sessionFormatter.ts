@@ -1,11 +1,5 @@
 import { useAuthStore } from '@/store';
 
-/**
- * Utility functions for accurately parsing and displaying session booking details.
- * Eliminates dummy fallback data and resolves exact times (e.g. 6:00 PM - 7:00 PM),
- * accurate locations, exact booked session titles & sports (Tennis Coaching, Badminton, etc.), and attendee names.
- */
-
 export const formatSingleTime = (t: string | Date | number | undefined | null): string => {
   if (!t) return '';
   const s = String(t).trim();
@@ -15,7 +9,6 @@ export const formatSingleTime = (t: string | Date | number | undefined | null): 
     return s;
   }
 
-  // ISO timestamp (e.g. "2026-11-05T18:00:00.000Z")
   if (s.includes('T')) {
     const d = new Date(s);
     if (!isNaN(d.getTime())) {
@@ -27,7 +20,6 @@ export const formatSingleTime = (t: string | Date | number | undefined | null): 
     }
   }
 
-  // 24-hr format like "18:00" or "09:30" or "18:00:00"
   if (s.includes(':')) {
     const parts = s.split(':');
     const h = parseInt(parts[0], 10);
@@ -40,7 +32,6 @@ export const formatSingleTime = (t: string | Date | number | undefined | null): 
     }
   }
 
-  // Single hour number like 18 or "18"
   const num = Number(s);
   if (!isNaN(num) && num >= 0 && num <= 24) {
     const ampm = num >= 12 ? 'PM' : 'AM';
@@ -54,7 +45,6 @@ export const formatSingleTime = (t: string | Date | number | undefined | null): 
 export const resolveSessionTime = (session: any): string => {
   if (!session) return 'Time TBD';
 
-  // 1. Direct formatted range string (e.g. "18:00 - 19:00", "06:00 PM - 07:00 PM", "6pm - 7pm")
   const directRangeCandidates = [
     session.timeRange,
     session.timing,
@@ -84,7 +74,6 @@ export const resolveSessionTime = (session: any): string => {
     }
   }
 
-  // 2. Separate start & end fields on session, slot, or schedule
   const rawStart = 
     session.startTime || 
     session.start_time || 
@@ -117,7 +106,6 @@ export const resolveSessionTime = (session: any): string => {
     if (startFormatted) return startFormatted;
   }
 
-  // 3. If rawStart is found alone, format it and compute 1-hour session window
   if (rawStart) {
     const startFormatted = formatSingleTime(rawStart);
     if (startFormatted) {
@@ -137,7 +125,6 @@ export const resolveSessionTime = (session: any): string => {
     }
   }
 
-  // 4. Check ISO timestamp dates for time (e.g. session.date: "2026-11-05T18:00:00.000Z")
   const dateCandidates = [session.date, session.startDate, session.bookingDate, session.slot?.date, session.createdAt];
   for (const dVal of dateCandidates) {
     if (typeof dVal === 'string' && dVal.includes('T')) {
@@ -151,7 +138,6 @@ export const resolveSessionTime = (session: any): string => {
     }
   }
 
-  // 5. Direct single session.time string if valid
   if (typeof session.time === 'string' && session.time.trim() && session.time !== 'Scheduled Time' && session.time !== 'Time TBD') {
     const clean = formatSingleTime(session.time);
     if (clean) return clean;
@@ -166,7 +152,6 @@ export const resolveSessionDate = (dateVal: any): string => {
     const trimmed = dateVal.trim();
     if (trimmed === 'Scheduled Date') return trimmed;
 
-    // Parse YYYY-MM-DD cleanly without timezone offset shift
     const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
     if (match) {
       const y = parseInt(match[1], 10);
@@ -241,7 +226,6 @@ export const resolveSessionSport = (session: any, coachUser?: any): string => {
     return (fallback && fallback.toLowerCase() !== 'sports') ? fallback : 'Tennis';
   }
 
-  // 1. Direct sport fields on session, slot, program, coach, or schedule
   const candidates = [
     session.sport,
     session.sportName,
@@ -273,7 +257,6 @@ export const resolveSessionSport = (session: any, coachUser?: any): string => {
     }
   }
 
-  // 2. Extract sport name from session/slot title (e.g. "Tennis Coaching" -> "Tennis")
   const title = session.title || session.sessionTitle || session.slot?.title || session.schedule?.title || session.program?.title;
   if (typeof title === 'string' && title.trim()) {
     const knownSports = ['Tennis', 'Badminton', 'Football', 'Basketball', 'Cricket', 'Swimming', 'Table Tennis', 'Squash', 'Yoga', 'Fitness', 'Martial Arts', 'Athletics', 'Gym', 'Boxing', 'Volleyball', 'Golf'];
@@ -288,7 +271,6 @@ export const resolveSessionSport = (session: any, coachUser?: any): string => {
     }
   }
 
-  // 3. Fallback to coach's registered sports or specialties
   if (effectiveCoach?.sports?.[0] && effectiveCoach.sports[0].toLowerCase() !== 'sports') {
     return effectiveCoach.sports[0];
   }
@@ -318,7 +300,6 @@ export const resolveSessionLocation = (session: any, coachUser?: any): string =>
     return coachUser?.location || 'Training Venue';
   }
 
-  // 1. Direct location string
   const loc = session.location;
   if (
     typeof loc === 'string' && 
@@ -329,7 +310,6 @@ export const resolveSessionLocation = (session: any, coachUser?: any): string =>
     return loc.trim();
   }
 
-  // 2. Location object with address/venue/city/name
   if (loc && typeof loc === 'object') {
     const parts = [loc.name, loc.venue, loc.stadium, loc.court, loc.address, loc.city].filter(
       p => typeof p === 'string' && p.trim() && !p.includes('Central Sports Complex') && !p.includes('Arena Sports Complex')
@@ -337,7 +317,6 @@ export const resolveSessionLocation = (session: any, coachUser?: any): string =>
     if (parts.length > 0) return parts.slice(0, 2).join(' • ');
   }
 
-  // 3. Slot location
   const slotLoc = session.slot?.location;
   if (
     typeof slotLoc === 'string' && 
@@ -354,7 +333,6 @@ export const resolveSessionLocation = (session: any, coachUser?: any): string =>
     if (parts.length > 0) return parts.slice(0, 2).join(' • ');
   }
 
-  // 4. Specific named venues on session or slot
   const venueCandidates = [
     session.venue?.name || (typeof session.venue === 'string' ? session.venue : null),
     session.slot?.venue?.name || (typeof session.slot?.venue === 'string' ? session.slot.venue : null),
@@ -381,7 +359,6 @@ export const resolveSessionLocation = (session: any, coachUser?: any): string =>
     }
   }
 
-  // 5. Coach's registered city or location
   if (coachUser?.location && typeof coachUser.location === 'string' && coachUser.location.trim()) {
     return coachUser.location.trim();
   }

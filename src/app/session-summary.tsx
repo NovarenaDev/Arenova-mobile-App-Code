@@ -303,7 +303,6 @@ export default function SessionSummaryScreen() {
           </View>
         ) : (
           <>
-            {/* Status overview badges */}
             {!isCheckoutMode && (
               <View className="flex-row flex-wrap gap-2 mb-4">
                 <View className={`px-3 py-1.5 rounded-full ${
@@ -343,7 +342,6 @@ export default function SessionSummaryScreen() {
               </View>
             )}
 
-            {/* Attendance OTP Card for Player / Parent */}
             {!isCoach && !isCheckoutMode && parentAttendanceOtp ? (
               <View className="bg-white rounded-2xl p-5 mb-4 shadow-sm border-l-4 border-[#FF5100]">
                 <Typography variant="subtitle1" color="secondary" weight="bold" className="font-outfit-bold mb-1">
@@ -360,7 +358,6 @@ export default function SessionSummaryScreen() {
               </View>
             ) : null}
 
-            {/* Session & Coach Info Card */}
             <View className="bg-white rounded-2xl p-5 mb-4 shadow-sm border border-gray-50">
               <View className="flex-row items-center border-b border-gray-100 pb-4 mb-4">
                 <View className="w-14 h-14 rounded-full bg-[#F5E6D3] mr-4 items-center justify-center">
@@ -411,7 +408,6 @@ export default function SessionSummaryScreen() {
               </View>
             </View>
 
-            {/* Pricing details */}
             <View className="bg-white rounded-2xl p-5 mb-4 shadow-sm border border-gray-50">
               <View className="flex-row justify-between items-center mb-3">
                 <Typography variant="body1" color="text" className="font-outfit">
@@ -431,7 +427,6 @@ export default function SessionSummaryScreen() {
               </View>
             </View>
 
-            {/* Official Invoice Card */}
             {!isCoach && isPaid && (
               <View className="bg-white rounded-2xl p-4 mb-4 shadow-sm border border-gray-100 flex-row justify-between items-center">
                 <View className="flex-row items-center flex-1 mr-3">
@@ -469,7 +464,6 @@ export default function SessionSummaryScreen() {
         )}
       </ScrollView>
 
-      {/* Coach OTP Modal */}
       <SessionOtpVerificationModal
         visible={showOtpVerifyModal}
         session={{
@@ -493,7 +487,6 @@ export default function SessionSummaryScreen() {
         }}
       />
 
-      {/* Customer Dispute Modal */}
       <Modal visible={showDisputeModal} transparent animationType="slide" onRequestClose={() => setShowDisputeModal(false)}>
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <View className="flex-1 bg-black/60 justify-end">
@@ -554,7 +547,6 @@ export default function SessionSummaryScreen() {
         </TouchableWithoutFeedback>
       </Modal>
 
-      {/* Coach Cancel Group Modal */}
       <Modal visible={showCoachCancelModal} transparent animationType="slide" onRequestClose={() => setShowCoachCancelModal(false)}>
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <View className="flex-1 bg-black/60 justify-end">
@@ -598,7 +590,6 @@ export default function SessionSummaryScreen() {
         </TouchableWithoutFeedback>
       </Modal>
 
-      {/* Coach No-Players Modal */}
       <Modal visible={showNoPlayersModal} transparent animationType="slide" onRequestClose={() => setShowNoPlayersModal(false)}>
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <View className="flex-1 bg-black/60 justify-end">
@@ -637,7 +628,6 @@ export default function SessionSummaryScreen() {
         </TouchableWithoutFeedback>
       </Modal>
 
-      {/* Bottom Actions */}
       <View className="p-4 bg-white border-t border-gray-100" style={{ paddingBottom: Math.max(insets.bottom + 16, 28) }}>
         {isCoach ? (
           (statusParam === 'confirmed' || statusParam === 'accepted') ? (

@@ -13,7 +13,6 @@ export default function BookingConfirmedScreen() {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
 
-  // Strict Role Guard: Coaches cannot access player booking confirmation
   useEffect(() => {
     if (user?.role === 'coach') {
       Alert.alert(
@@ -70,7 +69,6 @@ export default function BookingConfirmedScreen() {
     <SafeAreaView className="flex-1 bg-white">
       <ScrollView showsVerticalScrollIndicator={false} className="flex-1 px-4 pt-12" contentContainerStyle={{ flexGrow: 1, paddingBottom: Math.max(insets.bottom + 40, 60) }}>
         
-        {/* Success Header */}
         <View className="items-center mb-10">
           <View className="w-24 h-24 rounded-full items-center justify-center mb-6 relative" style={{ backgroundColor: '#4B9C73' }}>
             <Ionicons name="checkmark" size={48} color="white" />
@@ -86,7 +84,6 @@ export default function BookingConfirmedScreen() {
           </Typography>
         </View>
 
-        {/* Booking Details Card */}
         <View className="bg-white rounded-2xl p-5 mb-4 shadow-sm border border-gray-100">
           <View className="flex-row items-center border-b border-gray-100 pb-4 mb-4">
             <View className="w-12 h-12 rounded-full mr-4 items-center justify-center" style={{ backgroundColor: '#F5E6D3' }}>
@@ -166,7 +163,6 @@ export default function BookingConfirmedScreen() {
           </View>
         </View>
 
-        {/* Attendance OTP Card */}
         {attendanceOtp ? (
           <View className="bg-[#FFF2EB] rounded-2xl p-5 mb-4 border border-[#FFD4C2] items-center">
             <Typography variant="caption" color="primary" weight="bold" className="uppercase tracking-wider mb-1">
@@ -181,7 +177,6 @@ export default function BookingConfirmedScreen() {
           </View>
         ) : null}
 
-        {/* Payment Success Card */}
         <View className="bg-white rounded-2xl p-5 mb-8 shadow-sm border border-gray-100">
           <View className="flex-row items-center mb-6">
             <Ionicons name="checkmark-circle-outline" size={20} color="#4B9C73" className="mr-2" />

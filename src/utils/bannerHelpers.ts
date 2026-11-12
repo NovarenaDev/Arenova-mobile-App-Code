@@ -41,7 +41,6 @@ export const normalizeBanners = (
     const rawImage = b.imageUrl || b.image || b.bannerUrl || b.photo || b.posterUrl || b.mediaUrl;
     let rawRoute = b.link || b.route || b.targetUrl || b.actionUrl || b.url || defaultRoute;
 
-    // Strict role sanitization: purge cross-role routes at ingestion
     if (userRole && !isRoutePermittedForRole(rawRoute, userRole)) {
       rawRoute = '';
     }
@@ -75,7 +74,6 @@ export const handleBannerNavigation = (
 
   const routeStr = banner.route.trim();
 
-  // Strict role navigation boundary assertion
   if (!assertRoleNavigation(routeStr, userRole)) {
     return;
   }

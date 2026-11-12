@@ -77,7 +77,6 @@ export function SessionOtpVerificationModal({ visible, onClose, session, onSucce
     setIsVerifying(true);
 
     try {
-      // Primary coach session start endpoint
       await api.put(`/coach-app/sessions/${sessionId}/start`, { otp: trimmedOtp });
       setIsVerifying(false);
       setIsSuccess(true);
@@ -86,7 +85,6 @@ export function SessionOtpVerificationModal({ visible, onClose, session, onSucce
         onClose();
       }, 1200);
     } catch (err: any) {
-      // Try fallback endpoint if PUT is not supported or 404
       if (err?.response?.status === 404) {
         try {
           await api.post(`/coach-app/sessions/${sessionId}/start`, { otp: trimmedOtp });
@@ -98,7 +96,6 @@ export function SessionOtpVerificationModal({ visible, onClose, session, onSucce
           }, 1200);
           return;
         } catch (_) {
-          // Fall through to error handler
         }
       }
 
@@ -158,7 +155,6 @@ export function SessionOtpVerificationModal({ visible, onClose, session, onSucce
                 className="w-full bg-white rounded-[32px] p-6 shadow-2xl border border-gray-100"
                 style={{ elevation: 24 }}
               >
-                {/* Header */}
                 <View className="flex-row items-center justify-between pb-4 border-b border-gray-100 mb-4">
                   <View className="flex-row items-center flex-1 pr-2">
                     <View className="w-11 h-11 rounded-2xl bg-orange-50 border border-orange-200/80 items-center justify-center mr-3">
@@ -199,7 +195,6 @@ export function SessionOtpVerificationModal({ visible, onClose, session, onSucce
                   </View>
                 ) : (
                   <View>
-                    {/* Session Details Card */}
                     <View className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 mb-4">
                       <View className="flex-row items-center justify-between mb-1.5">
                         <View className="flex-row items-center flex-1 mr-2">
@@ -225,12 +220,10 @@ export function SessionOtpVerificationModal({ visible, onClose, session, onSucce
                       </View>
                     </View>
 
-                    {/* Instruction */}
                     <Typography variant="caption" color="muted" align="center" className="font-outfit text-xs text-gray-500 mb-4 px-2 leading-4">
                       Ask the player or parent for the 4-digit code shown on their booking card to verify attendance.
                     </Typography>
 
-                    {/* 4-Digit OTP Boxes (uses native styles to avoid CSS-interop className calculation on each keystroke) */}
                     <TouchableOpacity 
                       activeOpacity={0.9} 
                       onPress={handleBoxPress}
@@ -283,7 +276,6 @@ export function SessionOtpVerificationModal({ visible, onClose, session, onSucce
                       })}
                     </TouchableOpacity>
 
-                    {/* Hidden Native TextInput */}
                     <TextInput
                       ref={inputRef}
                       value={otp}
@@ -298,7 +290,6 @@ export function SessionOtpVerificationModal({ visible, onClose, session, onSucce
                       caretHidden
                     />
 
-                    {/* Error Banner */}
                     {errorMsg ? (
                       <View className="mb-4 bg-red-50 border border-red-200 rounded-xl p-2.5 flex-row items-center">
                         <Ionicons name="alert-circle" size={16} color="#EF4444" style={{ marginRight: 6 }} />
@@ -310,7 +301,6 @@ export function SessionOtpVerificationModal({ visible, onClose, session, onSucce
                       <View className="h-2" />
                     )}
 
-                    {/* Verify & Start Button */}
                     <Button
                       title={isVerifying ? 'Verifying Code...' : 'Verify & Start Session'}
                       onPress={handleVerifyOtp}
@@ -320,7 +310,6 @@ export function SessionOtpVerificationModal({ visible, onClose, session, onSucce
                       className="w-full mb-2.5"
                     />
 
-                    {/* Dismiss Button */}
                     <TouchableOpacity 
                       onPress={onClose}
                       disabled={isVerifying}

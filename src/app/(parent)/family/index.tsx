@@ -57,7 +57,6 @@ export default function FamilyScreen() {
   const rawServer = childrenResponse?.data || childrenResponse?.children || (Array.isArray(childrenResponse) ? childrenResponse : []);
   const serverChildren: Child[] = Array.isArray(rawServer) ? rawServer : [];
 
-  // Merge server and local store so added children are always visible
   const childrenMap = new Map<string, Child>();
   storedChildren.forEach(c => childrenMap.set(c._id || c.name, c));
   serverChildren.forEach(c => childrenMap.set(c._id || c.name, c));
@@ -65,7 +64,6 @@ export default function FamilyScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#EEF3F9]">
-      {/* Header */}
       <View className="px-4 py-4 flex-row justify-between items-center bg-white border-b border-gray-100">
         <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
           <Ionicons name="arrow-back" size={24} color="#0F2C59" />
@@ -98,7 +96,6 @@ export default function FamilyScreen() {
                 </View>
               </View>
 
-              {/* Action Buttons: Edit & Delete */}
               <View className="flex-row items-center gap-1.5">
                 <TouchableOpacity
                   onPress={() => router.push({
@@ -148,7 +145,6 @@ export default function FamilyScreen() {
 
       </ScrollView>
 
-      {/* Modern Confirm Modal for Child Deletion */}
       <ConfirmModal
         visible={!!childToDelete}
         onClose={() => setChildToDelete(null)}

@@ -33,7 +33,6 @@ export default function LoginScreen() {
   const [isPhoneVerifying, setIsPhoneVerifying] = useState(false);
   const [screenSuccess, setScreenSuccess] = useState<string | null>(null);
 
-  // Forgot Password State
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
   const [forgotStep, setForgotStep] = useState<1 | 2>(1);
   const [forgotEmail, setForgotEmail] = useState('');
@@ -571,7 +570,6 @@ export default function LoginScreen() {
             </View>
           )}
 
-          {/* Toggle Button */}
           <View className="flex-row bg-gray-200 rounded-full p-1 mb-8">
             <TouchableOpacity 
               onPress={() => {
@@ -790,7 +788,6 @@ export default function LoginScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Forgot Password Modal */}
       <Modal
         visible={showForgotPasswordModal}
         transparent

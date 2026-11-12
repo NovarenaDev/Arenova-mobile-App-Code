@@ -27,7 +27,6 @@ export default function CoachCommunityScreen() {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
 
-  // Strict Role Guard: Players and Parents cannot access coach communities screen
   useEffect(() => {
     if (user && user.role !== 'coach') {
       Alert.alert(
@@ -53,7 +52,6 @@ export default function CoachCommunityScreen() {
   const [isStartingGps, setIsStartingGps] = useState<string | null>(null);
   const [isEndingGps, setIsEndingGps] = useState<string | null>(null);
 
-  // 1. Fetch Coach Assigned Communities & Programs
   const { 
     data: communitiesResponse, 
     isLoading: isLoadingCommunities, 
@@ -70,7 +68,6 @@ export default function CoachCommunityScreen() {
     }
   });
 
-  // 2. Fetch Subscribers for Selected Program
   const { 
     data: subscribersResponse, 
     isLoading: isLoadingSubscribers,
@@ -89,7 +86,6 @@ export default function CoachCommunityScreen() {
     enabled: !!selectedProgramForSubscribers && subscribersModalVisible
   });
 
-  // 3. Fetch Attendance History for Selected Program
   const { 
     data: attendanceHistoryResponse, 
     isLoading: isLoadingAttendanceHistory 
@@ -107,7 +103,6 @@ export default function CoachCommunityScreen() {
     enabled: !!selectedProgramForHistory && attendanceHistoryModalVisible
   });
 
-  // 4. Fetch Salary History
   const { 
     data: salaryHistoryResponse, 
     isLoading: isLoadingSalaryHistory 
@@ -131,12 +126,10 @@ export default function CoachCommunityScreen() {
     return unsubscribe;
   }, [navigation, refetchCommunities]);
 
-  // GPS Attendance Start
   const handleStartAttendance = async (programId: string) => {
     try {
       setIsStartingGps(programId);
 
-      // 1. Request Foreground Location Permission
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert(
@@ -146,11 +139,9 @@ export default function CoachCommunityScreen() {
         return;
       }
 
-      // 2. Obtain Fresh Device Coordinates
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       const { latitude, longitude } = loc.coords;
 
-      // 3. Submit Start Attendance
       const res = await api.post(`/coach-app/programs/${programId}/attendance/start`, {
         latitude,
         longitude
@@ -171,23 +162,19 @@ export default function CoachCommunityScreen() {
     }
   };
 
-  // GPS Attendance End
   const handleEndAttendance = async (programId: string) => {
     try {
       setIsEndingGps(programId);
 
-      // 1. Request Location Permission
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Location Permission Required', 'GPS location access is required to complete session attendance.');
         return;
       }
 
-      // 2. Obtain Fresh Coordinates
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       const { latitude, longitude } = loc.coords;
 
-      // 3. Submit End Attendance
       const res = await api.post(`/coach-app/programs/${programId}/attendance/end`, {
         latitude,
         longitude
@@ -226,7 +213,6 @@ export default function CoachCommunityScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#EEF3F9]" edges={['top']}>
-      {/* Header */}
       <View className="px-4 py-3 flex-row justify-between items-center bg-[#0F2C59] border-b border-gray-100 shadow-sm z-10">
         <TouchableOpacity 
           onPress={() => {
@@ -251,7 +237,6 @@ export default function CoachCommunityScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Quick Action Bar: Earnings History & Wallet */}
       <View className="bg-white border-b border-gray-100 px-4 py-3 flex-row justify-between items-center">
         <View className="flex-row items-center">
           <Ionicons name="shield-checkmark" size={18} color="#047857" className="mr-1.5" />
@@ -321,7 +306,6 @@ export default function CoachCommunityScreen() {
                 key={programId}
                 className="bg-white rounded-3xl p-5 mb-4 shadow-sm border border-gray-100 relative overflow-hidden"
               >
-                {/* Header Row */}
                 <View className="flex-row justify-between items-start mb-2">
                   <View className="flex-1 mr-2">
                     <View className="flex-row items-center mb-1">
@@ -340,7 +324,6 @@ export default function CoachCommunityScreen() {
                     </Typography>
                   </View>
 
-                  {/* Contracted Monthly Salary Badge */}
                   <View className="bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full items-end">
                     <Typography variant="caption" className="text-emerald-800 font-outfit-bold text-xs">
                       ₹{salary.toLocaleString()}
@@ -351,7 +334,6 @@ export default function CoachCommunityScreen() {
                   </View>
                 </View>
 
-                {/* Schedule Box */}
                 <View className="bg-slate-50 rounded-2xl p-3 mb-3 border border-slate-100">
                   <View className="flex-row items-center mb-1">
                     <Ionicons name="calendar-outline" size={13} color="#64748B" className="mr-1.5" />
@@ -377,7 +359,6 @@ export default function CoachCommunityScreen() {
                   ) : null}
                 </View>
 
-                {/* Daily GPS Attendance Controls */}
                 <CoachTodayAttendanceCard 
                   programId={programId}
                   isStarting={isStartingGps === programId}
@@ -386,7 +367,6 @@ export default function CoachCommunityScreen() {
                   onEnd={() => handleEndAttendance(programId)}
                 />
 
-                {/* Action Buttons: Subscribers & Attendance Log */}
                 <View className="flex-row items-center justify-between pt-3 border-t border-gray-100 mt-2">
                   <TouchableOpacity
                     onPress={() => {
@@ -422,9 +402,6 @@ export default function CoachCommunityScreen() {
         )}
       </ScrollView>
 
-      {/* ========================================================================= */}
-      {/* MODAL 1: PROGRAM SUBSCRIBERS LIST                                         */}
-      {/* ========================================================================= */}
       <Modal
         visible={subscribersModalVisible}
         transparent
@@ -508,9 +485,6 @@ export default function CoachCommunityScreen() {
         </View>
       </Modal>
 
-      {/* ========================================================================= */}
-      {/* MODAL 2: ATTENDANCE HISTORY LOG                                           */}
-      {/* ========================================================================= */}
       <Modal
         visible={attendanceHistoryModalVisible}
         transparent
@@ -614,9 +588,6 @@ export default function CoachCommunityScreen() {
         </View>
       </Modal>
 
-      {/* ========================================================================= */}
-      {/* MODAL 3: SALARY PAYOUT HISTORY                                            */}
-      {/* ========================================================================= */}
       <Modal
         visible={salaryHistoryModalVisible}
         transparent
@@ -701,9 +672,6 @@ export default function CoachCommunityScreen() {
   );
 }
 
-/**
- * Subcomponent to fetch and manage today's daily GPS attendance for a program
- */
 function CoachTodayAttendanceCard({
   programId,
   isStarting,
@@ -789,7 +757,6 @@ function CoachTodayAttendanceCard({
         )}
       </View>
 
-      {/* Start / End CTA */}
       {isLive ? (
         <Button
           title={isEnding ? "Verifying GPS Check-out..." : "End Session (GPS Check-out)"}
@@ -821,4 +788,3 @@ function CoachTodayAttendanceCard({
     </View>
   );
 }
-

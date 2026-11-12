@@ -137,7 +137,6 @@ export default function ReviewPlayerScreen() {
   return (
     <SafeAreaView className="flex-1 bg-[#EEF3F9]">
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-        {/* Header */}
         <View className="px-4 py-4 flex-row items-center bg-white border-b border-gray-100 shadow-sm z-10">
           <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2 mr-4">
             <Ionicons name="arrow-back" size={24} color="#0F2C59" />
@@ -159,7 +158,6 @@ export default function ReviewPlayerScreen() {
             <Typography variant="body2" color="muted">{dateDisplay || 'Training Session'}</Typography>
           </View>
 
-          {/* Rating */}
           <View className="bg-white rounded-2xl p-6 mb-6 shadow-sm items-center">
             <Typography variant="subtitle1" color="secondary" weight="bold" className="mb-4">
               {isCoachReview ? `How was your session with ${targetDisplayName}?` : 'How did the player perform?'}
@@ -177,7 +175,6 @@ export default function ReviewPlayerScreen() {
             </View>
           </View>
 
-          {/* Select Sport */}
           <Typography variant="subtitle2" color="secondary" weight="bold" className="mb-2 ml-1">
             Sport Area
           </Typography>
@@ -200,7 +197,6 @@ export default function ReviewPlayerScreen() {
             </View>
           </ScrollView>
 
-          {/* Quick Feedback */}
           <Typography variant="subtitle2" color="secondary" weight="bold" className="mb-2 ml-1">
             Quick Feedback Tags
           </Typography>
@@ -221,7 +217,6 @@ export default function ReviewPlayerScreen() {
             })}
           </View>
 
-          {/* Description */}
           <Typography variant="subtitle2" color="secondary" weight="bold" className="mb-2 ml-1">
             {isCoachReview ? 'Review & Comments (Optional)' : 'Performance Notes (Optional)'}
           </Typography>

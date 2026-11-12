@@ -22,7 +22,6 @@ export default function SelectPlayerScreen() {
   }>();
   const { user, children: storedChildren } = useAuthStore();
 
-  // Strict Role Guard: Coaches cannot book coaching sessions
   React.useEffect(() => {
     if (user?.role === 'coach') {
       Alert.alert(
@@ -33,7 +32,6 @@ export default function SelectPlayerScreen() {
     }
   }, [user, router]);
 
-  // Fetch children list from API
   const { data: childrenResponse, isLoading } = useQuery({
     queryKey: ['children'],
     queryFn: async () => {
@@ -45,7 +43,6 @@ export default function SelectPlayerScreen() {
   const rawChildren = childrenResponse?.data || childrenResponse?.children || (Array.isArray(childrenResponse) ? childrenResponse : []);
   const serverChildren = Array.isArray(rawChildren) ? rawChildren : [];
 
-  // Merge server and local store so newly added children are always visible immediately
   const childrenMap = new Map<string, any>();
   (storedChildren || []).forEach(c => childrenMap.set(c._id || c.name, c));
   serverChildren.forEach(c => childrenMap.set(c._id || c.name, c));
@@ -63,7 +60,6 @@ export default function SelectPlayerScreen() {
     }
   ];
 
-  // Always show all available children in the list
   if (children.length > 0) {
     children.forEach((child: any) => {
       players.push({
@@ -76,7 +72,6 @@ export default function SelectPlayerScreen() {
     });
   }
 
-  // Selected player IDs (supports single or multiple attendees)
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>(() => {
     if (children.length > 0) {
       return [children[0]._id || children[0].id];
@@ -84,7 +79,6 @@ export default function SelectPlayerScreen() {
     return isParent ? [] : ['self'];
   });
 
-  // Keep selection updated when children load
   React.useEffect(() => {
     if (children.length > 0 && selectedPlayerIds.length === 0) {
       setSelectedPlayerIds([children[0]._id || children[0].id]);
@@ -101,7 +95,6 @@ export default function SelectPlayerScreen() {
     });
   };
 
-  // Pricing calculations
   const perPersonFee = Number(searchParams.price || 0);
   const attendeeCount = selectedPlayerIds.length;
   const subtotal = attendeeCount * perPersonFee;
@@ -117,8 +110,6 @@ export default function SelectPlayerScreen() {
     const selectedChildren = selectedPlayers.filter(p => p.isChild);
     const hasSelfSelected = selectedPlayerIds.includes('self');
 
-    // Strict Parent Module Rule:
-    // If in parent mode and the parent selects ONLY 'self' without at least one child:
     if (isParent && hasSelfSelected && selectedChildren.length === 0) {
       Alert.alert(
         'Child Selection Required',
@@ -161,7 +152,6 @@ export default function SelectPlayerScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#EEF3F9' }}>
-      {/* Header */}
       <View style={{ paddingHorizontal: 16, paddingVertical: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: '#f3f4f6', zIndex: 10 }}>
         <TouchableOpacity onPress={() => router.back()} style={{ padding: 8, marginLeft: -8 }}>
           <Ionicons name="arrow-back" size={24} color="#0F2C59" />
@@ -261,7 +251,6 @@ export default function SelectPlayerScreen() {
           </Typography>
         </TouchableOpacity>
 
-        {/* Live Calculation Preview Card */}
         {selectedPlayerIds.length > 0 && (
           <View style={{ backgroundColor: '#ffffff', borderRadius: 16, padding: 16, marginTop: 8, borderWidth: 1, borderColor: '#f3f4f6' }}>
             <Typography variant="subtitle2" color="secondary" weight="bold" className="font-outfit-bold mb-2">
@@ -287,7 +276,6 @@ export default function SelectPlayerScreen() {
         )}
       </ScrollView>
 
-      {/* Sticky Bottom Bar */}
       <View style={{ position: 'absolute', bottom: 0, width: '100%', backgroundColor: '#ffffff', padding: 16, borderTopWidth: 1, borderTopColor: '#f3f4f6', paddingBottom: Math.max(insets.bottom + 16, 32) }}>
         <Button 
           title={attendeeCount > 0 ? `Continue (₹${totalAmount})` : "Select Attendee"} 

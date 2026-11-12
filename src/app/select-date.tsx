@@ -31,7 +31,6 @@ export default function SelectDateScreen() {
   const { user } = useAuthStore();
   const { coachId } = useLocalSearchParams<{ coachId?: string }>();
 
-  // Strict Role Guard: Coaches cannot book coaching sessions
   React.useEffect(() => {
     if (user?.role === 'coach') {
       Alert.alert(
@@ -71,14 +70,12 @@ export default function SelectDateScreen() {
         });
         return res.data;
       } catch (err: any) {
-        // Fallback 1: try /coaches/:id/slots
         try {
           const res2 = await api.get(`/coaches/${coachId}/slots`, {
             params: { date: selectedDate }
           });
           return res2.data;
         } catch (err2) {
-          // Fallback 2: try /coach-app/slots
           try {
             const res3 = await api.get('/coach-app/slots', {
               params: { coachId, date: selectedDate }
@@ -93,7 +90,6 @@ export default function SelectDateScreen() {
     enabled: !!coachId && !!selectedDate
   });
 
-  // Extract slots list with full format tolerance
   const rawSlotsList = Array.isArray(slotsResponse)
     ? slotsResponse
     : (Array.isArray(slotsResponse?.data)
@@ -102,7 +98,6 @@ export default function SelectDateScreen() {
 
   let slots: Slot[] = Array.isArray(rawSlotsList) ? rawSlotsList : [];
 
-  // Fallback: If no date-specific slots exist, derive from coach's recurring availability for this day of week
   if (slots.length === 0 && coach?.availability && Array.isArray(coach.availability)) {
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const [y, m, d] = selectedDate.split('-').map(Number);
@@ -200,7 +195,6 @@ export default function SelectDateScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#EEF3F9]">
-      {/* Header */}
       <View className="px-4 py-4 flex-row justify-between items-center bg-white border-b border-gray-100 shadow-sm z-10">
         <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
           <Ionicons name="arrow-back" size={24} color="#0F2C59" />
@@ -213,7 +207,6 @@ export default function SelectDateScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} className="flex-1 px-4 pt-4" contentContainerStyle={{ flexGrow: 1, paddingBottom: Math.max(insets.bottom + 60, 80) }}>
         
-        {/* Coach Header Card */}
         {isLoadingCoach ? (
           <ActivityIndicator size="small" color="#FF5100" className="my-4" />
         ) : (
@@ -244,7 +237,6 @@ export default function SelectDateScreen() {
           </View>
         )}
 
-        {/* Real Calendar Card */}
         <View className="bg-white rounded-2xl p-4 mb-4 shadow-sm border border-gray-50">
           <Typography variant="subtitle1" color="secondary" weight="bold" className="mb-2 font-outfit-bold">
             Select Date
@@ -269,7 +261,6 @@ export default function SelectDateScreen() {
           />
         </View>
 
-        {/* Time Selector Card */}
         {selectedDate && (
           <View className="bg-white rounded-2xl p-4 mb-8 shadow-sm border border-gray-50">
             <Typography variant="subtitle1" color="secondary" weight="bold" className="mb-3 font-outfit-bold">

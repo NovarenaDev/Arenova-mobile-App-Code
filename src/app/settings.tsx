@@ -13,7 +13,6 @@ export default function SettingsScreen() {
   const { user, setUser, soundEnabled, vibrationEnabled, setSoundEnabled, setVibrationEnabled } = useAuthStore();
   const [modalDocType, setModalDocType] = useState<'support' | 'privacy' | 'terms' | null>(null);
 
-  // Password Management State
   const [isPasswordModalVisible, setIsPasswordModalVisible] = useState(false);
   const [passwordMode, setPasswordMode] = useState<'direct' | 'otp'>('direct');
   const [currentPassword, setCurrentPassword] = useState('');
@@ -48,7 +47,6 @@ export default function SettingsScreen() {
       const cleanEmail = user?.email ? user.email.trim().toLowerCase() : '';
       let sent = false;
 
-      // Try email-based password reset OTP first if user has email
       if (cleanEmail && cleanEmail.includes('@')) {
         try {
           const res = await api.post('/auth/forgot-password', {
@@ -60,7 +58,6 @@ export default function SettingsScreen() {
           setPasswordSuccess(res.data?.message || `6-digit verification code sent to ${cleanEmail}.`);
           return;
         } catch (emailErr: any) {
-          // If 404 or fails, fallback to phone OTP
         }
       }
 
@@ -123,7 +120,6 @@ export default function SettingsScreen() {
           newPassword: cleanNew
         });
       } else {
-        // Direct authenticated update with graceful fallbacks
         let updated = false;
         const endpoint = user?.role === 'coach' ? '/auth/coach/change-password' : '/auth/change-password';
 
@@ -196,7 +192,6 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#EEF3F9]">
-      {/* Header */}
       <View className="px-4 py-4 flex-row items-center bg-white border-b border-gray-100 shadow-sm z-10">
         <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2 mr-4">
           <Ionicons name="arrow-back" size={24} color="#0F2C59" />
@@ -209,7 +204,6 @@ export default function SettingsScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} className="flex-1 px-4 pt-4" contentContainerStyle={{ flexGrow: 1, paddingBottom: Math.max(insets.bottom + 40, 60) }}>
         
-        {/* Security & Password */}
         <Typography variant="subtitle2" color="muted" weight="bold" className="mb-2 ml-1 uppercase font-outfit-bold">
           Security & Password
         </Typography>
@@ -255,7 +249,6 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Preferences */}
         <Typography variant="subtitle2" color="muted" weight="bold" className="mb-2 ml-1 uppercase font-outfit-bold">
           Preferences
         </Typography>
@@ -292,7 +285,6 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* Account Settings */}
         <Typography variant="subtitle2" color="muted" weight="bold" className="mb-2 ml-1 uppercase font-outfit-bold">
           Account
         </Typography>
@@ -326,7 +318,6 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Legal */}
         <Typography variant="subtitle2" color="muted" weight="bold" className="mb-2 ml-1 uppercase font-outfit-bold">
           Legal
         </Typography>
@@ -362,7 +353,6 @@ export default function SettingsScreen() {
 
       </ScrollView>
 
-      {/* Dynamic Password Management Modal */}
       <Modal
         visible={isPasswordModalVisible}
         animationType="slide"
@@ -372,7 +362,6 @@ export default function SettingsScreen() {
         <View className="flex-1 justify-end bg-black/60">
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <View className="bg-white rounded-t-3xl p-6 shadow-xl max-h-[92%]">
-              {/* Modal Header */}
               <View className="flex-row justify-between items-center mb-4 border-b border-gray-100 pb-3">
                 <View className="flex-row items-center">
                   <View className="w-9 h-9 rounded-full bg-orange-50 items-center justify-center mr-3 border border-orange-100">
@@ -388,7 +377,6 @@ export default function SettingsScreen() {
               </View>
 
               <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-                {/* Information Card */}
                 <View className="bg-orange-50/70 border border-orange-100 rounded-2xl p-3.5 mb-4">
                   <Typography variant="caption" className="font-outfit text-orange-950 leading-5">
                     {userHasPassword
@@ -397,7 +385,6 @@ export default function SettingsScreen() {
                   </Typography>
                 </View>
 
-                {/* Error Banner */}
                 {passwordError && (
                   <View className="mb-4 bg-red-50 border border-red-200 rounded-2xl p-3.5 flex-row items-start">
                     <Ionicons name="alert-circle" size={18} color="#EF4444" style={{ marginRight: 8, marginTop: 1 }} />
@@ -407,7 +394,6 @@ export default function SettingsScreen() {
                   </View>
                 )}
 
-                {/* Success Banner */}
                 {passwordSuccess && (
                   <View className="mb-4 bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 flex-row items-start">
                     <Ionicons name="checkmark-circle" size={18} color="#10B981" style={{ marginRight: 8, marginTop: 1 }} />
@@ -417,7 +403,6 @@ export default function SettingsScreen() {
                   </View>
                 )}
 
-                {/* Mode Selector Tabs */}
                 <View className="flex-row bg-gray-100 rounded-xl p-1 mb-4">
                   <TouchableOpacity
                     onPress={() => {
@@ -457,7 +442,6 @@ export default function SettingsScreen() {
                   </TouchableOpacity>
                 </View>
 
-                {/* Direct Setup Form */}
                 {passwordMode === 'direct' ? (
                   <View>
                     {userHasPassword && (
@@ -490,7 +474,6 @@ export default function SettingsScreen() {
                     />
                   </View>
                 ) : (
-                  /* OTP Verification Form */
                   <View>
                     <View className="bg-gray-50 border border-gray-200 rounded-2xl p-4 mb-4">
                       <View className="flex-row justify-between items-center mb-2">
@@ -542,7 +525,6 @@ export default function SettingsScreen() {
                   </View>
                 )}
 
-                {/* Action Buttons */}
                 <View className="mt-2 mb-4 space-y-2.5">
                   <Button
                     title={userHasPassword ? 'Update Password' : 'Save & Set Password'}
@@ -565,7 +547,6 @@ export default function SettingsScreen() {
         </View>
       </Modal>
 
-      {/* Local Document Viewer Modal */}
       <Modal
         visible={modalDocType !== null}
         animationType="slide"

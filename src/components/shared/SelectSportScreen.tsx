@@ -14,7 +14,6 @@ export default function SelectSportScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
 
-  // Strict Role Guard: Coaches cannot access sport selection / player booking flow
   useEffect(() => {
     if (user?.role === 'coach') {
       Alert.alert(
@@ -56,7 +55,6 @@ export default function SelectSportScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#EEF3F9]">
-      {/* Header */}
       <View className="px-4 py-4 flex-row justify-between items-center bg-[#EEF3F9] border-b border-gray-100">
         <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
           <Ionicons name="arrow-back" size={24} color="#0F2C59" />

@@ -30,12 +30,10 @@ export default function CoachOnboardingScreen() {
   const setUser = useAuthStore(state => state.setUser);
   const user = useAuthStore(state => state.user);
 
-  // Screen modes: 'form' | 'under_review' | 'rejected'
   const [screenMode, setScreenMode] = useState<'form' | 'under_review' | 'rejected'>('form');
   const [rejectionNote, setRejectionNote] = useState<string>('');
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
 
-  // Form Fields
   const [email, setEmail] = useState(paramEmail || user?.email || '');
   const [phone, setPhone] = useState(paramPhone || user?.phone || '');
   const [experience, setExperience] = useState('');
@@ -49,7 +47,6 @@ export default function CoachOnboardingScreen() {
   const [achievements, setAchievements] = useState<string[]>(['']);
   const [selectedFiles, setSelectedFiles] = useState<LocalFile[]>([]);
 
-  // Agreement Terms Dialog State
   const [showAgreementModal, setShowAgreementModal] = useState(false);
   const [isFetchingTerms, setIsFetchingTerms] = useState(false);
   const [agreementData, setAgreementData] = useState<{ title: string; text: string }>({
@@ -57,7 +54,6 @@ export default function CoachOnboardingScreen() {
     text: ''
   });
 
-  // Query 1: Fetch Coach App Status
   const { data: coachStatusData, refetch: refetchStatus } = useQuery({
     queryKey: ['coachAppStatus'],
     queryFn: async () => {
@@ -71,7 +67,6 @@ export default function CoachOnboardingScreen() {
     enabled: !!user,
   });
 
-  // Query 2: Fetch Coach Profile (to prefill existing data)
   const { data: profileData } = useQuery({
     queryKey: ['coachOnboardingProfile'],
     queryFn: async () => {
@@ -85,7 +80,6 @@ export default function CoachOnboardingScreen() {
     enabled: !!user,
   });
 
-  // Query 3: Fetch Agreement Terms
   const { data: termsQueryData } = useQuery({
     queryKey: ['coachAgreementTerms'],
     queryFn: async () => {
@@ -98,7 +92,6 @@ export default function CoachOnboardingScreen() {
     }
   });
 
-  // Determine initial screen from status
   useEffect(() => {
     const statusObj = coachStatusData;
     if (statusObj) {
@@ -121,7 +114,6 @@ export default function CoachOnboardingScreen() {
     }
   }, [coachStatusData]);
 
-  // Prefill details from profileData
   useEffect(() => {
     if (profileData) {
       if (profileData.email && !email) setEmail(profileData.email);
@@ -166,7 +158,6 @@ export default function CoachOnboardingScreen() {
     }
   }, [profileData]);
 
-  // Sync agreement terms
   useEffect(() => {
     if (termsQueryData) {
       setAgreementData({
@@ -176,7 +167,6 @@ export default function CoachOnboardingScreen() {
     }
   }, [termsQueryData]);
 
-  // File Picking
   const handlePickDocument = async (docType: 'aadhaar' | 'certificate' | 'pan' | 'passport' | 'other' = 'aadhaar') => {
     if (selectedFiles.length >= 5) {
       Alert.alert('Upload Limit', 'You can upload a maximum of 5 documents (up to 10 MB each).');
@@ -227,7 +217,6 @@ export default function CoachOnboardingScreen() {
     setSelectedFiles(prev => prev.map(f => f.id === id ? { ...f, documentType: type } : f));
   };
 
-  // Word count helper
   const wordCount = bio.trim() ? bio.trim().split(/\s+/).length : 0;
   const handleBioChange = (text: string) => {
     const words = text.trim() ? text.trim().split(/\s+/).length : 0;
@@ -236,7 +225,6 @@ export default function CoachOnboardingScreen() {
     }
   };
 
-  // Mutation to submit profile and KYC
   const submitProfileMutation = useMutation({
     mutationFn: async () => {
       const cleanEmail = email.trim().toLowerCase();
@@ -258,7 +246,6 @@ export default function CoachOnboardingScreen() {
       formData.append('requestedGroupPricePerPerson', String(Number(requestedGroupPricePerPerson) || 0));
       formData.append('agreedToTerms', 'true');
 
-      // Append selected files using 'documents' key
       selectedFiles.forEach((file) => {
         formData.append('documents', {
           uri: file.uri,
@@ -267,7 +254,6 @@ export default function CoachOnboardingScreen() {
         } as any);
       });
 
-      // Match documentTypes to file order
       const docTypesOrder = selectedFiles.map(f => f.documentType).join(',');
       formData.append('documentTypes', docTypesOrder);
 
@@ -288,7 +274,6 @@ export default function CoachOnboardingScreen() {
     }
   });
 
-  // Validation before opening Agreement Dialog
   const handleSubmitClick = async () => {
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail) {
@@ -329,7 +314,6 @@ export default function CoachOnboardingScreen() {
       return;
     }
 
-    // Refresh agreement terms
     try {
       setIsFetchingTerms(true);
       const res = await api.get('/coach-app/agreement-terms');
@@ -341,7 +325,6 @@ export default function CoachOnboardingScreen() {
         });
       }
     } catch (e) {
-      // Use fallback/cached terms
     } finally {
       setIsFetchingTerms(false);
     }
@@ -349,7 +332,6 @@ export default function CoachOnboardingScreen() {
     setShowAgreementModal(true);
   };
 
-  // SCREEN: UNDER REVIEW
   if (screenMode === 'under_review') {
     return (
       <SafeAreaView className="flex-1 bg-[#EEF3F9]" edges={['top']}>
@@ -431,7 +413,6 @@ export default function CoachOnboardingScreen() {
     );
   }
 
-  // SCREEN: REJECTED
   if (screenMode === 'rejected') {
     return (
       <SafeAreaView className="flex-1 bg-[#EEF3F9]" edges={['top']}>
@@ -449,7 +430,6 @@ export default function CoachOnboardingScreen() {
               Our review team identified issues with your submission. Please check the feedback below, correct your information or documents, and resubmit for approval.
             </Typography>
 
-            {/* Rejection Note Box */}
             <View className="w-full bg-red-50 border border-red-200 rounded-2xl p-4 mb-6">
               <View className="flex-row items-center mb-1">
                 <Ionicons name="information-circle" size={18} color="#EF4444" className="mr-2" />
@@ -496,11 +476,9 @@ export default function CoachOnboardingScreen() {
     );
   }
 
-  // SCREEN: PROFILE & KYC COMPLETION FORM
   return (
     <SafeAreaView className="flex-1 bg-[#EEF3F9]">
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-        {/* Header */}
         <View className="px-4 py-4 flex-row justify-between items-center bg-white border-b border-gray-200 shadow-sm z-10">
           <TouchableOpacity 
             onPress={() => {
@@ -532,7 +510,6 @@ export default function CoachOnboardingScreen() {
             </Typography>
 
             <View className="space-y-4">
-              {/* Mandatory Email */}
               <View>
                 <Typography variant="caption" color="secondary" weight="bold" className="mb-1 ml-1 font-outfit-bold">
                   Email Address * (Mandatory for Profile Review)
@@ -547,7 +524,6 @@ export default function CoachOnboardingScreen() {
                 />
               </View>
 
-              {/* Phone (Read Only) */}
               {phone ? (
                 <View>
                   <Typography variant="caption" color="secondary" weight="bold" className="mb-1 ml-1 font-outfit-bold">
@@ -562,7 +538,6 @@ export default function CoachOnboardingScreen() {
                 </View>
               ) : null}
 
-              {/* Experience in Years */}
               <View>
                 <Typography variant="caption" color="secondary" weight="bold" className="mb-1 ml-1 font-outfit-bold">
                   Coaching Experience (Years) *
@@ -576,7 +551,6 @@ export default function CoachOnboardingScreen() {
                 />
               </View>
 
-              {/* Address Details */}
               <View className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm mt-1">
                 <Typography variant="subtitle2" color="secondary" weight="bold" className="mb-3 font-outfit-bold">
                   Address Details *
@@ -622,7 +596,6 @@ export default function CoachOnboardingScreen() {
                 />
               </View>
 
-              {/* Requested Pricing */}
               <View className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm mt-1">
                 <Typography variant="subtitle2" color="secondary" weight="bold" className="mb-2 font-outfit-bold">
                   Requested Session Pricing *
@@ -655,7 +628,6 @@ export default function CoachOnboardingScreen() {
                 </View>
               </View>
 
-              {/* Bio (Max 150 words) */}
               <View className="mt-2">
                 <View className="flex-row justify-between items-center px-1 mb-1">
                   <Typography variant="caption" color="secondary" weight="bold" className="font-outfit-bold">
@@ -675,7 +647,6 @@ export default function CoachOnboardingScreen() {
                 />
               </View>
 
-              {/* Achievements */}
               <View className="mt-2">
                 <Typography variant="caption" color="secondary" weight="bold" className="mb-1 ml-1 font-outfit-bold">
                   Achievements (Optional)
@@ -712,7 +683,6 @@ export default function CoachOnboardingScreen() {
                 </TouchableOpacity>
               </View>
 
-              {/* KYC Documents (Local files, up to 5) */}
               <View className="mt-2 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
                 <View className="flex-row justify-between items-center mb-1">
                   <Typography variant="subtitle2" color="secondary" weight="bold" className="font-outfit-bold">
@@ -726,7 +696,6 @@ export default function CoachOnboardingScreen() {
                   Upload identity proofs (Aadhaar, License) and sports coaching certificates. Files remain local until you accept the agreement.
                 </Typography>
 
-                {/* Selected Files List */}
                 {selectedFiles.map((file, idx) => (
                   <View key={file.id} className="p-3 bg-gray-50 rounded-xl mb-3 border border-gray-200">
                     <View className="flex-row items-center justify-between mb-2">
@@ -741,7 +710,6 @@ export default function CoachOnboardingScreen() {
                       </TouchableOpacity>
                     </View>
 
-                    {/* Document Type Chips */}
                     <View className="flex-row items-center flex-wrap gap-1.5">
                       <Typography variant="caption" color="muted" className="text-[10px] mr-1">
                         Type:
@@ -764,7 +732,6 @@ export default function CoachOnboardingScreen() {
                   </View>
                 ))}
 
-                {/* Add Document Buttons */}
                 {selectedFiles.length < 5 && (
                   <View className="flex-row gap-2 mt-1">
                     <TouchableOpacity 
@@ -780,7 +747,6 @@ export default function CoachOnboardingScreen() {
                 )}
               </View>
 
-              {/* Submit Button */}
               <View className="mt-4">
                 <Button 
                   title="Submit Details for KYC Approval" 
@@ -794,7 +760,6 @@ export default function CoachOnboardingScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* AGREEMENT TERMS DIALOG MODAL */}
       <Modal
         visible={showAgreementModal}
         transparent

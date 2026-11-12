@@ -102,9 +102,6 @@ export interface CoachAttendanceToday {
   openAttendance: any | null;
 }
 
-/**
- * Format 24-hr time (HH:mm) into human-friendly AM/PM
- */
 export const formatTimeHHmm = (timeStr?: string): string => {
   if (!timeStr) return '';
   const [hStr, mStr] = timeStr.split(':');
@@ -117,9 +114,6 @@ export const formatTimeHHmm = (timeStr?: string): string => {
   return `${displayH}:${displayM} ${ampm}`;
 };
 
-/**
- * Format recurring weekdays e.g. ["MON", "WED", "FRI"] -> "Mon, Wed, Fri"
- */
 export const formatWeekdays = (days?: string[]): string => {
   if (!days || !Array.isArray(days) || days.length === 0) return 'Daily';
   if (days.length === 7) return 'Every Day (Mon - Sun)';
@@ -139,9 +133,6 @@ export const formatWeekdays = (days?: string[]): string => {
   return days.map(d => map[d.toUpperCase()] || d).join(', ');
 };
 
-/**
- * Format ISO Date to readable localized date string
- */
 export const formatDateOnly = (isoString?: string): string => {
   if (!isoString) return '';
   try {
@@ -156,4 +147,3 @@ export const formatDateOnly = (isoString?: string): string => {
     return isoString;
   }
 };
-

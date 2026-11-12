@@ -1,9 +1,5 @@
 import { Alert } from 'react-native';
 
-/**
- * Route patterns strictly restricted to Players and Parents.
- * Coaches MUST NEVER access these routes under any circumstances.
- */
 export const PLAYER_PARENT_ONLY_ROUTES = [
   '/(individual)',
   '/(parent)',
@@ -21,10 +17,6 @@ export const PLAYER_PARENT_ONLY_ROUTES = [
   '/my-tournaments'
 ];
 
-/**
- * Route patterns strictly restricted to Coaches.
- * Players and Parents MUST NEVER access these routes under any circumstances.
- */
 export const COACH_ONLY_ROUTES = [
   '/(coach)',
   '/coach-dashboard',
@@ -32,14 +24,10 @@ export const COACH_ONLY_ROUTES = [
   '/wallet'
 ];
 
-/**
- * Check if a route is permitted for the given role.
- */
 export const isRoutePermittedForRole = (routeStr: string, role?: string): boolean => {
   if (!routeStr) return false;
   const clean = routeStr.trim().toLowerCase();
 
-  // External URLs are always permitted
   if (clean.startsWith('http://') || clean.startsWith('https://')) {
     return true;
   }
@@ -57,9 +45,6 @@ export const isRoutePermittedForRole = (routeStr: string, role?: string): boolea
   return true;
 };
 
-/**
- * Guard against unauthorized role navigation, showing a security alert and returning false if blocked.
- */
 export const assertRoleNavigation = (targetRoute: string, role?: string): boolean => {
   if (!targetRoute) return false;
 
@@ -93,4 +78,3 @@ export const assertRoleNavigation = (targetRoute: string, role?: string): boolea
 
   return true;
 };
-

@@ -36,7 +36,6 @@ export default function TournamentDetailsScreen() {
   const [isRegisterModalVisible, setIsRegisterModalVisible] = useState(false);
   const [registerError, setRegisterError] = useState<string | null>(null);
 
-  // Razorpay Payment States
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [isRazorpayModalVisible, setIsRazorpayModalVisible] = useState(false);
   const [razorpayOrder, setRazorpayOrder] = useState<{
@@ -47,7 +46,6 @@ export default function TournamentDetailsScreen() {
   } | null>(null);
   const [pendingRegistrationId, setPendingRegistrationId] = useState<string | null>(null);
 
-  // Success Confirmation & Invoice Download States
   const [confirmedRegistration, setConfirmedRegistration] = useState<any>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [isDownloadingInvoice, setIsDownloadingInvoice] = useState(false);
@@ -91,7 +89,6 @@ export default function TournamentDetailsScreen() {
 
   const invoicesList = normalizeInvoices(invoicesResponse);
 
-  // Check confirmed registrations from DB records or matching invoices
   let existingConfirmedReg = rawMyRegs.find((r: any) => {
     const tId = String(r.tournamentId?._id || r.tournamentId || r.tournament?._id || r.tournament || '');
     if (tId !== String(id)) return false;
@@ -117,7 +114,6 @@ export default function TournamentDetailsScreen() {
     return false;
   });
 
-  // If no registration record in DB, check if an invoice exists for this tournament ID
   if (!existingConfirmedReg) {
     const matchingTournInvoice = invoicesList.find((inv: any) => {
       const invTournId = String(inv.tournamentId || inv.tournament?._id || inv.tournament || inv.metadata?.tournamentId || '');
@@ -321,12 +317,10 @@ export default function TournamentDetailsScreen() {
     }
 
     try {
-      // 1. Submit Registration
       const regRes = await api.post(`/novare/tournaments/${id}/register`, payload);
       const resPayload = regRes.data;
       const regData = resPayload?.data || resPayload?.registration || resPayload;
 
-      // Extract Registration ID comprehensively from any potential response nesting
       const regId = 
         regData?._id || 
         regData?.id || 
@@ -357,7 +351,6 @@ export default function TournamentDetailsScreen() {
       };
       setConfirmedRegistration(regSummary);
 
-      // 2. If Free Tournament
       if (fee === 0) {
         try {
           await api.post(`/novare/registrations/${regId}/verify-payment`, {
@@ -375,7 +368,6 @@ export default function TournamentDetailsScreen() {
         return;
       }
 
-      // 3. Paid Tournament -> Extract Order Details from /register response
       const orderObj = 
         resPayload?.order || 
         resPayload?.data?.order || 
@@ -426,7 +418,6 @@ export default function TournamentDetailsScreen() {
         regData?.gatewayKeyId || 
         RAZORPAY_KEY_ID;
 
-      // Fallback if backend /register response did not contain order details directly
       if (!orderId || !orderId.startsWith('order_') || orderId.startsWith('order_tourn_')) {
         try {
           const orderRes = await api.post('/bookings/create-order', {
@@ -483,7 +474,6 @@ export default function TournamentDetailsScreen() {
         return;
       }
 
-      // If user already has a pending registration for this tournament
       const existingReg = resData?.data?.registration || resData?.registration || resData?.data;
       const existingRegId = existingReg?._id || existingReg?.id;
       if (existingRegId) {
@@ -711,7 +701,6 @@ export default function TournamentDetailsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#EEF3F9]">
-      {/* Header */}
       <View className="px-4 py-3 flex-row justify-between items-center bg-white border-b border-gray-100 shadow-sm z-10">
         <TouchableOpacity 
           onPress={() => {
@@ -738,7 +727,6 @@ export default function TournamentDetailsScreen() {
         className="flex-1"
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 90, 110) }}
       >
-        {/* Dynamic Banner Image */}
         <View className="h-56 bg-secondary relative overflow-hidden">
           <Image source={{ uri: bannerUrl }} className="w-full h-full" resizeMode="cover" />
           <View className="absolute top-4 right-4 bg-primary px-3 py-1.5 rounded-full shadow-md">
@@ -774,12 +762,10 @@ export default function TournamentDetailsScreen() {
             </View>
           )}
 
-          {/* Main Info */}
           <Typography variant="h2" color="secondary" weight="bold" className="font-outfit-bold mb-3">
             {tournament.name || tournament.title || 'Tournament Name'}
           </Typography>
 
-          {/* Key Badges / Details Row */}
           <View className="flex-row flex-wrap items-center gap-3 mb-5">
             <View className="flex-row items-center bg-white px-3.5 py-2.5 rounded-2xl border border-gray-100 shadow-sm">
               <Ionicons name="calendar" size={16} color="#FF5100" className="mr-2" />
@@ -803,7 +789,6 @@ export default function TournamentDetailsScreen() {
             </View>
           </View>
 
-          {/* Description */}
           <View className="bg-white rounded-3xl p-5 mb-5 border border-gray-100 shadow-sm">
             <Typography variant="subtitle1" color="secondary" weight="bold" className="mb-2 font-outfit-bold">
               About Tournament
@@ -813,7 +798,6 @@ export default function TournamentDetailsScreen() {
             </Typography>
           </View>
 
-          {/* Available Categories / Divisions */}
           <View className="bg-white rounded-3xl p-5 mb-6 border border-gray-100 shadow-sm">
             <Typography variant="subtitle1" color="secondary" weight="bold" className="mb-4 font-outfit-bold">
               Categories & Divisions
@@ -878,7 +862,6 @@ export default function TournamentDetailsScreen() {
         </View>
       </ScrollView>
 
-      {/* Bottom Fixed Action Bar - Raised with Safe Area Bottom Padding */}
       <View 
         className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 pt-4 flex-row items-center justify-between shadow-2xl z-20"
         style={{ paddingBottom: Math.max(insets.bottom + 12, 18) }}
@@ -921,7 +904,6 @@ export default function TournamentDetailsScreen() {
         )}
       </View>
 
-      {/* REGISTRATION MODAL SHEET (Step 1: Selection & Details | Step 2: Review & Price Breakdown) */}
       <Modal
         visible={isRegisterModalVisible}
         transparent
@@ -947,10 +929,8 @@ export default function TournamentDetailsScreen() {
             className="bg-white rounded-t-[32px] px-6 pt-4 shadow-2xl border-t border-gray-200 max-h-[90%]"
             style={{ paddingBottom: Math.max(insets.bottom + 16, 28) }}
           >
-            {/* Drag Handle Indicator */}
             <View className="w-12 h-1 bg-gray-300 rounded-full self-center mb-4" />
 
-            {/* Header with Step Indicator */}
             <View className="flex-row justify-between items-center mb-3 pb-2 border-b border-gray-100">
               <View>
                 <Typography variant="h3" color="secondary" weight="bold" className="font-outfit-bold">
@@ -984,10 +964,8 @@ export default function TournamentDetailsScreen() {
                 </View>
               )}
 
-              {/* STEP 1: CATEGORY, PARTICIPANT & CONTACT DETAILS */}
               {regStep === 1 && (
                 <>
-                  {/* Tournament Summary Card */}
                   <View className="bg-orange-50/70 p-4 rounded-2xl border border-orange-100 mb-4">
                     <Typography variant="caption" color="primary" weight="bold" className="font-outfit-bold uppercase text-[10px] tracking-wider">
                       Tournament Event
@@ -1002,7 +980,6 @@ export default function TournamentDetailsScreen() {
                     )}
                   </View>
 
-                  {/* Category Selector */}
                   <View className="mb-5">
                     <Typography variant="subtitle2" color="secondary" weight="bold" className="mb-2 font-outfit-bold">
                       Select Category / Division
@@ -1056,7 +1033,6 @@ export default function TournamentDetailsScreen() {
                     )}
                   </View>
 
-                  {/* Participant Selection (Child for Parent role, Athlete display for Individual) */}
                   {user?.role === 'parent' ? (
                     <View className="mb-5">
                       <Typography variant="subtitle2" color="secondary" weight="bold" className="mb-2 font-outfit-bold">
@@ -1116,7 +1092,6 @@ export default function TournamentDetailsScreen() {
                     </View>
                   )}
 
-                  {/* Contact Information Form */}
                   <View className="mb-4">
                     <Typography variant="subtitle2" color="secondary" weight="bold" className="mb-2 font-outfit-bold">
                       Contact & Participant Details
@@ -1162,10 +1137,8 @@ export default function TournamentDetailsScreen() {
                 </>
               )}
 
-              {/* STEP 2: REVIEW SUMMARY & PRICE BREAKDOWN */}
               {regStep === 2 && (
                 <>
-                  {/* Review Summary Card */}
                   <View className="bg-white rounded-2xl border border-gray-200 p-4 mb-4 shadow-sm">
                     <Typography variant="caption" color="muted" weight="bold" className="font-outfit-bold uppercase tracking-wider text-[11px] mb-3">
                       Order Summary
@@ -1218,7 +1191,6 @@ export default function TournamentDetailsScreen() {
                     </View>
                   </View>
 
-                  {/* Price Breakdown Card */}
                   <View className="bg-orange-50/60 rounded-2xl border border-orange-100 p-4 mb-5">
                     <Typography variant="caption" color="primary" weight="bold" className="font-outfit-bold uppercase tracking-wider text-[11px] mb-3">
                       Payment Details
@@ -1248,7 +1220,6 @@ export default function TournamentDetailsScreen() {
                     </View>
                   </View>
 
-                  {/* Action Buttons */}
                   <Button
                     title={getCategoryFee(selectedCategory) > 0 ? `Pay ₹${getCategoryFee(selectedCategory)} via Razorpay` : "Confirm Free Registration"}
                     onPress={handleInitiatePayment}
@@ -1270,7 +1241,6 @@ export default function TournamentDetailsScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* RAZORPAY GATEWAY WEBVIEW MODAL */}
       <Modal
         visible={isRazorpayModalVisible}
         animationType="slide"
@@ -1278,7 +1248,6 @@ export default function TournamentDetailsScreen() {
         onRequestClose={handleCloseRazorpay}
       >
         <View style={{ flex: 1, backgroundColor: '#0F2C59', paddingTop: insets.top }}>
-          {/* Header */}
           <View className="flex-row items-center justify-between px-4 py-3.5 bg-[#0F2C59] border-b border-white/10">
             <View className="flex-row items-center flex-1 mr-3">
               <View className="w-9 h-9 rounded-full bg-white/10 items-center justify-center mr-3 border border-white/15">
@@ -1303,7 +1272,6 @@ export default function TournamentDetailsScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* WebView Container */}
           <View style={{ flex: 1, backgroundColor: '#F9FAFB', paddingBottom: insets.bottom }}>
             {razorpayOrder && (
               <WebView
@@ -1327,7 +1295,6 @@ export default function TournamentDetailsScreen() {
         </View>
       </Modal>
 
-      {/* REGISTRATION & PAYMENT SUCCESS MODAL WITH DOWNLOAD INVOICE */}
       <Modal
         visible={showSuccessModal}
         transparent

@@ -97,7 +97,6 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
             borderColor: styles.cardBorder
           }}
         >
-          {/* Icon Badge */}
           <View 
             style={{ 
               width: 64, 
@@ -114,7 +113,6 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
             <Ionicons name={activeIcon} size={30} color={styles.iconColor} />
           </View>
 
-          {/* Title & Description */}
           <Typography variant="h3" color="secondary" weight="bold" className="font-outfit-bold text-xl text-center mb-2">
             {title}
           </Typography>
@@ -123,7 +121,6 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
             {message}
           </Typography>
 
-          {/* Action Buttons */}
           <View className="flex-row w-full gap-3">
             <TouchableOpacity
               style={{ 

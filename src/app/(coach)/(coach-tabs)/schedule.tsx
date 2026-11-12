@@ -29,7 +29,6 @@ interface Slot {
   };
 }
 
-// Helper to safely normalize and extract sport strings from strings or objects
 const cleanSport = (sp: any): string => {
   if (!sp) return '';
   if (typeof sp === 'string') return sp.trim();
@@ -39,7 +38,6 @@ const cleanSport = (sp: any): string => {
   return String(sp).trim();
 };
 
-// Safe locations array extractor
 const extractLocationsArray = (raw: any): any[] => {
   if (Array.isArray(raw)) return raw;
   if (Array.isArray(raw?.data)) return raw.data;
@@ -48,7 +46,6 @@ const extractLocationsArray = (raw: any): any[] => {
   return [];
 };
 
-// Convert backend 24h format and date string to a valid Date object in local time
 const parseTimeAndDateToDateObject = (dateStr: any, timeStr: any): Date => {
   if (!dateStr || typeof dateStr !== 'string' || !timeStr || typeof timeStr !== 'string') return new Date();
   try {
@@ -82,7 +79,6 @@ export default function ScheduleScreen() {
     }
   });
 
-  // Extract coach's registered sports dynamically
   const coachRegisteredSports = useMemo(() => {
     const list: string[] = [];
     const add = (item: any) => {
@@ -99,7 +95,6 @@ export default function ScheduleScreen() {
     return list;
   }, [profileResponse, user]);
 
-  // Only show the coach's registered sports from onboarding/profile
   const availableSports = useMemo(() => {
     if (coachRegisteredSports.length > 0) {
       return coachRegisteredSports;
@@ -108,7 +103,6 @@ export default function ScheduleScreen() {
     return [fallback];
   }, [coachRegisteredSports, profileResponse, user]);
 
-  // Pricing details dynamically resolved from profile (no hardcoded fallback)
   const coachApprovedIndividualPrice = 
     profileResponse?.individualPrice ?? 
     profileResponse?.profile?.individualPrice ?? 
@@ -124,7 +118,6 @@ export default function ScheduleScreen() {
     profileResponse?.requestedGroupPricePerPerson ?? 
     profileResponse?.profile?.requestedGroupPricePerPerson;
 
-  // Form States
   const [selectedSport, setSelectedSport] = useState<string>('Tennis');
   const [newTitle, setNewTitle] = useState('');
   const [locationName, setLocationName] = useState('');
@@ -135,7 +128,6 @@ export default function ScheduleScreen() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  // Dynamic fee calculation based on selected capacity
   const resolvedSlotFee = useMemo(() => {
     const cap = parseInt(capacity, 10) || 1;
     if (cap > 1 && coachApprovedGroupPrice && Number(coachApprovedGroupPrice) > 0) {
@@ -147,7 +139,6 @@ export default function ScheduleScreen() {
     return 0;
   }, [capacity, coachApprovedGroupPrice, coachApprovedIndividualPrice]);
 
-  // Sync selected sport from coach profile when loaded
   useEffect(() => {
     if (coachRegisteredSports.length > 0 && (!selectedSport || selectedSport === 'Tennis')) {
       const primary = coachRegisteredSports[0];
@@ -158,23 +149,20 @@ export default function ScheduleScreen() {
     }
   }, [coachRegisteredSports]);
   
-  // Date Range State
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [showCalendarModal, setShowCalendarModal] = useState(false);
 
   const [startTime, setStartTime] = useState(new Date());
   const [showStartTimePicker, setShowStartTimePicker] = useState(false);
-  const [endTime, setEndTime] = useState(new Date(new Date().getTime() + 60 * 60 * 1000)); // 1 hour later
+  const [endTime, setEndTime] = useState(new Date(new Date().getTime() + 60 * 60 * 1000));
   const [showEndTimePicker, setShowEndTimePicker] = useState(false);
 
-  // Form Errors State
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-  // Helper functions to prevent timezone shifting
   const parseDateString = (dateStr: string) => {
     const [year, month, day] = dateStr.split('-').map(Number);
-    return new Date(year, month - 1, day, 12, 0, 0); // Noon local time
+    return new Date(year, month - 1, day, 12, 0, 0);
   };
 
   const formatToDateString = (date: Date) => {
@@ -259,7 +247,6 @@ export default function ScheduleScreen() {
   const handleSelectStartTime = (timeStr: string) => {
     const newStart = parseTimeStringToDate(timeStr);
     setStartTime(newStart);
-    // Auto-advance End Time by current selected duration (capped at 2 hours / 120 mins)
     const effectiveDuration = Math.min(selectedDuration, 120);
     const newEnd = new Date(newStart.getTime() + effectiveDuration * 60 * 1000);
     setEndTime(newEnd);
@@ -342,7 +329,6 @@ export default function ScheduleScreen() {
     if (endDate) {
       marked[endDate] = { endingDay: true, color: '#F58220', textColor: 'white' };
       
-      // Fill dates in between
       if (startDate && endDate) {
         let curr = parseDateString(startDate);
         curr.setDate(curr.getDate() + 1);
@@ -565,7 +551,6 @@ export default function ScheduleScreen() {
       dateDisplay = `${sched.startDate} - ${sched.endDate}`;
     }
 
-    // Safely combine date and time to preserve accurate values inside the form when editing
     const startTimeObj = parseTimeAndDateToDateObject(sched?.startDate, sched?.startTime);
     const endTimeObj = parseTimeAndDateToDateObject(sched?.startDate, sched?.endTime);
 
@@ -598,7 +583,6 @@ export default function ScheduleScreen() {
 
   const slotsList = Array.isArray(fetchedSchedules) ? fetchedSchedules.map(mapBackendScheduleToSlot) : [];
 
-  // Existing slots scheduled for the selected date
   const existingSlotsForSelectedDate = useMemo(() => {
     if (!startDate) return [];
     return slotsList.filter(s => {
@@ -611,7 +595,6 @@ export default function ScheduleScreen() {
     });
   }, [startDate, slotsList]);
 
-  // Available End Time slots strictly after current startTime and up to 2 hours (120 mins)
   const availableEndSlots = useMemo(() => {
     const startMins = startTime.getHours() * 60 + startTime.getMinutes();
     return TIME_SLOTS.filter(tStr => {
@@ -745,7 +728,6 @@ export default function ScheduleScreen() {
     setStartDate('');
     setEndDate('');
 
-    // Pre-fill location if coach already has existing locations to keep venue consistent
     const existingLocs = extractLocationsArray(locationsResponse);
     if (existingLocs.length > 0) {
       const primaryLoc = existingLocs[0];
@@ -850,7 +832,6 @@ export default function ScheduleScreen() {
         )}
       </ScrollView>
 
-      {/* Add Slot Modal */}
       <Modal
         visible={isModalVisible}
         animationType="slide"
@@ -892,7 +873,6 @@ export default function ScheduleScreen() {
               )}
 
               <View className="space-y-4 mb-6">
-                {/* Session Sport Selector (strictly from coach's profile sports) */}
                 <View className="mb-2">
                   <Typography variant="caption" color="secondary" weight="bold" className="mb-2 ml-1 font-outfit-bold uppercase tracking-wider text-gray-500">
                     Session Sport
@@ -937,7 +917,6 @@ export default function ScheduleScreen() {
                   error={formErrors.title}
                 />
 
-                {/* Quick Venue Selection if coach has existing locations */}
                 {(() => {
                   const existingLocs = extractLocationsArray(locationsResponse);
                   if (existingLocs.length === 0) return null;
@@ -1018,7 +997,6 @@ export default function ScheduleScreen() {
                   </View>
                 </View>
 
-                {/* Dynamic Session Fee Badge (No input box needed) */}
                 <View className="mb-4 flex-row items-center bg-orange-50/90 border border-orange-200/80 px-4 py-3 rounded-2xl">
                   <View className="w-8 h-8 rounded-full bg-orange-100 items-center justify-center mr-3">
                     <Ionicons name="pricetag" size={16} color="#FF5100" />
@@ -1081,7 +1059,6 @@ export default function ScheduleScreen() {
                   </View>
                 </View>
 
-                {/* Existing Slots on this date (prevents accidental overlap) */}
                 {existingSlotsForSelectedDate.length > 0 && (
                   <View className="mb-4 bg-blue-50/90 border border-blue-200/80 rounded-2xl p-3.5">
                     <View className="flex-row items-center mb-1.5">
@@ -1102,7 +1079,6 @@ export default function ScheduleScreen() {
                   </View>
                 )}
 
-                {/* Session Duration Selector (30 mins, 45 mins, 1 hr, etc.) */}
                 <View className="mb-3">
                   <Typography variant="caption" color="secondary" weight="bold" className="mb-2 ml-1 font-outfit-bold uppercase tracking-wider text-gray-500">
                     Session Duration
@@ -1134,7 +1110,6 @@ export default function ScheduleScreen() {
                   </View>
                 </View>
 
-                {/* Inline Start Time Pill Selector (30-min increments) */}
                 <View className="mb-3">
                   <Typography variant="caption" color="secondary" weight="bold" className="mb-2 ml-1 font-outfit-bold uppercase tracking-wider text-gray-500">
                     Start Time
@@ -1162,7 +1137,6 @@ export default function ScheduleScreen() {
                   </ScrollView>
                 </View>
 
-                {/* Inline End Time Pill Selector (strictly after Start Time, max 2 hours) */}
                 <View className="mb-4">
                   <View className="flex-row justify-between items-center mb-2">
                     <Typography variant="caption" color="secondary" weight="bold" className="ml-1 font-outfit-bold uppercase tracking-wider text-gray-500">
@@ -1214,7 +1188,6 @@ export default function ScheduleScreen() {
           </View>
         </KeyboardAvoidingView>
 
-        {/* Calendar Range Selection Overlay */}
         {showCalendarModal && (
           <View className="absolute top-0 bottom-0 left-0 right-0 justify-center bg-black/60 px-4 z-50">
             <View className="bg-white rounded-3xl p-6 shadow-xl">
@@ -1246,7 +1219,6 @@ export default function ScheduleScreen() {
           </View>
         )}
       </Modal>
-      {/* Modern Confirm Modal for Slot Deletion */}
       <ConfirmModal
         visible={!!slotToDelete}
         onClose={() => setSlotToDelete(null)}

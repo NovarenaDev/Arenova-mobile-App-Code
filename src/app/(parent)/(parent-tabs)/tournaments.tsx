@@ -53,7 +53,6 @@ export default function ParentTournamentsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#EEF3F9]" edges={['top']}>
-      {/* Header */}
       <View className="px-5 py-4 bg-[#0F2C59] border-b border-gray-100 flex-row justify-between items-center shadow-sm">
         <View className="flex-1 mr-2">
           <Typography variant="h2" color="white" weight="bold" className="font-outfit-bold">
@@ -79,7 +78,6 @@ export default function ParentTournamentsScreen() {
         className="flex-1 px-4 pt-4"
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 40, 60) }}
       >
-        {/* Search Bar */}
         <View className="flex-row items-center bg-white rounded-2xl px-4 py-3 border border-gray-200 shadow-sm mb-4">
           <Ionicons name="search" size={20} color="#9CA3AF" className="mr-2" />
           <TextInput
@@ -96,7 +94,6 @@ export default function ParentTournamentsScreen() {
           )}
         </View>
 
-        {/* Sport Category Filters */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-5 flex-row">
           {categoriesList.map((cat: string) => (
             <TouchableOpacity
@@ -120,7 +117,6 @@ export default function ParentTournamentsScreen() {
           ))}
         </ScrollView>
 
-        {/* Content Section */}
         {isLoading || isRefetching ? (
           <View className="py-16 items-center justify-center">
             <ActivityIndicator size="large" color="#FF5100" />

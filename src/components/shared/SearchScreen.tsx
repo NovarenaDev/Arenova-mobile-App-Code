@@ -32,7 +32,6 @@ export default function FindCoachScreen() {
   const [activeFilter, setActiveFilter] = useState(sport || 'All');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Strict Role Guard: Coaches cannot access player coach booking screens
   useEffect(() => {
     if (user?.role === 'coach') {
       Alert.alert(
@@ -80,7 +79,6 @@ export default function FindCoachScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#EEF3F9]" edges={['top']}>
-      {/* Header */}
       <View className="px-4 py-4 flex-row justify-between items-center bg-white border-b border-gray-100 shadow-sm z-10">
         <TouchableOpacity 
           onPress={() => {

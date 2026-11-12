@@ -10,7 +10,7 @@ export interface User {
   phone: string;
   email?: string;
   role: UserRole;
-  isRegistered: boolean; // false if only OTP verified but profile not complete
+  isRegistered: boolean;
   password?: string;
   hasPassword?: boolean;
   sports?: string[];

@@ -73,7 +73,6 @@ export default function IndividualDashboard() {
   const allBookings: any[] = Array.isArray(rawBookings) ? rawBookings : [];
   const hasBookings = allBookings.length > 0;
 
-  // Prioritize active and ongoing sessions, then sort by session date
   const sortedBookings = [...allBookings].sort((a: any, b: any) => {
     const statusWeight: Record<string, number> = {
       ongoing: 1,
@@ -114,7 +113,6 @@ export default function IndividualDashboard() {
     <View className="flex-1 bg-[#EEF3F9]">
       <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} scrollEventThrottle={16} decelerationRate="normal" className="flex-1" contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 40, 60) }}>
         
-        {/* Header Section */}
         <View className="bg-secondary px-6 pt-16 pb-8 rounded-b-3xl shadow-sm">
           <View className="flex-row justify-between items-center mb-2">
             <View className="flex-1 mr-2">
@@ -136,7 +134,6 @@ export default function IndividualDashboard() {
           </View>
         </View>
 
-        {/* Dynamic Player Banner Carousel (Only rendered when dynamic banners exist in backend) */}
         {playerBanners.length > 0 && (
           <View className="mt-6 mx-6 relative">
             <ScrollView
@@ -208,7 +205,6 @@ export default function IndividualDashboard() {
               ))}
             </ScrollView>
 
-            {/* Carousel Indicator Dots */}
             {playerBanners.length > 1 && (
               <View className="flex-row justify-center items-center mt-3">
                 {playerBanners.map((_, i) => (
@@ -222,7 +218,6 @@ export default function IndividualDashboard() {
           </View>
         )}
 
-        {/* Fast Action Categories */}
         <View className="px-6 pt-6 pb-12 flex-row justify-between">
           <TouchableOpacity 
             onPress={() => router.push('/(individual)/select-sport')}
@@ -253,7 +248,6 @@ export default function IndividualDashboard() {
           </TouchableOpacity>
         </View>
 
-        {/* Conditional Display: Booked Sessions (if bookings exist) vs Recommended Coaches (if no bookings) */}
         <View className="px-6 pb-12">
           {hasBookings ? (
             <>

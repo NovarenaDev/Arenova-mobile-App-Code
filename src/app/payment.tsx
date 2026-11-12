@@ -15,7 +15,6 @@ export default function PaymentScreen() {
   const { user } = useAuthStore();
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Strict Role Guard: Coaches cannot make booking payments
   React.useEffect(() => {
     if (user?.role === 'coach') {
       Alert.alert(
@@ -293,7 +292,6 @@ export default function PaymentScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#EEF3F9]" edges={['top']}>
-      {/* Header */}
       <View className="px-4 py-4 flex-row justify-between items-center bg-white border-b border-gray-100 shadow-sm z-10">
         <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
           <Ionicons name="arrow-back" size={24} color="#0F2C59" />
@@ -306,7 +304,6 @@ export default function PaymentScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} className="flex-1 px-4 pt-6" contentContainerStyle={{ flexGrow: 1, paddingBottom: Math.max(insets.bottom + 80, 100) }}>
         
-        {/* Attendee Details Card */}
         <View className="bg-white rounded-2xl p-5 mb-5 shadow-sm border border-gray-50">
           <Typography variant="subtitle1" color="secondary" weight="bold" className="mb-3 font-outfit-bold">
             Booking Details
@@ -336,7 +333,6 @@ export default function PaymentScreen() {
           </View>
         </View>
         
-        {/* Payment Methods Card */}
         <View className="bg-white rounded-2xl p-5 mb-6 shadow-sm border border-gray-50">
           <Typography variant="subtitle1" color="secondary" weight="bold" className="mb-4 font-outfit-bold">
             Select Payment Method
@@ -361,7 +357,6 @@ export default function PaymentScreen() {
           </Typography>
         </View>
 
-        {/* Pricing summary */}
         <View className="bg-white rounded-2xl p-5 mb-8 shadow-sm border border-gray-50">
           <Typography variant="subtitle1" color="secondary" weight="bold" className="mb-4 font-outfit-bold">
             Order Summary
@@ -378,7 +373,6 @@ export default function PaymentScreen() {
 
       </ScrollView>
 
-      {/* Sticky Bottom Pay Button */}
       <View style={{ position: 'absolute', bottom: 0, width: '100%', backgroundColor: '#ffffff', padding: 16, borderTopWidth: 1, borderTopColor: '#f3f4f6', paddingBottom: Math.max(insets.bottom + 16, 32), zIndex: 20 }}>
         <Button 
           title={`Pay Now (₹${computedTotal})`}
@@ -387,7 +381,6 @@ export default function PaymentScreen() {
         />
       </View>
 
-      {/* Razorpay Gateway Checkout Modal */}
       <Modal
         visible={isRazorpayModalVisible}
         animationType="slide"
@@ -395,7 +388,6 @@ export default function PaymentScreen() {
         onRequestClose={handleCloseRazorpay}
       >
         <View style={{ flex: 1, backgroundColor: '#0F2C59', paddingTop: insets.top }}>
-          {/* Header */}
           <View className="px-4 py-3.5 bg-[#0F2C59] border-b border-white/10 flex-row justify-between items-center shadow-sm">
             <View className="flex-row items-center flex-1 mr-3">
               <View className="w-9 h-9 rounded-full bg-white/10 items-center justify-center mr-3 border border-white/15">

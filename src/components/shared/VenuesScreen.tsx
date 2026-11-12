@@ -21,7 +21,6 @@ export default function VenuesScreen() {
   const { user } = useAuthStore();
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Strict Role Guard: Coaches cannot access player venue booking screens
   useEffect(() => {
     if (user?.role === 'coach') {
       Alert.alert(
@@ -51,7 +50,6 @@ export default function VenuesScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#EEF3F9]" edges={['top']}>
-      {/* Header */}
       <View className="px-4 py-3 bg-[#0F2C59] border-b border-gray-100 flex-row justify-between items-center shadow-sm">
         <TouchableOpacity 
           onPress={() => {
@@ -83,7 +81,6 @@ export default function VenuesScreen() {
         className="flex-1 px-4 pt-4"
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 40, 60) }}
       >
-        {/* Search Bar */}
         <View className="flex-row items-center bg-white rounded-2xl px-4 py-3 border border-gray-200 shadow-sm mb-5">
           <Ionicons name="search" size={20} color="#9CA3AF" className="mr-2" />
           <TextInput
@@ -163,7 +160,6 @@ export default function VenuesScreen() {
                       </Typography>
                     </View>
 
-                    {/* Amenities chips */}
                     {Array.isArray(amenities) && amenities.length > 0 && (
                       <View className="flex-row flex-wrap gap-1.5 mb-4">
                         {amenities.slice(0, 3).map((item: string, i: number) => (

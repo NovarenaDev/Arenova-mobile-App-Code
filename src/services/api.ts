@@ -2,7 +2,6 @@ import axios from 'axios';
 import { useAuthStore } from '../store';
 import { safeStorage } from './storage';
 
-// Default base URL pointing to live HTTPS API domain
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api.getarenova.com/api';
 
 export const RAZORPAY_KEY_ID = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID || 'rzp_live_ToWiCACQpuVBCX';
@@ -19,7 +18,6 @@ api.interceptors.request.use(
   async (config) => {
     let token = useAuthStore.getState().token;
     
-    // Fallback: If memory hasn't hydrated yet, read token directly from safeStorage
     if (!token) {
       try {
         const storedToken = await safeStorage.getItem('auth_token');
@@ -28,7 +26,6 @@ api.interceptors.request.use(
           useAuthStore.setState({ token });
         }
       } catch (_) {
-        // ignore
       }
     }
 
@@ -60,7 +57,6 @@ api.interceptors.response.use(
     const status = error.response?.status;
     const url = (originalRequest?.url || '').toString();
 
-    // Endpoints where a 401 should NEVER trigger global session logout
     const isAuthRoute = url.includes('/auth/');
     const isPublicOrOptional = 
       url.includes('/banners') || 
@@ -71,7 +67,6 @@ api.interceptors.response.use(
 
     const hadAuthHeader = !!originalRequest?.headers?.Authorization;
 
-    // Only handle true expired/invalid token on authenticated protected routes
     if (
       status === 401 && 
       !originalRequest?._retry && 

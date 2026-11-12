@@ -128,7 +128,6 @@ export default function CoachActivityScreen() {
     );
   };
 
-  // Merge sessions from all available endpoints (my sessions & segmented)
   const rawSegmentedUpcoming = Array.isArray(segmentedSessions?.data?.upcoming) ? segmentedSessions.data.upcoming : [];
   const rawSegmentedCurrent = Array.isArray(segmentedSessions?.data?.current) ? segmentedSessions.data.current : [];
   const rawSegmentedCompleted = Array.isArray(segmentedSessions?.data?.completed) ? segmentedSessions.data.completed : [];
@@ -319,7 +318,6 @@ export default function CoachActivityScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      {/* 3 Segment Tabs: Upcoming, Current, Completed */}
       <View className="px-3 pt-4 pb-2">
         <View className="flex-row bg-white rounded-full border border-gray-200 overflow-hidden h-12 p-1">
           <TouchableOpacity 
@@ -440,7 +438,6 @@ export default function CoachActivityScreen() {
               </Typography>
             </View>
 
-            {/* Accept / Decline / Details Action Row for Requested Sessions */}
             {booking.rawStatus === 'requested' ? (
               <View className="flex-row gap-2 pt-3 border-t border-gray-100 items-center">
                 <TouchableOpacity
@@ -572,7 +569,6 @@ export default function CoachActivityScreen() {
                 </TouchableOpacity>
               </View>
             ) : (
-              /* Upcoming tab */
               <View className="flex-row justify-end mt-1 gap-2 items-center">
                 <TouchableOpacity
                   onPress={() => setSelectedSessionForOtp({
@@ -619,7 +615,6 @@ export default function CoachActivityScreen() {
 
       </ScrollView>
 
-      {/* INDIVIDUAL / GROUP SESSION OTP VERIFICATION MODAL */}
       <SessionOtpVerificationModal
         visible={!!selectedSessionForOtp}
         session={selectedSessionForOtp}

@@ -12,7 +12,6 @@ try {
     strict: false,
   });
 } catch (e) {
-  // ignore
 }
 
 LogBox.ignoreLogs([
@@ -46,7 +45,6 @@ export default function RootLayout() {
 
   useEffect(() => {
     hydrateAuth();
-    // Safety fallback timeout to prevent app hanging on splash screen
     const timer = setTimeout(() => {
       if (useAuthStore.getState().isLoading) {
         useAuthStore.setState({ isLoading: false });

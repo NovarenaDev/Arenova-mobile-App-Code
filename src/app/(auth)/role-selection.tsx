@@ -17,7 +17,6 @@ export default function RoleSelectionScreen() {
     { id: 'coach', title: 'Coach', icon: 'person-circle' },
   ] as const;
 
-
   return (
     <SafeAreaView className="flex-1 bg-[#EEF3F9]">
       <View className="flex-1 px-6 pt-4">

@@ -50,16 +50,16 @@ const sanitizeTypographyChildren = (child: React.ReactNode): React.ReactNode => 
 
 const getVariantClasses = (variant: TypographyVariant) => {
   switch (variant) {
-    case 'h1': return 'text-4xl font-bold'; // 36px
-    case 'h2': return 'text-3xl font-bold'; // 30px
-    case 'h3': return 'text-2xl font-semibold'; // 24px
-    case 'h4': return 'text-xl font-semibold'; // 20px
-    case 'subtitle1': return 'text-lg font-medium'; // 18px
-    case 'subtitle2': return 'text-base font-medium'; // 16px
-    case 'body1': return 'text-base'; // 16px
-    case 'body2': return 'text-sm'; // 14px
-    case 'caption': return 'text-xs'; // 12px
-    case 'overline': return 'text-[10px] uppercase tracking-wider font-semibold'; // 10px
+    case 'h1': return 'text-4xl font-bold';
+    case 'h2': return 'text-3xl font-bold';
+    case 'h3': return 'text-2xl font-semibold';
+    case 'h4': return 'text-xl font-semibold';
+    case 'subtitle1': return 'text-lg font-medium';
+    case 'subtitle2': return 'text-base font-medium';
+    case 'body1': return 'text-base';
+    case 'body2': return 'text-sm';
+    case 'caption': return 'text-xs';
+    case 'overline': return 'text-[10px] uppercase tracking-wider font-semibold';
     default: return 'text-base';
   }
 };

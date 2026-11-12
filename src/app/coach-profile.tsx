@@ -33,7 +33,6 @@ export default function PublicCoachProfileScreen() {
   const { id, coachId } = useLocalSearchParams<{ id?: string; coachId?: string }>();
   const targetCoachId = id || coachId;
 
-  // Strict Role Guard: Coaches cannot access player coach profile booking screens
   useEffect(() => {
     if (user?.role === 'coach') {
       Alert.alert(
@@ -44,7 +43,6 @@ export default function PublicCoachProfileScreen() {
     }
   }, [user, router]);
 
-  // Fetch coach details
   const { data: coachResponse, isLoading } = useQuery({
     queryKey: ['coachProfile', targetCoachId],
     queryFn: async () => {
@@ -98,7 +96,6 @@ export default function PublicCoachProfileScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#EEF3F9' }}>
-      {/* Header */}
       <View style={{ paddingHorizontal: 16, paddingVertical: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: '#f3f4f6', zIndex: 10 }}>
         <TouchableOpacity onPress={() => router.back()} style={{ padding: 8, marginLeft: -8 }}>
           <Ionicons name="arrow-back" size={24} color="#0F2C59" />
@@ -110,7 +107,6 @@ export default function PublicCoachProfileScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1, paddingHorizontal: 16, paddingTop: 24 }} contentContainerStyle={{ paddingBottom: 120 }}>
-        {/* Main Info Card */}
         <View style={{ backgroundColor: '#ffffff', borderRadius: 16, padding: 24, marginBottom: 20, alignItems: 'center', borderWidth: 1, borderColor: '#f3f4f6' }}>
           <View style={{ width: 96, height: 96, borderRadius: 48, backgroundColor: '#F5CEAA', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
             <Typography variant="h1" color="primary" weight="bold" className="font-outfit-bold text-[28px]">{coachInitials}</Typography>
@@ -123,7 +119,6 @@ export default function PublicCoachProfileScreen() {
           </View>
         </View>
 
-        {/* Experience Details */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20, gap: 12 }}>
           <View style={{ flex: 1, backgroundColor: '#ffffff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#f3f4f6', alignItems: 'center' }}>
             <Ionicons name="ribbon-outline" size={24} color="#FF5100" style={{ marginBottom: 4 }} />
@@ -137,7 +132,6 @@ export default function PublicCoachProfileScreen() {
           </View>
         </View>
 
-        {/* About/Bio Section */}
         <View style={{ backgroundColor: '#ffffff', borderRadius: 16, padding: 20, marginBottom: 20, borderWidth: 1, borderColor: '#f3f4f6' }}>
           <Typography variant="subtitle1" color="secondary" weight="bold" className="mb-2 font-outfit-bold">About</Typography>
           <Typography variant="body2" color="text" className="leading-5 font-outfit text-gray-600">
@@ -145,7 +139,6 @@ export default function PublicCoachProfileScreen() {
           </Typography>
         </View>
 
-        {/* Specialties/Skills */}
         {specialties.length > 0 && (
           <View style={{ backgroundColor: '#ffffff', borderRadius: 16, padding: 20, marginBottom: 20, borderWidth: 1, borderColor: '#f3f4f6' }}>
             <Typography variant="subtitle1" color="secondary" weight="bold" className="mb-3 font-outfit-bold">Specialties & Skills</Typography>
@@ -160,7 +153,6 @@ export default function PublicCoachProfileScreen() {
         )}
       </ScrollView>
 
-      {/* Book Button */}
       <View style={{ position: 'absolute', bottom: 0, width: '100%', backgroundColor: '#ffffff', padding: 16, borderTopWidth: 1, borderTopColor: '#f3f4f6', paddingBottom: Math.max(insets.bottom + 16, 32), zIndex: 20 }}>
         <Button 
           title="Book Session" 

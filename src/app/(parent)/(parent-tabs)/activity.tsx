@@ -44,16 +44,13 @@ export default function BookingsScreen() {
     return unsubscribe;
   }, [navigation]);
 
-  // Section toggle: Coaching Sessions vs Tournament Registrations
   const [sectionType, setSectionType] = useState<'coaching' | 'tournaments'>('coaching');
   const [activeTab, setActiveTab] = useState<'upcoming' | 'completed'>('upcoming');
   const [tournTab, setTournTab] = useState<'confirmed' | 'pending'>('confirmed');
 
-  // Tournaments Detail & Invoice States
   const [selectedReg, setSelectedReg] = useState<any | null>(null);
   const [isDownloadingInvoice, setIsDownloadingInvoice] = useState(false);
 
-  // Resume Payment States
   const [activePayReg, setActivePayReg] = useState<any | null>(null);
   const [isRazorpayModalVisible, setIsRazorpayModalVisible] = useState(false);
   const [isResumingPayment, setIsResumingPayment] = useState(false);
@@ -64,7 +61,6 @@ export default function BookingsScreen() {
     currency?: string;
   } | null>(null);
 
-  // 1. Coaching Bookings Query
   const { 
     data: bookingsResponse, 
     isLoading: isLoadingBookings, 
@@ -78,7 +74,6 @@ export default function BookingsScreen() {
     }
   });
 
-  // 2. Tournament Registrations Query
   const { 
     data: tournamentsResponse, 
     isLoading: isLoadingTournaments, 
@@ -100,7 +95,6 @@ export default function BookingsScreen() {
         console.log('Error fetching registrations:', e);
       }
 
-      // Check invoices to pull any registration by that ID
       try {
         const invRes = await api.get('/invoices/my', { params: { limit: 50 } });
         const invList = normalizeInvoices(invRes.data);
@@ -133,7 +127,6 @@ export default function BookingsScreen() {
     }
   });
 
-  // 3. Invoices Query
   const { data: invoicesResponse } = useQuery({
     queryKey: ['invoices'],
     queryFn: async () => {
@@ -547,7 +540,6 @@ export default function BookingsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#EEF3F9]" edges={['top']}>
-      {/* Header */}
       <View className="px-4 py-4 bg-white border-b border-gray-100 flex-row justify-between items-center shadow-sm z-10">
         <Typography variant="h2" color="secondary" weight="bold" className="font-outfit-bold">
           Family Activity
@@ -557,7 +549,6 @@ export default function BookingsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Primary Section Switcher: Coaching Sessions vs Tournaments */}
       <View className="px-4 pt-3 pb-1">
         <View className="flex-row bg-white rounded-2xl p-1 border border-gray-200 shadow-sm">
           <TouchableOpacity 
@@ -602,7 +593,6 @@ export default function BookingsScreen() {
         </View>
       </View>
 
-      {/* Community Passes & Complaints Quick Access */}
       <View className="px-4 pt-1.5 pb-1">
         <TouchableOpacity 
           onPress={() => router.push('/(parent)/community?tab=subscriptions')}
@@ -631,7 +621,6 @@ export default function BookingsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* SECTION 1: COACHING SESSIONS */}
       {sectionType === 'coaching' && (
         <>
           <View className="px-4 pt-2 pb-2">
@@ -814,10 +803,8 @@ export default function BookingsScreen() {
         </>
       )}
 
-      {/* SECTION 2: TOURNAMENTS HISTORY */}
       {sectionType === 'tournaments' && (
         <>
-          {/* Total Paid & Invoices Summary Header for Tournaments */}
           <View className="px-4 pt-2 pb-1">
             <View className="bg-white rounded-2xl p-3 flex-row items-center justify-between border border-gray-200 shadow-sm">
               <View className="flex-row items-center flex-1 mr-2">
@@ -973,7 +960,6 @@ export default function BookingsScreen() {
                       </View>
                     </View>
 
-                    {/* Participant Details Badge */}
                     <View className="bg-gray-50 rounded-2xl p-3 mb-3 border border-gray-100">
                       <View className="flex-row justify-between items-center">
                         <Typography variant="caption" color="muted" className="font-outfit">Participant</Typography>
@@ -1018,7 +1004,6 @@ export default function BookingsScreen() {
                       ) : null}
                     </View>
 
-                    {/* Action Bar */}
                     <View className="flex-row items-center justify-between pt-1">
                       <Typography variant="caption" color="muted" className="font-outfit text-xs">
                         {dateStr ? `Reg: ${dateStr}` : 'Confirmed'}
@@ -1079,7 +1064,6 @@ export default function BookingsScreen() {
         </>
       )}
 
-      {/* REGISTRATION DETAIL MODAL */}
       <Modal
         visible={!!selectedReg}
         transparent
@@ -1227,7 +1211,6 @@ export default function BookingsScreen() {
         </View>
       </Modal>
 
-      {/* Razorpay WebView Modal */}
       <Modal
         visible={isRazorpayModalVisible}
         animationType="slide"
@@ -1235,7 +1218,6 @@ export default function BookingsScreen() {
         onRequestClose={handleCloseRazorpay}
       >
         <View style={{ flex: 1, backgroundColor: '#0F2C59', paddingTop: insets.top }}>
-          {/* Header */}
           <View className="flex-row items-center justify-between px-4 py-3.5 bg-[#0F2C59] border-b border-white/10">
             <View className="flex-row items-center flex-1 mr-3">
               <View className="w-9 h-9 rounded-full bg-white/10 items-center justify-center mr-3 border border-white/15">
@@ -1260,7 +1242,6 @@ export default function BookingsScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* WebView Container */}
           <View style={{ flex: 1, backgroundColor: '#F9FAFB', paddingBottom: insets.bottom }}>
             {razorpayOrder && (
               <WebView

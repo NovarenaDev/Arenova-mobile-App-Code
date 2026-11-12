@@ -661,7 +661,6 @@ export default function ProfileScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
         style={{ flex: 1 }}
       >
-        {/* Top Header */}
         <View className="px-4 py-4 flex-row justify-between items-center bg-white border-b border-gray-100 shadow-sm z-10">
           <Typography variant="h2" color="secondary" weight="bold" className="font-outfit-bold">
             My Profile
@@ -684,7 +683,6 @@ export default function ProfileScreen() {
             <ActivityIndicator size="large" color="#FF5100" style={{ marginTop: 40 }} />
           ) : (
             <>
-              {/* On-Screen Error Banner */}
               {submitError && (
                 <View className="mb-4 bg-red-50 border border-red-200 rounded-2xl p-4 flex-row items-start shadow-sm">
                   <Ionicons name="alert-circle" size={20} color="#EF4444" style={{ marginRight: 10, marginTop: 2 }} />
@@ -702,7 +700,6 @@ export default function ProfileScreen() {
                 </View>
               )}
 
-              {/* Header Profile Summary Panel */}
               <View className="bg-secondary rounded-3xl p-6 mb-6 shadow-md relative overflow-hidden">
                 <View className="flex-row items-center">
                   <TouchableOpacity 
@@ -754,7 +751,6 @@ export default function ProfileScreen() {
                   )}
                 </View>
 
-                {/* Quick Stats Banner for Coaches */}
                 {!isEditing && user?.role === 'coach' && (
                   <View className="flex-row pt-4 mt-4 border-t border-white/10">
                     <View className="flex-1 items-center border-r border-white/10">
@@ -776,14 +772,12 @@ export default function ProfileScreen() {
                 )}
               </View>
 
-              {/* Account Details Card */}
               <View className="bg-white rounded-3xl p-5 mb-5 shadow-sm border border-gray-100">
                 <Typography variant="subtitle1" color="secondary" weight="bold" className="mb-4 font-outfit-bold">
                   Account Details
                 </Typography>
 
                 <View style={{ gap: 12 }}>
-                  {/* Name Input (Visible in edit mode) */}
                   {isEditing && (
                     <TextInput 
                       label="Full Name"
@@ -793,7 +787,6 @@ export default function ProfileScreen() {
                     />
                   )}
 
-                  {/* Phone Input (Visible in edit mode) */}
                   {isEditing && (
                     <TextInput 
                       label="Phone Number"
@@ -804,7 +797,6 @@ export default function ProfileScreen() {
                     />
                   )}
 
-                  {/* Email (Visible in edit mode as read-only) */}
                   {isEditing && (
                     <TextInput 
                       label="Email Address"
@@ -814,7 +806,6 @@ export default function ProfileScreen() {
                     />
                   )}
 
-                  {/* Email Row (Visible in view mode) */}
                   {!isEditing && (
                     <View className="flex-row items-center py-2.5">
                       <View className="w-8 h-8 rounded-full bg-blue-50 items-center justify-center mr-3">
@@ -830,7 +821,6 @@ export default function ProfileScreen() {
                     </View>
                   )}
 
-                  {/* Location (Visible in edit mode) */}
                   {isEditing && (
                     <TextInput 
                       label="Location/City"
@@ -840,7 +830,6 @@ export default function ProfileScreen() {
                     />
                   )}
 
-                  {/* Location Row (Visible in view mode) */}
                   {!isEditing && (
                     <View className="flex-row items-center py-2.5">
                       <View className="w-8 h-8 rounded-full bg-red-50 items-center justify-center mr-3">
@@ -855,7 +844,6 @@ export default function ProfileScreen() {
                     </View>
                   )}
 
-                  {/* Experience (Visible in edit mode for coaches) */}
                   {user?.role === 'coach' && isEditing && (
                     <TextInput 
                       label="Coaching Experience (Years)"
@@ -866,7 +854,6 @@ export default function ProfileScreen() {
                     />
                   )}
 
-                  {/* Experience Row (Visible in view mode for coaches) */}
                   {user?.role === 'coach' && !isEditing && (
                     <View className="flex-row items-center py-2.5">
                       <View className="w-8 h-8 rounded-full bg-green-50 items-center justify-center mr-3">
@@ -883,7 +870,6 @@ export default function ProfileScreen() {
                 </View>
               </View>
 
-              {/* Coaching & Professional Profile Cards */}
               {user?.role === 'coach' && (
                 <View className="bg-white rounded-3xl p-5 mb-5 shadow-sm border border-gray-100">
                   <Typography variant="subtitle1" color="secondary" weight="bold" className="mb-2 font-outfit-bold">
@@ -891,7 +877,6 @@ export default function ProfileScreen() {
                   </Typography>
 
                   <View>
-                    {/* Sports tags */}
                     <View className="py-2.5">
                       <Typography variant="caption" color="muted" className="font-outfit">Sports Specialization (Read-Only)</Typography>
                       <View className="flex-row flex-wrap mt-2">
@@ -907,7 +892,6 @@ export default function ProfileScreen() {
                       </View>
                     </View>
 
-                    {/* About Me / Bio */}
                     <View className="py-2.5">
                       <View className="flex-row justify-between items-center">
                         <Typography variant="caption" color="muted" className="font-outfit">Biography</Typography>
@@ -932,7 +916,6 @@ export default function ProfileScreen() {
                       )}
                     </View>
 
-                    {/* KYC Proof */}
                     <View className="flex-row items-center py-2.5">
                       <View className="w-8 h-8 rounded-full bg-blue-50 items-center justify-center mr-3">
                         <Ionicons name="id-card" size={16} color="#3B82F6" />
@@ -958,7 +941,6 @@ export default function ProfileScreen() {
                 </View>
               )}
 
-              {/* Schedule Management Panel for Coaches */}
               {user?.role === 'coach' && !isEditing && (
                 <View className="bg-white rounded-3xl p-5 mb-5 shadow-sm border border-gray-100 flex-row items-center justify-between">
                   <View className="flex-1 mr-4">
@@ -978,7 +960,6 @@ export default function ProfileScreen() {
                 </View>
               )}
 
-              {/* Book Another Session Quick Action Banner for Players & Parents */}
               {user?.role !== 'coach' && !isEditing && (
                 <View className="bg-white rounded-3xl p-5 mb-5 shadow-sm border border-gray-100">
                   <View className="flex-row items-center">
@@ -1011,7 +992,6 @@ export default function ProfileScreen() {
                 </View>
               )}
 
-              {/* Save Changes Buttons in Edit Mode */}
               {isEditing && (
                 <View className="mb-6 flex-row gap-3">
                   <View className="flex-1">
@@ -1034,7 +1014,6 @@ export default function ProfileScreen() {
             </>
           )}
 
-          {/* Menu Action Sheet */}
           <View className="mb-2">
             {menuItems.map((item) => {
               const details = getMenuDetails(item.id);
@@ -1091,7 +1070,6 @@ export default function ProfileScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Referral bottom sheet Modal */}
       <Modal
         visible={isReferralModalVisible}
         transparent={true}
@@ -1126,7 +1104,6 @@ export default function ProfileScreen() {
               </Typography>
             </View>
 
-            {/* Referral Code Box */}
             <View className="bg-purple-50/50 border border-purple-100 rounded-2xl p-4 flex-row items-center justify-between mb-6">
               <View>
                 <Typography variant="caption" color="muted" className="font-outfit">Your Referral Code</Typography>
@@ -1144,7 +1121,6 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Sharing Options */}
             <View style={{ gap: 12 }}>
               <TouchableOpacity 
                 onPress={handleShareWhatsApp}
@@ -1172,7 +1148,6 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* Confirm Logout Modal */}
       <Modal
         visible={isLogoutModalVisible}
         transparent
@@ -1197,7 +1172,6 @@ export default function ProfileScreen() {
               borderColor: 'rgba(239, 68, 68, 0.15)'
             }}
           >
-            {/* Top Badge Icon */}
             <View 
               style={{ 
                 width: 64, 
@@ -1214,7 +1188,6 @@ export default function ProfileScreen() {
               <Ionicons name="log-out" size={30} color="#EF4444" />
             </View>
 
-            {/* Title & Subtitle */}
             <Typography variant="h3" color="secondary" weight="bold" className="font-outfit-bold text-xl text-center mb-2">
               Sign Out of Arenova?
             </Typography>
@@ -1223,7 +1196,6 @@ export default function ProfileScreen() {
               Are you sure you want to sign out? You will need to log back in to manage your sessions and activities.
             </Typography>
 
-            {/* Action Buttons */}
             <View className="flex-row w-full gap-3">
               <TouchableOpacity
                 style={{ 
@@ -1276,4 +1248,3 @@ export default function ProfileScreen() {
     </SafeAreaView>
   );
 }
-

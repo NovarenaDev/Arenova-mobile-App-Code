@@ -29,7 +29,6 @@ export default function AddChildScreen() {
   const isEdit = !!childId;
   const coachSport = params.coachSport || params.sport || '';
 
-  // Form states
   const [name, setName] = useState(params.initialName || '');
   const [age, setAge] = useState(params.initialAge ? params.initialAge.toString() : '');
   const [sport, setSport] = useState(params.initialSport || coachSport || 'Football');
@@ -175,7 +174,6 @@ export default function AddChildScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#EEF3F9]">
-      {/* Header */}
       <View style={{ paddingHorizontal: 16, paddingVertical: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: '#f3f4f6', zIndex: 10 }}>
         <TouchableOpacity onPress={() => router.back()} style={{ padding: 8, marginLeft: -8 }}>
           <Ionicons name="arrow-back" size={24} color="#0F2C59" />
@@ -192,7 +190,6 @@ export default function AddChildScreen() {
       >
         <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={{ flex: 1, paddingHorizontal: 16, paddingTop: 24 }} contentContainerStyle={{ flexGrow: 1, paddingBottom: Math.max(insets.bottom + 80, 100) }}>
           
-          {/* Photo Upload Mockup */}
           <View style={{ alignItems: 'center', marginBottom: 24 }}>
             <TouchableOpacity 
               style={{ width: 96, height: 96, borderRadius: 48, backgroundColor: '#FFEAE0', borderWidth: 2, borderStyle: 'dashed', borderColor: '#FF5100', alignItems: 'center', justifyContent: 'center', marginBottom: 8, overflow: 'hidden' }}
@@ -212,7 +209,6 @@ export default function AddChildScreen() {
               error={errors.name}
             />
 
-            {/* Gender Switcher tabs */}
             <View style={{ marginBottom: 8 }}>
               <Typography variant="caption" color="secondary" weight="bold" className="mb-2 ml-1 font-outfit-bold text-gray-500 uppercase tracking-wider">
                 Gender
@@ -266,7 +262,6 @@ export default function AddChildScreen() {
               error={errors.age}
             />
 
-            {/* Sport Toggle selection */}
             <View style={{ marginBottom: 8 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                 <Typography variant="caption" color="secondary" weight="bold" className="ml-1 font-outfit-bold text-gray-500 uppercase tracking-wider">
@@ -316,7 +311,6 @@ export default function AddChildScreen() {
             />
           </View>
 
-          {/* Delete Button in Edit Mode */}
           {isEdit && (
             <TouchableOpacity 
               onPress={handleDelete}
@@ -344,7 +338,6 @@ export default function AddChildScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Sticky Bottom Bar */}
       <View style={{ backgroundColor: '#ffffff', padding: 16, borderTopWidth: 1, borderTopColor: '#f3f4f6', paddingBottom: Math.max(insets.bottom + 16, 28) }}>
         <Button 
           title={isEdit ? "Update Profile" : "Save Profile"}
@@ -352,7 +345,6 @@ export default function AddChildScreen() {
           isLoading={createChildMutation.isPending || updateChildMutation.isPending}
         />
       </View>
-      {/* Modern Confirm Modal for Child Deletion */}
       <ConfirmModal
         visible={isDeleteModalVisible}
         onClose={() => setIsDeleteModalVisible(false)}

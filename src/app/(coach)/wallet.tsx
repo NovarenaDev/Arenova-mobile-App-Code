@@ -28,7 +28,6 @@ export default function WalletScreen() {
   const [withdrawTab, setWithdrawTab] = useState<'upi' | 'bank'>('upi');
   const [activityTab, setActivityTab] = useState<'all' | 'transactions' | 'withdrawals'>('all');
 
-  // Strict Role Guard: Players and Parents cannot access coach wallet
   useEffect(() => {
     if (user && user.role !== 'coach') {
       Alert.alert(
@@ -42,7 +41,6 @@ export default function WalletScreen() {
     }
   }, [user, router]);
   
-  // Withdrawal Form States
   const [amount, setAmount] = useState('');
   const [upiId, setUpiId] = useState('');
   const [accountName, setAccountName] = useState('');
@@ -51,7 +49,6 @@ export default function WalletScreen() {
   const [ifscCode, setIfscCode] = useState('');
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // 1. GET /api/wallet/summary - Fetch Coach Wallet Summary
   const { data: summaryResponse, isLoading: isSummaryLoading, refetch: refetchSummary } = useQuery({
     queryKey: ['walletSummary'],
     queryFn: async () => {
@@ -88,7 +85,6 @@ export default function WalletScreen() {
   const minWithdrawal = Number(summaryData?.minWithdrawal ?? summaryData?.minWithdrawalAmount ?? 100);
   const maxWithdrawal = Number(summaryData?.maxWithdrawal ?? summaryData?.maxWithdrawalAmount ?? 50000);
 
-  // 2. GET /api/wallet/transactions - Fetch Wallet Transactions
   const { data: transactionsResponse, isLoading: isTransactionsLoading, refetch: refetchTransactions } = useQuery({
     queryKey: ['walletTransactions'],
     queryFn: async () => {
@@ -97,7 +93,6 @@ export default function WalletScreen() {
     }
   });
 
-  // 3. GET /api/wallet/withdrawals - Fetch Payout/Withdrawal History
   const { data: withdrawalsResponse, isLoading: isWithdrawalsLoading, refetch: refetchWithdrawals } = useQuery({
     queryKey: ['walletWithdrawals'],
     queryFn: async () => {
@@ -106,7 +101,6 @@ export default function WalletScreen() {
     }
   });
 
-  // Auto-refetch all wallet queries when screen is focused
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       refetchSummary();
@@ -189,7 +183,6 @@ export default function WalletScreen() {
       ? mappedTx 
       : mappedWithdrawals;
 
-  // 4. POST /api/wallet/withdraw - Request Withdrawal
   const requestWithdrawalMutation = useMutation({
     mutationFn: async (withdrawAmount: number) => {
       try {
@@ -204,7 +197,6 @@ export default function WalletScreen() {
         const res = await api.post('/wallet/withdraw', payload);
         return res.data;
       } catch (err: any) {
-        // If server validator rejects extra fields, retry with strict { amount } payload as defined in Swagger
         if (err?.response?.status === 400) {
           const errMsg = err?.response?.data?.message || '';
           if (errMsg.includes('allowed') || errMsg.includes('extra') || errMsg.includes('property')) {
@@ -280,7 +272,6 @@ export default function WalletScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#EEF3F9]">
-      {/* Header */}
       <View className="px-4 py-4 flex-row justify-between items-center bg-white border-b border-gray-100 shadow-sm z-10">
         <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
           <Ionicons name="arrow-back" size={24} color="#0F2C59" />
@@ -311,7 +302,6 @@ export default function WalletScreen() {
           </View>
         ) : (
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" className="flex-1 px-4 pt-6" contentContainerStyle={{ flexGrow: 1, paddingBottom: Math.max(insets.bottom + 60, 80) }}>
-            {/* Balance Cards Summary */}
             <View className="bg-white rounded-3xl p-5 mb-6 shadow-sm border border-gray-100">
               <View className="bg-[#EBF7F0] border border-[#D5EFE0] p-5 rounded-2xl mb-4 flex-row justify-between items-center">
                 <View>
@@ -335,7 +325,6 @@ export default function WalletScreen() {
               </View>
             </View>
 
-            {/* Withdrawal Form Section */}
             <Typography variant="h3" color="secondary" weight="bold" className="mb-4">
               Request Payout
             </Typography>
@@ -358,7 +347,6 @@ export default function WalletScreen() {
                 </View>
               )}
 
-              {/* Payment Method Selector Tabs */}
               <View className="flex-row bg-[#EEF3F9] rounded-full p-1 mb-6">
                 <TouchableOpacity 
                   onPress={() => setWithdrawTab('upi')} 
@@ -390,7 +378,6 @@ export default function WalletScreen() {
                 </TouchableOpacity>
               </View>
 
-            {/* Common Amount Input */}
             <View className="mb-4">
               <View className="flex-row justify-between items-center mb-1 ml-1">
                 <Typography variant="caption" color="secondary" weight="bold">Withdrawal Amount (₹)</Typography>
@@ -405,7 +392,6 @@ export default function WalletScreen() {
             </View>
 
               {withdrawTab === 'upi' ? (
-                /* UPI Form */
                 <View className="mb-6">
                   <Typography variant="caption" color="secondary" weight="bold" className="mb-1 ml-1">UPI ID (VPA)</Typography>
                   <TextInput 
@@ -416,7 +402,6 @@ export default function WalletScreen() {
                   />
                 </View>
               ) : (
-                /* Bank Account Form */
                 <View className="space-y-4 mb-6">
                   <View>
                     <Typography variant="caption" color="secondary" weight="bold" className="mb-1 ml-1">Account Holder Name</Typography>
@@ -456,7 +441,6 @@ export default function WalletScreen() {
                 </View>
               )}
 
-              {/* Withdrawal Action Button */}
               <Button 
                 title="Request Payout" 
                 isLoading={requestWithdrawalMutation.isPending}
@@ -465,7 +449,6 @@ export default function WalletScreen() {
               />
             </View>
 
-            {/* Wallet Activity Header & Filter Tabs */}
             <View className="flex-row justify-between items-center mb-3">
               <Typography variant="h3" color="secondary" weight="bold">
                 Wallet Activity
@@ -560,7 +543,6 @@ export default function WalletScreen() {
                         {tx.type === 'payout' ? `+₹${tx.amount}` : `-₹${Math.abs(tx.amount)}`}
                       </Typography>
                       
-                      {/* Status Indicator */}
                       <View className={`px-1.5 py-0.5 rounded-md mt-1 ${
                         tx.status === 'completed' || tx.status === 'approved' ? 'bg-green-100' : 
                         tx.status === 'processing' || tx.status === 'pending' ? 'bg-orange-100' : 'bg-red-100'

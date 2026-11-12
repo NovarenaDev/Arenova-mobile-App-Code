@@ -19,7 +19,6 @@ export default function Index() {
     };
   }, [hydrateAuth]);
 
-  // While auth state is hydrating from disk storage, render a background loader
   if (isLoading || !hydrationChecked) {
     return (
       <View style={{ flex: 1, backgroundColor: '#061325', justifyContent: 'center', alignItems: 'center' }}>
@@ -28,7 +27,6 @@ export default function Index() {
     );
   }
 
-  // If user is authenticated with a token
   if (token) {
     const role = user?.role || 'individual';
     if (role === 'coach') {
@@ -40,10 +38,8 @@ export default function Index() {
     if (role === 'parent') {
       return <Redirect href="/(parent)/(parent-tabs)/parent-dashboard" />;
     }
-    // Default to individual/player
     return <Redirect href="/(individual)/(individual-tabs)/individual-dashboard" />;
   }
 
-  // Not authenticated: proceed to Auth Welcome Screen
   return <Redirect href="/(auth)" />;
 }

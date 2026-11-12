@@ -12,7 +12,6 @@ export default function CoachTabLayout() {
   const bottomPadding = Platform.OS === 'android' ? Math.max(insets.bottom, 16) : Math.max(insets.bottom, 12);
   const barHeight = 58 + bottomPadding;
 
-  // Strict Role Boundary Guard: Players and Parents can NEVER access coach portal
   useEffect(() => {
     if (token && user && user.role !== 'coach') {
       Alert.alert(

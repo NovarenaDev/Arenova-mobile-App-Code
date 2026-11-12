@@ -214,7 +214,6 @@ export default function OTPScreen() {
           </View>
 
           <View className="flex-1">
-            {/* Simple OTP Input */}
             <TextInput
               placeholder="Enter 6-digit OTP"
               keyboardType="number-pad"

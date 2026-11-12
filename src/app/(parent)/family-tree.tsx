@@ -24,7 +24,6 @@ export default function FamilyTreeScreen() {
   const { children: storedChildren, removeChild } = useAuthStore();
   const [manageModalVisible, setManageModalVisible] = useState(false);
 
-  // Fetch children list
   const { data: childrenResponse, isLoading } = useQuery({
     queryKey: ['children'],
     queryFn: async () => {
@@ -75,7 +74,6 @@ export default function FamilyTreeScreen() {
   const rawServer = childrenResponse?.data || childrenResponse?.children || (Array.isArray(childrenResponse) ? childrenResponse : []);
   const serverChildren: Child[] = Array.isArray(rawServer) ? rawServer : [];
 
-  // Merge server children with persistent AuthStore children
   const childrenMap = new Map<string, Child>();
   (storedChildren || []).forEach(c => childrenMap.set(c._id || c.name, c));
   serverChildren.forEach(c => childrenMap.set(c._id || c.name, c));
@@ -83,7 +81,6 @@ export default function FamilyTreeScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#EEF3F9]" edges={['top']}>
-      {/* Header */}
       <View className="px-4 py-4 flex-row justify-between items-center bg-white border-b border-gray-100 shadow-sm z-10">
         <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
           <Ionicons name="arrow-back" size={24} color="#0F2C59" />
@@ -100,7 +97,6 @@ export default function FamilyTreeScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} className="flex-1 px-4 pt-4 pb-8">
-        {/* Banner Card - Clickable to Open Manage Children Popup Modal */}
         <TouchableOpacity 
           onPress={() => setManageModalVisible(true)}
           activeOpacity={0.85}
@@ -130,7 +126,6 @@ export default function FamilyTreeScreen() {
           Active Account Profile
         </Typography>
 
-        {/* Parent Profile */}
         <View className="bg-white rounded-2xl p-4 mb-4 flex-row items-center justify-between border border-gray-100 shadow-sm">
           <View className="flex-row items-center flex-1 mr-4">
             <View className="w-12 h-12 rounded-full bg-blue-50 items-center justify-center mr-3.5">
@@ -156,7 +151,6 @@ export default function FamilyTreeScreen() {
           Child Profiles
         </Typography>
 
-        {/* Children Profiles */}
         {isLoading ? (
           <View className="py-10 justify-center items-center">
             <ActivityIndicator size="small" color="#FF5100" />
@@ -186,7 +180,6 @@ export default function FamilyTreeScreen() {
                 </View>
               </View>
 
-              {/* Action Buttons: Edit & Delete */}
               <View className="flex-row items-center gap-2">
                 <TouchableOpacity
                   onPress={() => handleEditChild(child)}
@@ -206,7 +199,6 @@ export default function FamilyTreeScreen() {
           ))
         )}
 
-        {/* Add New Child Profile Button */}
         <TouchableOpacity 
           className="bg-white rounded-2xl p-4 mb-8 flex-row items-center justify-between border border-dashed border-gray-300 active:opacity-80"
           onPress={() => router.push('/(parent)/family/add-child')}
@@ -228,7 +220,6 @@ export default function FamilyTreeScreen() {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* POPUP MODAL SHEET: Manage Family Members (Edit / Delete Children) */}
       <Modal
         visible={manageModalVisible}
         transparent
@@ -245,10 +236,8 @@ export default function FamilyTreeScreen() {
             className="bg-white rounded-t-[32px] px-6 pt-4 shadow-2xl border-t border-gray-200 max-h-[82%]"
             style={{ paddingBottom: Math.max(insets.bottom + 20, 32) }}
           >
-            {/* Drag Handle Indicator */}
             <View className="w-12 h-1 bg-gray-300 rounded-full self-center mb-5" />
 
-            {/* Modal Header */}
             <View className="flex-row justify-between items-center mb-4 pb-3 border-b border-gray-100">
               <View>
                 <Typography variant="h3" color="secondary" weight="bold" className="text-xl font-outfit-bold">
@@ -294,7 +283,6 @@ export default function FamilyTreeScreen() {
                       </View>
                     </View>
 
-                    {/* Action buttons inside popup */}
                     <View className="flex-row items-center gap-2">
                       <TouchableOpacity
                         onPress={() => handleEditChild(child)}
@@ -321,7 +309,6 @@ export default function FamilyTreeScreen() {
               )}
             </ScrollView>
 
-            {/* Bottom Actions inside Modal */}
             <View className="gap-2">
               <Button 
                 title="+ Add New Child Profile" 
@@ -343,7 +330,6 @@ export default function FamilyTreeScreen() {
         </View>
       </Modal>
 
-      {/* Modern Confirm Modal for Child Deletion */}
       <ConfirmModal
         visible={!!childToDelete}
         onClose={() => setChildToDelete(null)}

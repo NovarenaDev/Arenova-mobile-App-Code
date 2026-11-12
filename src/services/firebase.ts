@@ -10,10 +10,8 @@ const firebaseConfig = {
   appId: "1:144453754365:web:970dc7d74ac1db01f84d94"
 };
 
-// Initialize Firebase
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// Initialize auth with memory persistence first to silence the AsyncStorage warning
 let auth: any;
 try {
   auth = initializeAuth(app, {

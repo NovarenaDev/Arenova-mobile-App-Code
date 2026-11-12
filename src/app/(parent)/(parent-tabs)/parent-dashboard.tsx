@@ -133,7 +133,6 @@ export default function ParentDashboard() {
   const rawBookings = bookingsResponse?.data || bookingsResponse || [];
   const allBookings: any[] = Array.isArray(rawBookings) ? rawBookings : [];
 
-  // If a child is selected, filter bookings for that child if matches found
   const filteredBookings = activeChildFilter === 'all' 
     ? allBookings 
     : allBookings.filter((b: any) => {
@@ -148,7 +147,6 @@ export default function ParentDashboard() {
   const effectiveBookings = filteredBookings.length > 0 ? filteredBookings : allBookings;
   const hasBookings = allBookings.length > 0;
 
-  // Prioritize active and ongoing sessions, then sort by session date
   const sortedBookings = [...effectiveBookings].sort((a: any, b: any) => {
     const statusWeight: Record<string, number> = {
       ongoing: 1,
@@ -173,7 +171,6 @@ export default function ParentDashboard() {
     <View className="flex-1 bg-[#EEF3F9]">
       <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} scrollEventThrottle={16} decelerationRate="normal" className="flex-1" contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 40, 60) }}>
         
-        {/* Header Section */}
         <View className="bg-secondary px-6 pt-16 pb-8 rounded-b-3xl shadow-sm">
           <View className="flex-row justify-between items-center mb-6">
             <View className="flex-1 mr-2">
@@ -194,7 +191,6 @@ export default function ParentDashboard() {
             </View>
           </View>
 
-          {/* Family Members Header Row */}
           <View className="flex-row justify-between items-center mb-3">
             <Typography variant="subtitle2" color="white" weight="semibold" className="opacity-90 font-outfit-semibold">
               Family Members
@@ -210,7 +206,6 @@ export default function ParentDashboard() {
             </TouchableOpacity>
           </View>
 
-          {/* Children Profiles Shortcuts */}
           <View className="flex-row items-center gap-2.5 flex-wrap">
             <TouchableOpacity 
               onPress={() => setActiveChildFilter('all')}
@@ -247,7 +242,6 @@ export default function ParentDashboard() {
                       <Typography variant="body2" color="white" weight="bold" className="font-outfit-bold text-xs mr-1">{child.name}</Typography>
                     </TouchableOpacity>
 
-                    {/* Inline Edit Button */}
                     <TouchableOpacity
                       onPress={() => handleEditChild(child)}
                       className="ml-1 p-0.5"
@@ -269,10 +263,8 @@ export default function ParentDashboard() {
           </View>
         </View>
 
-        {/* Dynamic Parent Banner Carousel */}
         <ParentBannerCarousel router={router} />
 
-        {/* Fast Action Categories */}
         <View className="px-6 pt-6 pb-12 flex-row justify-between">
           <TouchableOpacity 
             onPress={() => router.push('/(parent)/select-sport')}
@@ -306,7 +298,6 @@ export default function ParentDashboard() {
           </TouchableOpacity>
         </View>
 
-        {/* Conditional Display: Booked Sessions (if bookings exist) vs Recommended Coaches (if no bookings) */}
         <View className="px-6 pb-12">
           {hasBookings ? (
             <>
@@ -481,7 +472,6 @@ export default function ParentDashboard() {
 
       </ScrollView>
 
-      {/* POPUP MODAL SHEET: Manage Children Profiles (Edit & Delete directly from Dashboard) */}
       <Modal
         visible={manageModalVisible}
         transparent
@@ -498,10 +488,8 @@ export default function ParentDashboard() {
             className="bg-white rounded-t-[32px] px-6 pt-4 shadow-2xl border-t border-gray-200 max-h-[82%]"
             style={{ paddingBottom: Math.max(insets.bottom + 20, 32) }}
           >
-            {/* Drag Handle Indicator */}
             <View className="w-12 h-1 bg-gray-300 rounded-full self-center mb-5" />
 
-            {/* Modal Header */}
             <View className="flex-row justify-between items-center mb-4 pb-3 border-b border-gray-100">
               <View>
                 <Typography variant="h3" color="secondary" weight="bold" className="text-xl font-outfit-bold">
@@ -547,7 +535,6 @@ export default function ParentDashboard() {
                       </View>
                     </View>
 
-                    {/* Action buttons inside popup */}
                     <View className="flex-row items-center gap-2">
                       <TouchableOpacity
                         onPress={() => handleEditChild(child)}
@@ -574,7 +561,6 @@ export default function ParentDashboard() {
               )}
             </ScrollView>
 
-            {/* Bottom Actions inside Modal */}
             <View className="gap-2">
               <Button 
                 title="+ Add New Child Profile" 
@@ -596,7 +582,6 @@ export default function ParentDashboard() {
         </View>
       </Modal>
 
-      {/* Modern Confirm Modal for Child Deletion */}
       <ConfirmModal
         visible={!!childToDelete}
         onClose={() => setChildToDelete(null)}
@@ -723,7 +708,6 @@ function ParentBannerCarousel({ router }: { router: any }) {
         ))}
       </ScrollView>
 
-      {/* Carousel Indicator Dots */}
       {parentBanners.length > 1 && (
         <View className="flex-row justify-center items-center mt-3">
           {parentBanners.map((_, i) => (
@@ -737,4 +721,3 @@ function ParentBannerCarousel({ router }: { router: any }) {
     </View>
   );
 }
-

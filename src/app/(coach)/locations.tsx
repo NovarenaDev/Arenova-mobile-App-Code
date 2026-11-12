@@ -87,7 +87,6 @@ const getMapHtml = (lat: number, lng: number) => {
       
       var map = L.map('map', { zoomControl: false }).setView([initLat, initLng], 16);
       
-      // Load Google Maps Hybrid Tiles (Satellite + labels)
       L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
         maxZoom: 20,
         attribution: '© Google'
@@ -97,7 +96,6 @@ const getMapHtml = (lat: number, lng: number) => {
 
       var marker = L.marker([initLat, initLng], { draggable: true }).addTo(map);
 
-      // Perform initial geocode for display
       reverseGeocode(initLat, initLng);
 
       document.getElementById('search-button').addEventListener('click', performSearch);
@@ -138,7 +136,6 @@ const getMapHtml = (lat: number, lng: number) => {
       });
 
       function reverseGeocode(lat, lng) {
-        // Send loading status to React Native immediately while fetching address
         sendToApp(lat, lng, 'Selected Venue', 'City', 'Fetching address details...');
         
         fetch('https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&email=arenova-app@example.com&lat=' + lat + '&lon=' + lng)
@@ -401,7 +398,6 @@ export default function LocationsScreen() {
   if (screenMode === 'list') {
     return (
       <SafeAreaView className="flex-1 bg-[#EEF3F9]" edges={['top']}>
-        {/* Header */}
         <View className="px-4 py-4 flex-row items-center bg-white border-b border-gray-100 shadow-sm z-10">
           <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2 mr-4">
             <Ionicons name="arrow-back" size={24} color="#0F2C59" />
@@ -433,7 +429,6 @@ export default function LocationsScreen() {
             </View>
           )}
 
-          {/* Helper Banner */}
           <View className="bg-orange-50 border border-orange-100 rounded-2xl p-4 mb-5 flex-row">
             <Ionicons name="information-circle" size={20} color="#FF5100" className="mr-3 mt-0.5" />
             <Typography variant="body2" color="text" className="flex-1 leading-5 font-outfit-medium">
@@ -441,7 +436,6 @@ export default function LocationsScreen() {
             </Typography>
           </View>
 
-          {/* Locations List */}
           {isLoading ? (
             <View className="py-20 items-center justify-center">
               <ActivityIndicator size="large" color="#FF5100" />
@@ -472,7 +466,6 @@ export default function LocationsScreen() {
                   }`}
                 >
                   <View className="flex-row items-center flex-1 mr-4">
-                    {/* Select indicator */}
                     <View className="mr-3">
                       <Ionicons 
                         name={isSelected ? "checkbox-sharp" : "square-outline"} 
@@ -494,7 +487,6 @@ export default function LocationsScreen() {
                     </View>
                   </View>
 
-                  {/* Action buttons */}
                   <View className="flex-row items-center gap-1">
                     <TouchableOpacity 
                       onPress={() => openEditScreen(loc)}
@@ -515,7 +507,6 @@ export default function LocationsScreen() {
           )}
         </ScrollView>
 
-        {/* Floating Sticky Add Button */}
         {locations.length > 0 && (
           <View className="absolute left-4 right-4 z-10 shadow-md" style={{ bottom: Math.max(insets.bottom + 16, 24) }}>
             <Button 
@@ -531,7 +522,6 @@ export default function LocationsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-white">
-      {/* Form Header */}
       <View className="px-4 py-4 flex-row items-center justify-between border-b border-gray-100 shadow-sm z-10 bg-white">
         <View className="flex-row items-center">
           <TouchableOpacity onPress={closeForm} className="p-2 -ml-2 mr-4">
@@ -576,7 +566,6 @@ export default function LocationsScreen() {
             </View>
           )}
 
-          {/* Helper instructions */}
           <View className="bg-blue-50 border border-blue-100 rounded-2xl p-4 mb-6 flex-row">
             <Ionicons name="map" size={20} color="#3B82F6" className="mr-3 mt-0.5" />
             <Typography variant="body2" color="text" className="flex-1 leading-5 font-outfit-medium">
@@ -584,7 +573,6 @@ export default function LocationsScreen() {
             </Typography>
           </View>
 
-          {/* Pin on Map Button */}
           <View className="mb-6">
             <Button 
               title="Pin Location on Map" 
@@ -667,14 +655,12 @@ export default function LocationsScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Map Picker Modal */}
       <Modal
         animationType="slide"
         visible={mapModalVisible}
         onRequestClose={() => setMapModalVisible(false)}
       >
         <SafeAreaView className="flex-1 bg-white">
-          {/* Map Header */}
           <View className="px-4 py-4 flex-row items-center justify-between border-b border-gray-100 shadow-sm z-10 bg-white">
             <TouchableOpacity onPress={() => setMapModalVisible(false)} className="p-2 -ml-2 mr-4">
               <Ionicons name="arrow-back" size={24} color="#0F2C59" />
@@ -684,7 +670,6 @@ export default function LocationsScreen() {
             </Typography>
           </View>
 
-          {/* Map View Container */}
           <View className="flex-1 relative">
             {mapInitCoords && (
               <WebView
@@ -698,7 +683,6 @@ export default function LocationsScreen() {
               />
             )}
 
-            {/* Bottom Premium Card Overlay */}
             <View className="absolute left-4 right-4 bg-white rounded-2xl p-4 shadow-lg border border-gray-100 z-20" style={{ bottom: Math.max(insets.bottom + 16, 24) }}>
               <View className="flex-row items-start mb-4">
                 <Ionicons name="location-sharp" size={20} color="#FF5100" className="mr-2 mt-0.5" />

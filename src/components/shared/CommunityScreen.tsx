@@ -38,7 +38,6 @@ export default function CommunityScreen() {
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
 
-  // Strict Role Guard: Coaches cannot access player community discovery / purchase
   useEffect(() => {
     if (user?.role === 'coach') {
       Alert.alert(
@@ -51,7 +50,6 @@ export default function CommunityScreen() {
 
   const isParent = user?.role === 'parent';
 
-  // Navigation Tabs: 'explore' | 'subscriptions' | 'complaints' | 'refunds'
   const [activeTab, setActiveTab] = useState<'explore' | 'subscriptions' | 'complaints' | 'refunds'>(
     params?.tab && ['explore', 'subscriptions', 'complaints', 'refunds'].includes(params.tab)
       ? (params.tab as any)
@@ -64,27 +62,22 @@ export default function CommunityScreen() {
     }
   }, [params?.tab]);
 
-  // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSportFilter, setSelectedSportFilter] = useState('All');
 
-  // Selected Community Detail Modal
   const [selectedCommunityId, setSelectedCommunityId] = useState<string | null>(null);
 
-  // Program Plan Selection & Checkout State
   const [selectedProgram, setSelectedProgram] = useState<CommunityProgram | null>(null);
   const [selectedPlanIndex, setSelectedPlanIndex] = useState<number | null>(null);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const [isCheckoutModalVisible, setIsCheckoutModalVisible] = useState(false);
 
-  // New Child Registration (for parents)
   const [isAddChildModalVisible, setIsAddChildModalVisible] = useState(false);
   const [newChildName, setNewChildName] = useState('');
   const [newChildAge, setNewChildAge] = useState('');
   const [newChildSport, setNewChildSport] = useState('');
   const [newChildSchool, setNewChildSchool] = useState('');
 
-  // Razorpay Checkout Modal
   const [isRazorpayModalVisible, setIsRazorpayModalVisible] = useState(false);
   const [razorpayOrder, setRazorpayOrder] = useState<{
     orderId: string;
@@ -101,13 +94,10 @@ export default function CommunityScreen() {
     participantName?: string;
   } | null>(null);
 
-  // Success Activation Modal
   const [activatedSubscription, setActivatedSubscription] = useState<any | null>(null);
 
-  // Access Pass Viewer Modal
   const [viewingPass, setViewingPass] = useState<CommunitySubscription | null>(null);
 
-  // Report Complaint Modal
   const [complaintSubscription, setComplaintSubscription] = useState<CommunitySubscription | null>(null);
   const [complaintSessionDate, setComplaintSessionDate] = useState('');
   const [complaintType, setComplaintType] = useState<'COACH_ABSENCE' | 'PROGRAM_NOT_CONDUCTED' | 'REPEATED_MISSED_SESSIONS' | 'OTHER'>('COACH_ABSENCE');
@@ -120,7 +110,6 @@ export default function CommunityScreen() {
     setComplaintType('COACH_ABSENCE');
   };
 
-  // 1. Fetch Communities List (Public Discovery)
   const { 
     data: communitiesData, 
     isLoading: isLoadingCommunities, 
@@ -138,7 +127,6 @@ export default function CommunityScreen() {
     }
   });
 
-  // 2. Fetch Single Community Detail with Programs
   const { 
     data: communityDetail, 
     isLoading: isLoadingDetail,
@@ -157,7 +145,6 @@ export default function CommunityScreen() {
     enabled: !!selectedCommunityId
   });
 
-  // 3. Fetch Parent's Children (if parent)
   const { 
     data: childrenData, 
     refetch: refetchChildren 
@@ -175,7 +162,6 @@ export default function CommunityScreen() {
     enabled: isParent
   });
 
-  // 4. Fetch My Subscriptions
   const { 
     data: mySubscriptionsData, 
     isLoading: isLoadingSubscriptions, 
@@ -193,7 +179,6 @@ export default function CommunityScreen() {
     }
   });
 
-  // 5. Fetch My Complaints
   const { 
     data: myComplaintsData, 
     isLoading: isLoadingComplaints, 
@@ -212,7 +197,6 @@ export default function CommunityScreen() {
     enabled: activeTab === 'complaints'
   });
 
-  // 6. Fetch My Subscription Refunds
   const { 
     data: myRefundsData, 
     isLoading: isLoadingRefunds, 
@@ -231,7 +215,6 @@ export default function CommunityScreen() {
     enabled: activeTab === 'refunds'
   });
 
-  // Screen focus listener
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       refetchCommunities();
@@ -241,7 +224,6 @@ export default function CommunityScreen() {
     return unsubscribe;
   }, [navigation, refetchCommunities, refetchSubscriptions, isParent, refetchChildren]);
 
-  // Add Child Mutation
   const addChildMutation = useMutation({
     mutationFn: async (payload: { name: string; age?: number; sport?: string; school?: string }) => {
       const res = await api.post('/users/me/children', payload);
@@ -264,7 +246,6 @@ export default function CommunityScreen() {
     }
   });
 
-  // Create Subscription Order Mutation
   const createOrderMutation = useMutation({
     mutationFn: async (payload: { programId: string; planIndex: number; childId?: string }) => {
       const res = await api.post('/subscriptions/create-order', payload);
@@ -297,7 +278,6 @@ export default function CommunityScreen() {
     }
   });
 
-  // Verify Subscription Payment Mutation
   const verifyPaymentMutation = useMutation({
     mutationFn: async (payload: {
       programId: string;
@@ -332,7 +312,6 @@ export default function CommunityScreen() {
     }
   });
 
-  // Submit Complaint Mutation
   const submitComplaintMutation = useMutation({
     mutationFn: async ({ subscriptionId, payload }: { subscriptionId: string; payload: any }) => {
       const res = await api.post(`/subscriptions/${subscriptionId}/complaints`, payload);
@@ -351,7 +330,6 @@ export default function CommunityScreen() {
     }
   });
 
-  // Invoice Download Handler
   const handleDownloadInvoice = async (invoiceId: string) => {
     try {
       const res = await api.get(`/invoices/${invoiceId}/download`);
@@ -368,7 +346,6 @@ export default function CommunityScreen() {
     }
   };
 
-  // Razorpay WebView message handler
   const handleRazorpayMessage = async (event: any) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
@@ -485,7 +462,6 @@ export default function CommunityScreen() {
     ? childrenData
     : (childrenData?.data || []);
 
-  // Filter communities by search and sport
   const filteredCommunities = communitiesList.filter((c: CommunityCenter) => {
     const matchesSearch = !searchQuery.trim() || 
       (c.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -499,7 +475,6 @@ export default function CommunityScreen() {
     return matchesSearch && matchesSport;
   });
 
-  // Distinct sports list for filter chips
   const allSportsSet = new Set<string>();
   communitiesList.forEach((c: CommunityCenter) => {
     if (Array.isArray(c.sports)) {
@@ -510,7 +485,6 @@ export default function CommunityScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#EEF3F9]" edges={['top']}>
-      {/* Top Header */}
       <View className="px-4 py-3 flex-row justify-between items-center bg-[#0F2C59] border-b border-gray-100 shadow-sm z-10">
         <TouchableOpacity 
           onPress={() => {
@@ -544,7 +518,6 @@ export default function CommunityScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Modern 4-Tab Navigation Bar */}
       <View className="bg-white border-b border-gray-100 px-4 pt-3 pb-2">
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row">
           <TouchableOpacity
@@ -585,16 +558,12 @@ export default function CommunityScreen() {
         </ScrollView>
       </View>
 
-      {/* ========================================================================= */}
-      {/* TAB 1: EXPLORE ACADEMIES & PROGRAMS                                       */}
-      {/* ========================================================================= */}
       {activeTab === 'explore' && (
         <ScrollView
           showsVerticalScrollIndicator={false}
           className="flex-1 px-4 pt-4"
           contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 60, 80) }}
         >
-          {/* Search Box */}
           <View className="bg-white rounded-2xl px-3.5 py-2.5 flex-row items-center border border-gray-200 shadow-xs mb-3">
             <Ionicons name="search" size={18} color="#64748B" className="mr-2" />
             <TextInput
@@ -611,7 +580,6 @@ export default function CommunityScreen() {
             )}
           </View>
 
-          {/* Sport Filter Chips */}
           {sportsFilterOptions.length > 1 && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row mb-4">
               {sportsFilterOptions.map((sport) => (
@@ -628,7 +596,6 @@ export default function CommunityScreen() {
             </ScrollView>
           )}
 
-          {/* Communities List */}
           {isLoadingCommunities || isRefetchingCommunities ? (
             <View className="py-12 items-center">
               <ActivityIndicator size="large" color="#FF5100" />
@@ -659,7 +626,6 @@ export default function CommunityScreen() {
                   activeOpacity={0.88}
                   className="bg-white rounded-3xl p-5 mb-4 border border-gray-100 shadow-sm"
                 >
-                  {/* Top Row: Academy Name & City Badge */}
                   <View className="flex-row items-center justify-between mb-2">
                     <Typography variant="h3" color="secondary" weight="bold" className="font-outfit-bold text-lg flex-1 mr-2">
                       {c.name}
@@ -671,7 +637,6 @@ export default function CommunityScreen() {
                     </View>
                   </View>
 
-                  {/* Address */}
                   <View className="flex-row items-center mb-2">
                     <Ionicons name="location-outline" size={14} color="#64748B" className="mr-1.5" />
                     <Typography variant="caption" color="muted" className="font-outfit text-xs flex-1" numberOfLines={1}>
@@ -679,14 +644,12 @@ export default function CommunityScreen() {
                     </Typography>
                   </View>
 
-                  {/* Description */}
                   {c.description ? (
                     <Typography variant="body2" color="muted" className="font-outfit text-xs leading-4 mb-3" numberOfLines={2}>
                       {c.description}
                     </Typography>
                   ) : null}
 
-                  {/* Bottom Stats & Sports */}
                   <View className="flex-row items-center justify-between pt-3 border-t border-gray-100">
                     <View className="flex-row items-center">
                       <Ionicons name="trophy-outline" size={14} color="#047857" className="mr-1" />
@@ -709,9 +672,6 @@ export default function CommunityScreen() {
         </ScrollView>
       )}
 
-      {/* ========================================================================= */}
-      {/* TAB 2: MY SUBSCRIPTIONS & ACCESS PASSES                                   */}
-      {/* ========================================================================= */}
       {activeTab === 'subscriptions' && (
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -757,7 +717,6 @@ export default function CommunityScreen() {
                   key={sub._id}
                   className="bg-white rounded-3xl p-5 mb-4 border border-gray-100 shadow-sm overflow-hidden"
                 >
-                  {/* Top Status & Participant Row */}
                   <View className="flex-row items-center justify-between mb-3">
                     <View className="flex-row items-center flex-1 mr-2">
                       <View className="w-8 h-8 rounded-full bg-primary/10 items-center justify-center mr-2">
@@ -773,7 +732,6 @@ export default function CommunityScreen() {
                       </View>
                     </View>
 
-                    {/* Status Pill */}
                     <View className={`px-3 py-1 rounded-full border ${
                       isActivePass 
                         ? 'bg-emerald-50 border-emerald-200' 
@@ -793,7 +751,6 @@ export default function CommunityScreen() {
                     </View>
                   </View>
 
-                  {/* Program & Academy */}
                   <View className="mb-3">
                     <Typography variant="h3" color="secondary" weight="bold" className="font-outfit-bold text-base mb-0.5">
                       {programTitle}
@@ -803,7 +760,6 @@ export default function CommunityScreen() {
                     </Typography>
                   </View>
 
-                  {/* Validity & Plan Box */}
                   <View className="bg-gray-50 rounded-2xl p-3 mb-4 border border-gray-100">
                     <View className="flex-row items-center justify-between mb-1.5">
                       <Typography variant="caption" color="muted" className="font-outfit text-xs">
@@ -824,7 +780,6 @@ export default function CommunityScreen() {
                     </View>
                   </View>
 
-                  {/* Actions Row */}
                   <View className="flex-row items-center justify-between pt-3 border-t border-gray-100">
                     <TouchableOpacity
                       onPress={() => setViewingPass(sub)}
@@ -865,16 +820,12 @@ export default function CommunityScreen() {
         </ScrollView>
       )}
 
-      {/* ========================================================================= */}
-      {/* TAB 3: MY COMPLAINTS & ISSUES                                             */}
-      {/* ========================================================================= */}
       {activeTab === 'complaints' && (
         <ScrollView
           showsVerticalScrollIndicator={false}
           className="flex-1 px-4 pt-4"
           contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 60, 80) }}
         >
-          {/* Header Action Bar */}
           <View className="flex-row items-center justify-between mb-4">
             <View>
               <Typography variant="h3" color="secondary" weight="bold" className="font-outfit-bold text-base">
@@ -994,7 +945,6 @@ export default function CommunityScreen() {
                     "{comp.reason}"
                   </Typography>
 
-                  {/* Decision History */}
                   {Array.isArray(comp.decisionHistory) && comp.decisionHistory.length > 0 && (
                     <View className="pt-2 border-t border-gray-100">
                       <Typography variant="caption" color="muted" weight="bold" className="font-outfit-bold text-[11px] mb-1">
@@ -1014,9 +964,6 @@ export default function CommunityScreen() {
         </ScrollView>
       )}
 
-      {/* ========================================================================= */}
-      {/* TAB 4: REFUND TRACKING                                                    */}
-      {/* ========================================================================= */}
       {activeTab === 'refunds' && (
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -1097,9 +1044,6 @@ export default function CommunityScreen() {
         </ScrollView>
       )}
 
-      {/* ========================================================================= */}
-      {/* MODAL 1: COMMUNITY DETAILS & PROGRAMS VIEW                                */}
-      {/* ========================================================================= */}
       <Modal
         visible={!!selectedCommunityId}
         transparent
@@ -1136,7 +1080,6 @@ export default function CommunityScreen() {
               </View>
             ) : communityDetail ? (
               <ScrollView showsVerticalScrollIndicator={false}>
-                {/* Academy Info Header */}
                 <View className="mb-4 bg-[#F8FAFC] p-4 rounded-2xl border border-slate-100">
                   <Typography variant="h3" color="secondary" weight="bold" className="font-outfit-bold text-lg mb-1">
                     {communityDetail.name}
@@ -1149,7 +1092,6 @@ export default function CommunityScreen() {
                   </Typography>
                 </View>
 
-                {/* Available Programs */}
                 <Typography variant="subtitle1" color="secondary" weight="bold" className="font-outfit-bold mb-3">
                   Training Batches ({communityDetail.programs?.length ?? 0})
                 </Typography>
@@ -1171,7 +1113,6 @@ export default function CommunityScreen() {
                         key={prog._id} 
                         className="bg-white rounded-2xl p-4 mb-4 border border-gray-200 shadow-xs"
                       >
-                        {/* Program Header */}
                         <View className="flex-row items-center justify-between mb-2">
                           <View className="flex-1 mr-2">
                             <View className="flex-row items-center mb-1">
@@ -1190,7 +1131,6 @@ export default function CommunityScreen() {
                           </View>
                         </View>
 
-                        {/* Schedule & Timing */}
                         <View className="bg-slate-50 p-2.5 rounded-xl mb-3 border border-slate-100">
                           <View className="flex-row items-center mb-1">
                             <Ionicons name="calendar-outline" size={13} color="#64748B" className="mr-1.5" />
@@ -1206,7 +1146,6 @@ export default function CommunityScreen() {
                           </View>
                         </View>
 
-                        {/* Assigned Coaches */}
                         {Array.isArray(prog.coaches) && prog.coaches.length > 0 && (
                           <View className="flex-row items-center mb-3">
                             <Ionicons name="ribbon-outline" size={14} color="#047857" className="mr-1.5" />
@@ -1216,7 +1155,6 @@ export default function CommunityScreen() {
                           </View>
                         )}
 
-                        {/* Subscription Plans */}
                         <Typography variant="caption" color="secondary" weight="bold" className="font-outfit-bold text-xs mb-2">
                           Select Subscription Plan:
                         </Typography>
@@ -1249,7 +1187,6 @@ export default function CommunityScreen() {
                           })}
                         </View>
 
-                        {/* Subscribe Button */}
                         <Button
                           title={selectedProgram?._id === prog._id && selectedPlanIndex !== null ? "Proceed to Subscribe" : "Select a Plan Above"}
                           disabled={selectedProgram?._id !== prog._id || selectedPlanIndex === null}
@@ -1266,9 +1203,6 @@ export default function CommunityScreen() {
         </View>
       </Modal>
 
-      {/* ========================================================================= */}
-      {/* MODAL 2: CHECKOUT & PARTICIPANT SELECTION SHEET                           */}
-      {/* ========================================================================= */}
       <Modal
         visible={isCheckoutModalVisible}
         transparent
@@ -1301,7 +1235,6 @@ export default function CommunityScreen() {
 
             {selectedProgram && selectedPlanIndex !== null && (
               <ScrollView showsVerticalScrollIndicator={false}>
-                {/* Summary Box */}
                 <View className="bg-gray-50 rounded-2xl p-4 mb-4 border border-gray-200">
                   <Typography variant="h3" color="secondary" weight="bold" className="font-outfit-bold text-base mb-1">
                     {selectedProgram.title}
@@ -1320,7 +1253,6 @@ export default function CommunityScreen() {
                   </View>
                 </View>
 
-                {/* PARENT SPECIFIC: CHILD SELECTOR */}
                 {isParent ? (
                   <View className="mb-4">
                     <View className="flex-row justify-between items-center mb-2">
@@ -1391,7 +1323,6 @@ export default function CommunityScreen() {
                     )}
                   </View>
                 ) : (
-                  /* PLAYER PARTICIPANT INFO */
                   <View className="bg-blue-50/60 p-3 rounded-2xl border border-blue-100 mb-4 flex-row items-center">
                     <Ionicons name="information-circle" size={20} color="#0F2C59" className="mr-2" />
                     <Typography variant="caption" color="secondary" className="font-outfit text-xs flex-1">
@@ -1400,12 +1331,10 @@ export default function CommunityScreen() {
                   </View>
                 )}
 
-                {/* Terms Notice */}
                 <Typography variant="caption" color="muted" className="font-outfit text-[11px] leading-4 mb-4">
                   Note: Subscriptions are access passes for all recurring batch sessions during the paid period. No separate daily session bookings are needed.
                 </Typography>
 
-                {/* Checkout CTA */}
                 <Button
                   title="Proceed to Razorpay Payment"
                   isLoading={createOrderMutation.isPending}
@@ -1424,9 +1353,6 @@ export default function CommunityScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* ========================================================================= */}
-      {/* MODAL 3: QUICK ADD CHILD (FOR PARENTS)                                    */}
-      {/* ========================================================================= */}
       <Modal
         visible={isAddChildModalVisible}
         transparent
@@ -1507,9 +1433,6 @@ export default function CommunityScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* ========================================================================= */}
-      {/* MODAL 4: RAZORPAY GATEWAY CHECKOUT MODAL                                  */}
-      {/* ========================================================================= */}
       <Modal
         visible={isRazorpayModalVisible}
         animationType="slide"
@@ -1561,9 +1484,6 @@ export default function CommunityScreen() {
         </SafeAreaView>
       </Modal>
 
-      {/* ========================================================================= */}
-      {/* MODAL 5: SUCCESS ACTIVATED PASS MODAL                                     */}
-      {/* ========================================================================= */}
       <Modal
         visible={!!activatedSubscription}
         transparent
@@ -1607,9 +1527,6 @@ export default function CommunityScreen() {
         </View>
       </Modal>
 
-      {/* ========================================================================= */}
-      {/* MODAL 6: ACCESS PASS DETAIL MODAL                                         */}
-      {/* ========================================================================= */}
       <Modal
         visible={!!viewingPass}
         transparent
@@ -1639,7 +1556,6 @@ export default function CommunityScreen() {
 
             {viewingPass && (
               <ScrollView showsVerticalScrollIndicator={false}>
-                {/* Visual Pass Card */}
                 <View className="bg-[#0F2C59] rounded-3xl p-5 mb-4 shadow-md relative overflow-hidden">
                   <View className="flex-row justify-between items-start mb-4">
                     <View>
@@ -1692,7 +1608,6 @@ export default function CommunityScreen() {
                   </View>
                 </View>
 
-                {/* Sub ID Details */}
                 <Typography variant="caption" color="muted" align="center" className="font-outfit text-xs mb-4">
                   Pass ID: {viewingPass._id}
                 </Typography>
@@ -1704,9 +1619,6 @@ export default function CommunityScreen() {
         </View>
       </Modal>
 
-      {/* ========================================================================= */}
-      {/* MODAL 7: REPORT PROGRAM COMPLAINT / ISSUE                                 */}
-      {/* ========================================================================= */}
       <Modal
         visible={!!complaintSubscription}
         transparent
@@ -1743,7 +1655,6 @@ export default function CommunityScreen() {
                   Report a session issue for <Typography weight="bold">{complaintSubscription.programTitle || 'this program'}</Typography>.
                 </Typography>
 
-                {/* Issue Type Selector */}
                 <Typography variant="caption" color="secondary" weight="bold" className="font-outfit-bold text-xs mb-1.5">
                   Issue Type:
                 </Typography>
@@ -1770,7 +1681,6 @@ export default function CommunityScreen() {
                   ))}
                 </View>
 
-                {/* Session Date */}
                 <Typography variant="caption" color="secondary" weight="bold" className="font-outfit-bold text-xs mb-1.5">
                   Session Date (YYYY-MM-DD):
                 </Typography>
@@ -1782,7 +1692,6 @@ export default function CommunityScreen() {
                   className="bg-gray-50 border border-gray-200 rounded-2xl px-4 py-3 font-outfit text-secondary text-sm mb-3"
                 />
 
-                {/* Reason description */}
                 <Typography variant="caption" color="secondary" weight="bold" className="font-outfit-bold text-xs mb-1.5">
                   Detailed Reason:
                 </Typography>

@@ -1,12 +1,6 @@
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 
-/**
- * Universal safe storage wrapper:
- * - Falls back to localStorage on web
- * - Avoids throwing exceptions if storage operations fail
- * - Sanitizes overly large JSON payloads to respect Android SecureStore 2048-byte limits
- */
 export const safeStorage = {
   async setItem(key: string, value: string): Promise<void> {
     if (!key || typeof value !== 'string') return;
@@ -19,12 +13,10 @@ export const safeStorage = {
       }
 
       let payload = value;
-      // Android KeyStore / SharedPreferences limit is 2048 bytes
       if (Platform.OS === 'android' && payload.length > 2000) {
         try {
           const parsed = JSON.parse(payload);
           if (parsed && typeof parsed === 'object') {
-            // Strip large base64 strings or non-critical bulky metadata
             if (typeof parsed.avatar === 'string' && parsed.avatar.length > 300) {
               delete parsed.avatar;
             }
@@ -80,4 +72,3 @@ export const safeStorage = {
     }
   }
 };
-

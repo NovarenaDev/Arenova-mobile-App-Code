@@ -32,7 +32,6 @@ export default function MyTournamentsScreen() {
   const [tournamentTab, setTournamentTab] = useState<'confirmed' | 'pending'>('confirmed');
   const [showInvoicesModal, setShowInvoicesModal] = useState(false);
 
-  // Resume Payment States
   const [activePayReg, setActivePayReg] = useState<any | null>(null);
   const [isRazorpayModalVisible, setIsRazorpayModalVisible] = useState(false);
   const [isResumingPayment, setIsResumingPayment] = useState(false);
@@ -43,14 +42,12 @@ export default function MyTournamentsScreen() {
     currency?: string;
   } | null>(null);
 
-  // Fetch registrations: checks /novare/registrations/my AND fetches any registrations referenced in invoices
   const { data: registrationsResponse, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['myTournamentRegistrations', user?.phone],
     queryFn: async () => {
       let list: any[] = [];
       const cleanPhone = (user?.phone || '').replace(/\D/g, '').slice(-10);
 
-      // 1. Fetch user registrations
       try {
         const res = await api.get('/novare/registrations/my', {
           params: cleanPhone ? { phone: cleanPhone, mobile: cleanPhone, mobileNumber: cleanPhone } : undefined
@@ -61,7 +58,6 @@ export default function MyTournamentsScreen() {
         console.log('Error fetching my registrations:', e);
       }
 
-      // 2. Cross-check invoices to resolve any registration ID by that ID
       try {
         const invRes = await api.get('/invoices/my', { params: { limit: 50 } });
         const invList = normalizeInvoices(invRes.data);
@@ -110,7 +106,6 @@ export default function MyTournamentsScreen() {
     getConfirmedTournamentIds().then(setLocallyConfirmedIds);
   }, []);
 
-  // Process registrations and invoices with synthesis so every paid entry is included
   const {
     confirmedRegistrations,
     pendingRegistrations,
@@ -152,7 +147,6 @@ export default function MyTournamentsScreen() {
     enabled: !!selectedRegistrationId
   });
 
-  // Fallback to in-memory registration if detail query is loading or 404
   const detailObj = 
     detailResponse || 
     confirmedRegistrations.find(r => (r._id || r.id) === selectedRegistrationId) || 
@@ -164,7 +158,6 @@ export default function MyTournamentsScreen() {
       let targetInvoiceId = invoiceIdParam;
 
       if (!targetInvoiceId) {
-        // Try finding matching invoice in allInvoices
         const match = allInvoices.find((inv: any) => {
           if (regId && invoiceMatchesRegistration(inv, { _id: regId, id: regId })) return true;
           return false;
@@ -506,7 +499,6 @@ export default function MyTournamentsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#EEF3F9]" edges={['top']}>
-      {/* Header */}
       <View className="px-4 py-3 flex-row justify-between items-center bg-[#0F2C59] border-b border-gray-100 shadow-sm z-10">
         <TouchableOpacity 
           onPress={() => {
@@ -528,7 +520,6 @@ export default function MyTournamentsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Total Paid & Invoices Summary Header */}
       <View className="px-4 py-2.5 bg-[#0F2C59] border-t border-white/10">
         <View className="bg-white/10 rounded-2xl p-3 flex-row items-center justify-between border border-white/15">
           <View className="flex-row items-center flex-1 mr-2">
@@ -559,7 +550,6 @@ export default function MyTournamentsScreen() {
         </View>
       </View>
 
-      {/* Tabs: Confirmed vs Pending */}
       <View className="px-4 pt-2 pb-2.5 bg-[#0F2C59]">
         <View className="flex-row bg-white/10 p-1 rounded-2xl">
           <TouchableOpacity
@@ -686,7 +676,6 @@ export default function MyTournamentsScreen() {
                 activeOpacity={0.8}
                 className="bg-white rounded-3xl p-5 mb-4 shadow-sm border border-gray-100"
               >
-                {/* Header: Trophy, Name, Category & Status Badge */}
                 <View className="flex-row items-center justify-between mb-3">
                   <View className="flex-row items-center flex-1 mr-2">
                     <View className="w-10 h-10 rounded-xl bg-[#FFF5F0] items-center justify-center mr-3">
@@ -713,7 +702,6 @@ export default function MyTournamentsScreen() {
                   </View>
                 </View>
 
-                {/* Details Badges: Participant, Phone Number & Registration ID */}
                 <View className="flex-row flex-wrap items-center gap-1.5 mb-2.5">
                   {(reg.childName || reg.participantName) ? (
                     <View className="bg-gray-50 px-2.5 py-1 rounded-xl flex-row items-center border border-gray-100">
@@ -742,7 +730,6 @@ export default function MyTournamentsScreen() {
                   )}
                 </View>
 
-                {/* Footer: Date / Invoice # & Action Buttons */}
                 <View className="flex-row items-center justify-between pt-3 border-t border-gray-100 mt-1">
                   <View>
                     <Typography variant="caption" color="muted" className="font-outfit text-xs">
@@ -813,7 +800,6 @@ export default function MyTournamentsScreen() {
         </ScrollView>
       )}
 
-      {/* ALL INVOICES MODAL */}
       <Modal
         visible={showInvoicesModal}
         transparent
@@ -908,7 +894,6 @@ export default function MyTournamentsScreen() {
         </View>
       </Modal>
 
-      {/* REGISTRATION DETAILS MODAL */}
       <Modal
         visible={!!selectedRegistrationId}
         transparent
@@ -1047,7 +1032,6 @@ export default function MyTournamentsScreen() {
         </View>
       </Modal>
 
-      {/* RAZORPAY GATEWAY MODAL FOR RESUMING PAYMENT */}
       <Modal
         visible={isRazorpayModalVisible}
         animationType="slide"
@@ -1055,7 +1039,6 @@ export default function MyTournamentsScreen() {
         onRequestClose={handleCloseRazorpay}
       >
         <View style={{ flex: 1, backgroundColor: '#0F2C59', paddingTop: insets.top }}>
-          {/* Header */}
           <View className="flex-row items-center justify-between px-4 py-3.5 bg-[#0F2C59] border-b border-white/10">
             <View className="flex-row items-center flex-1 mr-3">
               <View className="w-9 h-9 rounded-full bg-white/10 items-center justify-center mr-3 border border-white/15">
@@ -1080,7 +1063,6 @@ export default function MyTournamentsScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* WebView Container */}
           <View style={{ flex: 1, backgroundColor: '#F9FAFB', paddingBottom: insets.bottom }}>
             {razorpayOrder && (
               <WebView

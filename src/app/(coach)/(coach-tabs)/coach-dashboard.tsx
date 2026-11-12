@@ -378,7 +378,6 @@ export default function CoachDashboard() {
     return 'requested';
   };
 
-  // Merge sessions from all available endpoints (dashboard, segmented, my sessions) to ensure full data
   const rawDashboardUpcoming = Array.isArray(dashboardData?.data?.upcomingSessions) ? dashboardData.data.upcomingSessions : [];
   const rawDashboardActive = Array.isArray(dashboardData?.data?.activeSessions) ? dashboardData.data.activeSessions : [];
   const rawSegmentedUpcoming = Array.isArray(segmentedSessions?.data?.upcoming) ? segmentedSessions.data.upcoming : [];
@@ -493,12 +492,9 @@ export default function CoachDashboard() {
 
   return (
     <View className="flex-1 bg-[#EEF3F9]">
-      {/* Sticky Header Section */}
       <View className="z-10">
         <View className="bg-secondary pt-14 pb-14 rounded-b-3xl px-6 shadow-sm relative overflow-hidden">
-          {/* Header Row (Left: Location, Right: Settings & Notifications) */}
           <View className="flex-row items-center justify-between mb-4">
-            {/* Active Location Display on the Left */}
             <TouchableOpacity 
               onPress={() => router.push('/locations')}
               className="flex-row items-center bg-white border border-gray-100 shadow-sm px-3.5 py-1.5 rounded-full active:opacity-75"
@@ -511,7 +507,6 @@ export default function CoachDashboard() {
               <Ionicons name="chevron-down" size={10} color="#0F2C59" />
             </TouchableOpacity>
 
-            {/* Sticky Header Icons */}
             <View className="flex-row items-center">
               <TouchableOpacity className="p-1 mr-3" onPress={() => router.push('/(coach)/wallet' as any)}>
                 <Ionicons name="wallet-outline" size={24} color="white" />
@@ -528,7 +523,6 @@ export default function CoachDashboard() {
             </View>
           </View>
 
-          {/* Coach Welcome Info */}
           <Typography variant="h1" color="white" weight="bold" className="font-outfit-bold text-2xl mb-1">
             Welcome back, {user?.name || 'Coach'}!
           </Typography>
@@ -537,7 +531,6 @@ export default function CoachDashboard() {
           </Typography>
         </View>
 
-        {/* Metrics Cards (Overlapping header) */}
         <View className="px-6 -mt-8 mb-4 flex-row justify-between gap-3">
           <TouchableOpacity 
             onPress={() => openMetricsModal('earnings')}
@@ -607,7 +600,6 @@ export default function CoachDashboard() {
       </View>
 
       <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} scrollEventThrottle={16} decelerationRate="normal" className="flex-1 pt-2" contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 40, 60) }}>
-        {/* Dynamic Coach Promotional Banners (UI Friendly Dedicated Carousel) */}
         {banners.length > 0 && (
           <View className="mb-6 mx-6 relative">
             <ScrollView 
@@ -673,7 +665,6 @@ export default function CoachDashboard() {
               ))}
             </ScrollView>
             
-            {/* Pagination Dots */}
             {banners.length > 1 && (
               <View className="flex-row justify-center items-center mt-3">
                 {banners.map((_, i) => (
@@ -687,7 +678,6 @@ export default function CoachDashboard() {
           </View>
         )}
 
-        {/* Upcoming Sessions Section */}
         <View className="pb-6">
           <View className="flex-row justify-between items-center mb-4 px-6">
             <View className="flex-row items-center">
@@ -766,7 +756,6 @@ export default function CoachDashboard() {
                       </View>
                     </View>
 
-                    {/* Action Row */}
                     {isRequested ? (
                       <View className="flex-row gap-2 pt-3 border-t border-gray-100 items-center">
                         <TouchableOpacity
@@ -841,7 +830,6 @@ export default function CoachDashboard() {
           )}
         </View>
 
-        {/* Current Sessions */}
         <View className="pb-6">
           <View className="flex-row justify-between items-center mb-4 px-6">
             <View className="flex-row items-center">
@@ -937,7 +925,6 @@ export default function CoachDashboard() {
           )}
         </View>
 
-        {/* Completed Sessions */}
         <View className="pb-6">
           <View className="flex-row justify-between items-center mb-4 px-6">
             <Typography variant="h3" color="secondary" weight="bold">
@@ -1009,7 +996,6 @@ export default function CoachDashboard() {
           )}
         </View>
 
-        {/* My Communities Section */}
         <View className="px-6 pb-6">
           <View className="flex-row justify-between items-center mb-4">
             <View className="flex-row items-center">
@@ -1065,7 +1051,6 @@ export default function CoachDashboard() {
                 key={programId} 
                 className="bg-white rounded-3xl p-5 mb-4 shadow-sm border border-gray-100 relative overflow-hidden"
               >
-                {/* Header Banner Row */}
                 <View className="flex-row justify-between items-start mb-3">
                   <View className="flex-1 pr-2">
                     <View className="flex-row items-center mb-1">
@@ -1084,7 +1069,6 @@ export default function CoachDashboard() {
                     </Typography>
                   </View>
 
-                  {/* Active Live Session Badge */}
                   {isSessionActive && (
                     <View className="flex-row items-center bg-red-500 px-2.5 py-1 rounded-full">
                       <View className="w-1.5 h-1.5 rounded-full bg-white mr-1.5 animate-pulse" />
@@ -1095,7 +1079,6 @@ export default function CoachDashboard() {
                   )}
                 </View>
 
-                {/* Schedule & Earnings */}
                 <View className="bg-[#F8FAFC] rounded-2xl p-3 mb-4 border border-slate-100">
                   <View className="flex-row items-center mb-1.5">
                     <Ionicons name="time-outline" size={14} color="#64748B" className="mr-2" />
@@ -1112,7 +1095,6 @@ export default function CoachDashboard() {
                       </Typography>
                     </View>
 
-                    {/* Active Subscribers Pill Button */}
                     <TouchableOpacity 
                       onPress={() => openSubscribersModal(programId, item.title || item.name || 'Program')}
                       className="flex-row items-center bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs"
@@ -1126,7 +1108,6 @@ export default function CoachDashboard() {
                   </View>
                 </View>
 
-                {/* Session Attendance Controls */}
                 <View className="flex-row gap-2">
                   {!isSessionActive ? (
                     <TouchableOpacity
@@ -1157,7 +1138,6 @@ export default function CoachDashboard() {
           })
         )}
 
-        {/* Downside View All Button */}
         <TouchableOpacity
           onPress={() => router.push('/(coach)/community' as any)}
           activeOpacity={0.85}
@@ -1180,7 +1160,6 @@ export default function CoachDashboard() {
         </TouchableOpacity>
         </View>
 
-        {/* Learning & Tips */}
         <View className="px-6 pb-12">
           <View className="flex-row justify-between items-center mb-4">
             <Typography variant="h3" color="secondary" weight="bold">
@@ -1199,7 +1178,6 @@ export default function CoachDashboard() {
               key={index} 
               className="flex-row bg-white rounded-3xl p-3 mb-4 shadow-sm border border-gray-100 items-center"
             >
-              {/* Left Side: Soft Pastel Background for Icon */}
               <View className={`w-24 h-24 rounded-2xl ${tip.imageBg} items-center justify-center mr-4`}>
                 <Ionicons 
                   name={tip.id === '1' ? "american-football-outline" : "ribbon-outline"} 
@@ -1208,7 +1186,6 @@ export default function CoachDashboard() {
                 />
               </View>
 
-              {/* Right Side: Text details */}
               <View className="flex-1 pr-2">
                 <Typography variant="subtitle2" color="secondary" weight="bold" className="text-secondary text-[16px] leading-5 mb-0.5">
                   {tip.title}
@@ -1226,7 +1203,6 @@ export default function CoachDashboard() {
 
       </ScrollView>
 
-      {/* Metrics Detail Overlay (Modal replacement) */}
       {metricsModalVisible && (
         <View className="absolute inset-0 bg-black/50 justify-end z-50">
           <TouchableOpacity 
@@ -1240,10 +1216,8 @@ export default function CoachDashboard() {
             className="bg-white rounded-t-[32px] px-6 pt-4 shadow-2xl border-t border-gray-200"
             style={{ paddingBottom: Math.max(insets.bottom + 24, 36) }}
           >
-            {/* Drag Handle Indicator */}
             <View className="w-12 h-1 bg-gray-300 rounded-full self-center mb-6" />
 
-            {/* Modal Title */}
             <View className="flex-row justify-between items-center mb-6">
               <Typography variant="h3" color="secondary" weight="bold" className="text-xl">
                 Metrics Dashboard
@@ -1256,7 +1230,6 @@ export default function CoachDashboard() {
               </TouchableOpacity>
             </View>
 
-            {/* Tabs Row */}
             <View className="flex-row bg-[#EEF3F9] rounded-full p-1.5 mb-6">
               <TouchableOpacity 
                 onPress={() => setSelectedMetricTab('earnings')}
@@ -1338,7 +1311,6 @@ export default function CoachDashboard() {
               </TouchableOpacity>
             </View>
 
-            {/* Tab Contents */}
             <View className="mb-6 min-h-[220px]">
               {selectedMetricTab === 'earnings' && (
                 <View>
@@ -1375,7 +1347,6 @@ export default function CoachDashboard() {
                       <Typography variant="h3" color="secondary" weight="bold" className="mb-2">
                         {metrics?.weeklySessionsCompleted ?? 0} of {metrics?.weeklySessionsTotal ?? 0} Completed
                       </Typography>
-                      {/* Fake progress bar */}
                       <View className="w-full h-2.5 bg-gray-200 rounded-full overflow-hidden">
                         <View 
                           className="h-full bg-[#4A90E2] rounded-full" 
@@ -1443,7 +1414,6 @@ export default function CoachDashboard() {
               )}
             </View>
 
-            {/* Bottom Close Button / Withdraw Button */}
             {selectedMetricTab === 'earnings' ? (
               <Button 
                 title="Withdraw Balance" 
@@ -1464,7 +1434,6 @@ export default function CoachDashboard() {
         </View>
       )}
 
-      {/* Active Program Subscribers Modal */}
       {subscribersModalVisible && (
         <View className="absolute inset-0 bg-black/50 justify-end z-50">
           <TouchableOpacity 
@@ -1546,7 +1515,6 @@ export default function CoachDashboard() {
         </View>
       )}
 
-      {/* Earnings Payout History Modal */}
       {earningsHistoryModalVisible && (
         <View className="absolute inset-0 bg-black/50 justify-end z-50">
           <TouchableOpacity 

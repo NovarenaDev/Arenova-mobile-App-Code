@@ -14,7 +14,6 @@ export default function VenueDetailsScreen() {
   const { user } = useAuthStore();
   const { id } = useLocalSearchParams<{ id: string }>();
 
-  // Strict Role Guard: Coaches cannot access venue booking screens
   useEffect(() => {
     if (user?.role === 'coach') {
       Alert.alert(
@@ -66,7 +65,6 @@ export default function VenueDetailsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#EEF3F9]">
-      {/* Header */}
       <View className="px-4 py-3 flex-row justify-between items-center bg-white border-b border-gray-100 shadow-sm z-10">
         <TouchableOpacity 
           onPress={() => {
@@ -115,7 +113,6 @@ export default function VenueDetailsScreen() {
             </Typography>
           </View>
 
-          {/* Key Specs Card */}
           <View className="bg-white rounded-3xl p-5 mb-5 border border-gray-100 shadow-sm flex-row justify-around">
             <View className="items-center">
               <Typography variant="caption" color="muted" className="font-outfit">Rate</Typography>
@@ -139,7 +136,6 @@ export default function VenueDetailsScreen() {
             </View>
           </View>
 
-          {/* Supported Sports */}
           {Array.isArray(venue.sports) && venue.sports.length > 0 && (
             <View className="bg-white rounded-3xl p-5 mb-5 border border-gray-100 shadow-sm">
               <Typography variant="subtitle1" color="secondary" weight="bold" className="mb-3 font-outfit-bold">
@@ -157,7 +153,6 @@ export default function VenueDetailsScreen() {
             </View>
           )}
 
-          {/* Amenities */}
           {Array.isArray(venue.amenities) && venue.amenities.length > 0 && (
             <View className="bg-white rounded-3xl p-5 mb-5 border border-gray-100 shadow-sm">
               <Typography variant="subtitle1" color="secondary" weight="bold" className="mb-3 font-outfit-bold">
@@ -178,7 +173,6 @@ export default function VenueDetailsScreen() {
         </View>
       </ScrollView>
 
-      {/* Fixed Bottom Action Bar */}
       <View 
         className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 pt-4 flex-row items-center justify-between shadow-2xl z-20"
         style={{ paddingBottom: Math.max(insets.bottom + 12, 18) }}
