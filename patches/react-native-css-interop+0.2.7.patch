@@ -54,3 +54,20 @@ index 88d2ec1..5d7c607 100644
      if (animatedCache.has(Component)) {
          return animatedCache.get(Component);
      }
+diff --git a/node_modules/react-native-css-interop/dist/runtime/web/color-scheme.js b/node_modules/react-native-css-interop/dist/runtime/web/color-scheme.js
+index 4030060..1e57374 100644
+--- a/node_modules/react-native-css-interop/dist/runtime/web/color-scheme.js
++++ b/node_modules/react-native-css-interop/dist/runtime/web/color-scheme.js
+@@ -43,10 +43,10 @@ const colorSchemeObservable = (0, observable_1.observable)(initialColor, { fallb
+ exports.colorScheme = {
+     set(value) {
+         if (darkMode === "media") {
+-            throw new Error("Cannot manually set color scheme, as dark mode is type 'media'. Please use StyleSheet.setFlag('darkMode', 'class')");
++            return;
+         }
+         if (!globalThis.window) {
+-            throw new Error("Cannot manually set color scheme while not in a browser environment.");
++            return;
+         }
+         if (value === "system") {
+             colorSchemeObservable.set(undefined);
