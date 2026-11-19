@@ -36,7 +36,7 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 export default function RootLayout() {
   const { hydrateAuth, isLoading } = useAuthStore();
 
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Outfit_400Regular,
     Outfit_500Medium,
     Outfit_600SemiBold,
@@ -46,20 +46,19 @@ export default function RootLayout() {
   useEffect(() => {
     hydrateAuth();
     const timer = setTimeout(() => {
-      if (useAuthStore.getState().isLoading) {
-        useAuthStore.setState({ isLoading: false });
-      }
-    }, 2500);
+      useAuthStore.setState({ isLoading: false });
+      SplashScreen.hideAsync().catch(() => {});
+    }, 3000);
     return () => clearTimeout(timer);
   }, [hydrateAuth]);
 
   useEffect(() => {
-    if (fontsLoaded && !isLoading) {
+    if ((fontsLoaded || fontError) && !isLoading) {
       SplashScreen.hideAsync().catch(() => {});
     }
-  }, [fontsLoaded, isLoading]);
+  }, [fontsLoaded, fontError, isLoading]);
 
-  if (!fontsLoaded || isLoading) {
+  if (!fontsLoaded && !fontError && isLoading) {
     return null;
   }
 
