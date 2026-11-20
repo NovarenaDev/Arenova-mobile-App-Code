@@ -6,7 +6,7 @@ import { Typography, Button, TextInput } from '@/components/ui';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/services/api';
-import { useAuthStore } from '@/store';
+import { useAuthStore, showThemedModal } from '@/store';
 
 interface CoachItem {
   _id: string;
@@ -34,6 +34,13 @@ export default function FindCoachScreen() {
 
   useEffect(() => {
     if (user?.role === 'coach') {
+      showThemedModal({
+        title: 'Athlete & Parent Feature',
+        message: 'Searching and booking coaches is designed for athletes and parents. Coaches can view their assigned students and schedules from the Coach Dashboard.',
+        variant: 'primary',
+        iconName: 'information-circle-outline',
+        confirmText: 'Back to Dashboard'
+      });
       router.replace('/(coach)/(coach-tabs)/coach-dashboard');
     }
   }, [user, router]);

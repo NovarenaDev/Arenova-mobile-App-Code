@@ -6,7 +6,7 @@ import { Typography, Button } from '@/components/ui';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/services/api';
-import { useAuthStore } from '@/store';
+import { useAuthStore, showThemedModal } from '@/store';
 
 const DEFAULT_VENUE_IMAGES = [
   'https://images.unsplash.com/photo-1517649763962-0c623266010b?w=800&auto=format&fit=crop&q=80',
@@ -23,6 +23,13 @@ export default function VenuesScreen() {
 
   useEffect(() => {
     if (user?.role === 'coach') {
+      showThemedModal({
+        title: 'Athlete & Parent Feature',
+        message: 'Venue discovery and court booking is designed for athletes and parents. Coaches can view their allocated training grounds in their schedule.',
+        variant: 'primary',
+        iconName: 'information-circle-outline',
+        confirmText: 'Back to Dashboard'
+      });
       router.replace('/(coach)/(coach-tabs)/coach-dashboard');
     }
   }, [user, router]);

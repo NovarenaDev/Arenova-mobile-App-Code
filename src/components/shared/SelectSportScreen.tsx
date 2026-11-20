@@ -7,7 +7,7 @@ import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/services/api';
 import { getTournamentBanner } from '@/utils/tournamentImages';
-import { useAuthStore } from '@/store';
+import { useAuthStore, showThemedModal } from '@/store';
 
 export default function SelectSportScreen() {
   const router = useRouter();
@@ -16,6 +16,13 @@ export default function SelectSportScreen() {
 
   useEffect(() => {
     if (user?.role === 'coach') {
+      showThemedModal({
+        title: 'Athlete & Parent Feature',
+        message: 'Sport selection and session booking is designed for athletes and parents. Coaches manage their training batches directly from the Coach Dashboard.',
+        variant: 'primary',
+        iconName: 'information-circle-outline',
+        confirmText: 'Back to Dashboard'
+      });
       router.replace('/(coach)/(coach-tabs)/coach-dashboard');
     }
   }, [user, router]);

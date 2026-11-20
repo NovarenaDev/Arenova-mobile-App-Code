@@ -7,7 +7,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Calendar } from 'react-native-calendars';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/services/api';
-import { useAuthStore } from '@/store';
+import { useAuthStore, showThemedModal } from '@/store';
 import { resolveSessionSport, resolveSessionTitle } from '@/utils/sessionFormatter';
 
 interface Slot {
@@ -33,6 +33,13 @@ export default function SelectDateScreen() {
 
   React.useEffect(() => {
     if (user?.role === 'coach') {
+      showThemedModal({
+        title: 'Athlete & Parent Feature',
+        message: 'Slot booking is designed for athletes and parents. Coaches can view their assigned sessions from the Coach Dashboard.',
+        variant: 'primary',
+        iconName: 'information-circle-outline',
+        confirmText: 'Back to Dashboard'
+      });
       router.replace('/(coach)/(coach-tabs)/coach-dashboard');
     }
   }, [user, router]);

@@ -4,7 +4,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Button } from '@/components/ui';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useAuthStore } from '@/store';
+import { useAuthStore, showThemedModal } from '@/store';
 import { useQueryClient } from '@tanstack/react-query';
 
 export default function BookingConfirmedScreen() {
@@ -15,6 +15,13 @@ export default function BookingConfirmedScreen() {
 
   useEffect(() => {
     if (user?.role === 'coach') {
+      showThemedModal({
+        title: 'Athlete & Parent Feature',
+        message: 'Booking confirmations are for athlete and parent bookings. Coaches can view upcoming sessions directly in the Schedule tab.',
+        variant: 'primary',
+        iconName: 'information-circle-outline',
+        confirmText: 'Back to Dashboard'
+      });
       router.replace('/(coach)/(coach-tabs)/coach-dashboard');
     }
   }, [user, router]);

@@ -72,14 +72,14 @@ export const handleBannerNavigation = (
 
   // If coach clicks a banner that leads to player/parent features:
   if (userRole === 'coach') {
-    const isForbidden = PLAYER_PARENT_ONLY_ROUTES.some(p => routeStr.toLowerCase().includes(p.toLowerCase()));
-    if (isForbidden) {
+    const isPermitted = isRoutePermittedForRole(routeStr, 'coach');
+    if (!isPermitted) {
       showThemedModal({
-        title: 'Player & Parent Feature',
-        message: 'This feature is designed for athletes and parents to book coaching sessions and explore venues. As a Coach, please manage your schedules, batches, and earnings from your Coach Dashboard.',
+        title: 'Athlete & Parent Feature',
+        message: 'This feature is designed for athletes and parents to book coaching sessions, explore venues, and register for tournaments. As an Arenova Coach, please manage your schedules, batches, and earnings from your Coach Dashboard.',
         variant: 'primary',
         iconName: 'information-circle-outline',
-        confirmText: 'Got It'
+        confirmText: 'Understood'
       });
       return;
     }
@@ -87,14 +87,14 @@ export const handleBannerNavigation = (
 
   // If athlete or parent clicks a coach-only section:
   if (userRole === 'individual' || userRole === 'player' || userRole === 'parent') {
-    const isCoachRoute = COACH_ONLY_ROUTES.some(p => routeStr.toLowerCase().includes(p.toLowerCase()));
-    if (isCoachRoute) {
+    const isPermitted = isRoutePermittedForRole(routeStr, userRole);
+    if (!isPermitted) {
       showThemedModal({
         title: 'Coach Only Section',
         message: 'This section is reserved for verified Arenova coaches to manage their training sessions and schedules.',
         variant: 'primary',
         iconName: 'fitness-outline',
-        confirmText: 'Got It'
+        confirmText: 'Understood'
       });
       return;
     }

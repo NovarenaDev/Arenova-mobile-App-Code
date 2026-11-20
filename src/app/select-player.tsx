@@ -4,7 +4,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Button } from '@/components/ui';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useAuthStore } from '@/store';
+import { useAuthStore, showThemedModal } from '@/store';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/services/api';
 
@@ -24,6 +24,13 @@ export default function SelectPlayerScreen() {
 
   React.useEffect(() => {
     if (user?.role === 'coach') {
+      showThemedModal({
+        title: 'Athlete & Parent Feature',
+        message: 'Attendee selection is designed for athletes and parents booking sessions. Coaches manage attendance from their scheduled sessions.',
+        variant: 'primary',
+        iconName: 'information-circle-outline',
+        confirmText: 'Back to Dashboard'
+      });
       router.replace('/(coach)/(coach-tabs)/coach-dashboard');
     }
   }, [user, router]);

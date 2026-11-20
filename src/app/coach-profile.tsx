@@ -6,7 +6,7 @@ import { Typography, Button } from '@/components/ui';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/services/api';
-import { useAuthStore } from '@/store';
+import { useAuthStore, showThemedModal } from '@/store';
 
 interface CoachProfile {
   _id: string;
@@ -35,6 +35,13 @@ export default function PublicCoachProfileScreen() {
 
   useEffect(() => {
     if (user?.role === 'coach') {
+      showThemedModal({
+        title: 'Coach Notice',
+        message: 'Coach profile booking view is designed for students and parents. Coaches can view and edit their own profile in the Profile tab.',
+        variant: 'primary',
+        iconName: 'information-circle-outline',
+        confirmText: 'Back to Dashboard'
+      });
       router.replace('/(coach)/(coach-tabs)/coach-dashboard');
     }
   }, [user, router]);

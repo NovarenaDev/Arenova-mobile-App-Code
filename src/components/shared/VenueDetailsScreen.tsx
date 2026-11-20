@@ -6,7 +6,7 @@ import { Typography, Button } from '@/components/ui';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/services/api';
-import { useAuthStore } from '@/store';
+import { useAuthStore, showThemedModal } from '@/store';
 
 export default function VenueDetailsScreen() {
   const router = useRouter();
@@ -16,6 +16,13 @@ export default function VenueDetailsScreen() {
 
   useEffect(() => {
     if (user?.role === 'coach') {
+      showThemedModal({
+        title: 'Athlete & Parent Feature',
+        message: 'Venue details and booking slots are designed for athletes and parents. Coaches can view their allocated training grounds in their schedule.',
+        variant: 'primary',
+        iconName: 'information-circle-outline',
+        confirmText: 'Back to Dashboard'
+      });
       router.replace('/(coach)/(coach-tabs)/coach-dashboard');
     }
   }, [user, router]);
