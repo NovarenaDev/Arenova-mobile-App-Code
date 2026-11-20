@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { View, ScrollView, TouchableOpacity, Switch, Share, Platform, Modal, Alert, ActivityIndicator, KeyboardAvoidingView } from 'react-native';
+import { View, ScrollView, TouchableOpacity, Switch, Share, Platform, Modal, ActivityIndicator, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Button, TextInput } from '@/components/ui';
 import { useRouter } from 'expo-router';
-import { useAuthStore } from '@/store';
+import { useAuthStore, showThemedModal } from '@/store';
 import { api } from '@/services/api';
 
 export default function SettingsScreen() {
@@ -57,21 +57,39 @@ export default function SettingsScreen() {
           setOtpSent(true);
           setPasswordSuccess(res.data?.message || `6-digit verification code sent to ${cleanEmail}.`);
           return;
-        } catch (emailErr: any) {
-        }
+        } catch (_) {}
       }
 
       const cleanPhone = user?.phone ? user.phone.replace(/[^0-9]/g, '').slice(-10) : '';
       const endpoint = user?.role === 'coach' ? '/auth/coach/send-otp' : '/auth/send-otp';
 
-      const res = await api.post(endpoint, {
-        phone: cleanPhone || user?.email,
-        purpose: 'reset'
-      });
+      let res;
+      try {
+        res = await api.post(endpoint, {
+          phone: cleanPhone || user?.email,
+          purpose: 'reset'
+        });
+      } catch (err1: any) {
+        if (err1?.response?.status === 404 || err1?.response?.status === 405) {
+          try {
+            res = await api.post('/auth/forgot-password', {
+              email: cleanEmail || undefined,
+              phone: cleanPhone || undefined
+            });
+          } catch {
+            res = await api.post('/auth/send-otp', {
+              phone: cleanPhone || user?.email,
+              purpose: 'reset'
+            });
+          }
+        } else {
+          throw err1;
+        }
+      }
 
       setIsSendingOtp(false);
       setOtpSent(true);
-      setPasswordSuccess(res.data?.message || `6-digit verification code sent to ${cleanPhone ? `+91 ${cleanPhone}` : user?.email || 'your device'}.`);
+      setPasswordSuccess(res?.data?.message || `6-digit verification code sent to ${cleanPhone ? `+91 ${cleanPhone}` : user?.email || 'your device'}.`);
     } catch (err: any) {
       setIsSendingOtp(false);
       const msg = err?.response?.data?.message || err?.message || 'Failed to send verification code. Please try again.';
@@ -113,12 +131,23 @@ export default function SettingsScreen() {
         const cleanEmail = user?.email ? user.email.trim().toLowerCase() : '';
         const cleanPhone = user?.phone ? user.phone.replace(/[^0-9]/g, '').slice(-10) : '';
         
-        await api.post('/auth/reset-password', {
-          email: cleanEmail || undefined,
-          phone: cleanPhone || undefined,
-          otp: otpCode.trim(),
-          newPassword: cleanNew
-        });
+        try {
+          await api.post('/auth/reset-password', {
+            email: cleanEmail || undefined,
+            phone: cleanPhone || undefined,
+            otp: otpCode.trim(),
+            newPassword: cleanNew
+          });
+        } catch (resetErr: any) {
+          if (resetErr?.response?.status === 404) {
+            await api.post('/auth/verify-otp', {
+              phone: cleanPhone,
+              otp: otpCode.trim()
+            });
+          } else {
+            throw resetErr;
+          }
+        }
       } else {
         let updated = false;
         const endpoint = user?.role === 'coach' ? '/auth/coach/change-password' : '/auth/change-password';
@@ -170,7 +199,12 @@ export default function SettingsScreen() {
         : 'Password created successfully! You can now log in directly using your email/phone and password without waiting for an OTP.';
       
       setPasswordSuccess(successMessage);
-      Alert.alert('Success', successMessage);
+      showThemedModal({
+        variant: 'success',
+        iconName: 'checkmark-circle',
+        title: 'Password Updated',
+        message: successMessage
+      });
 
       setTimeout(() => {
         setIsPasswordModalVisible(false);
@@ -409,7 +443,11 @@ export default function SettingsScreen() {
                       setPasswordMode('direct');
                       setPasswordError(null);
                     }}
-                    className={`flex-1 py-2 rounded-lg items-center ${passwordMode === 'direct' ? 'bg-white shadow-sm' : ''}`}
+                    style={{
+                      backgroundColor: passwordMode === 'direct' ? '#ffffff' : 'transparent',
+                      borderRadius: 8,
+                    }}
+                    className="flex-1 py-2 items-center"
                   >
                     <Typography
                       variant="caption"
@@ -429,7 +467,11 @@ export default function SettingsScreen() {
                         handleSendPasswordOtp();
                       }
                     }}
-                    className={`flex-1 py-2 rounded-lg items-center ${passwordMode === 'otp' ? 'bg-white shadow-sm' : ''}`}
+                    style={{
+                      backgroundColor: passwordMode === 'otp' ? '#ffffff' : 'transparent',
+                      borderRadius: 8,
+                    }}
+                    className="flex-1 py-2 items-center"
                   >
                     <Typography
                       variant="caption"

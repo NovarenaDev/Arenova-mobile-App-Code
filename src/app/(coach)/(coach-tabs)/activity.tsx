@@ -318,7 +318,7 @@ export default function CoachActivityScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      <View className="px-3 pt-4 pb-2">
+      <View className="px-3 pt-4 pb-1">
         <View className="flex-row bg-white rounded-full border border-gray-200 overflow-hidden h-12 p-1">
           <TouchableOpacity 
             className={`flex-1 justify-center items-center rounded-full ${activeTab === 'upcoming' ? 'bg-secondary' : 'bg-transparent'}`}
@@ -345,6 +345,29 @@ export default function CoachActivityScreen() {
             </Typography>
           </TouchableOpacity>
         </View>
+      </View>
+
+      <View className="px-3 pt-1 pb-2">
+        <TouchableOpacity 
+          onPress={() => router.push('/(coach)/community' as any)}
+          className="bg-white rounded-2xl px-3.5 py-2.5 border border-blue-100 shadow-2xs flex-row items-center justify-between"
+          activeOpacity={0.8}
+        >
+          <View className="flex-row items-center flex-1 pr-2">
+            <View className="w-7 h-7 rounded-full bg-blue-50 items-center justify-center mr-2">
+              <Ionicons name="business-outline" size={15} color="#0F2C59" />
+            </View>
+            <View className="flex-1">
+              <Typography variant="caption" color="secondary" weight="bold" className="font-outfit-bold text-xs">
+                Community Batches & Daily Attendance
+              </Typography>
+              <Typography variant="caption" color="muted" className="font-outfit text-[10px]">
+                Start daily attendance check-in for assigned academy programs
+              </Typography>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={14} color="#FF5100" />
+        </TouchableOpacity>
       </View>
 
       <ScrollView 

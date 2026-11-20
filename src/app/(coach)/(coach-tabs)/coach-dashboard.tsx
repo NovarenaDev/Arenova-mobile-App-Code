@@ -6,9 +6,18 @@ import { Typography, Button } from '@/components/ui';
 import { useRouter, useNavigation } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/services/api';
-import { useAuthStore } from '@/store';
+import { useAuthStore, showThemedModal, useCommunityAttendanceStore } from '@/store';
 import { resolveSessionTime, resolveSessionDate, resolveSessionSport, resolveSessionTitle, resolveSessionLocation, resolveStudentName, formatSingleTime } from '@/utils/sessionFormatter';
 import { normalizeBanners, handleBannerNavigation } from '@/utils/bannerHelpers';
+import { 
+  normalizeCoachPrograms, 
+  NormalizedCoachProgram, 
+  isProgramScheduledToday, 
+  formatWeekdays, 
+  formatTimeHHmm, 
+  getQuickLocationCoordinates, 
+  formatCommunityAttendanceError 
+} from '@/utils/communityHelpers';
 import * as Location from 'expo-location';
 
 export default function CoachDashboard() {
@@ -32,7 +41,6 @@ export default function CoachDashboard() {
   const [selectedProgramForSubscribers, setSelectedProgramForSubscribers] = React.useState<string | null>(null);
   const [selectedProgramTitle, setSelectedProgramTitle] = React.useState<string>('Program');
   const [subscribersModalVisible, setSubscribersModalVisible] = React.useState(false);
-  const [earningsHistoryModalVisible, setEarningsHistoryModalVisible] = React.useState(false);
   const [activeSessionProgramId, setActiveSessionProgramId] = React.useState<string | null>(null);
   const [startingAttendanceLoading, setStartingAttendanceLoading] = React.useState<string | null>(null);
   const [endingAttendanceLoading, setEndingAttendanceLoading] = React.useState<string | null>(null);
@@ -131,23 +139,6 @@ export default function CoachDashboard() {
     }
   });
 
-  const { data: earningsHistoryResponse } = useQuery({
-    queryKey: ['coachEarningsHistory'],
-    queryFn: async () => {
-      try {
-        const res = await api.get('/coach-app/salary-history');
-        return res.data;
-      } catch (e) {
-        try {
-          const res2 = await api.get('/coach-app/earnings-history');
-          return res2.data;
-        } catch {
-          return null;
-        }
-      }
-    }
-  });
-
   const { data: subscribersResponse, isLoading: isLoadingSubscribers } = useQuery({
     queryKey: ['programSubscribers', selectedProgramForSubscribers],
     queryFn: async () => {
@@ -163,77 +154,89 @@ export default function CoachDashboard() {
     enabled: !!selectedProgramForSubscribers
   });
 
-  const handleStartAttendance = async (programId: string) => {
+  const handleStartAttendance = async (program: NormalizedCoachProgram) => {
+    const programId = program.programId;
     try {
       setStartingAttendanceLoading(programId);
 
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        alert('GPS location permission is required to start community session attendance.');
-        return;
-      }
-
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      const { latitude, longitude } = loc.coords;
+      const coords = await getQuickLocationCoordinates();
 
       await api.post(`/coach-app/programs/${programId}/attendance/start`, {
-        latitude,
-        longitude
+        latitude: coords.latitude,
+        longitude: coords.longitude
       });
+
+      await useCommunityAttendanceStore.getState().markStarted(programId);
       setActiveSessionProgramId(programId);
       refetchCommunities();
-      alert('Community Session Started with GPS Check-in!');
+
+      showThemedModal({
+        variant: 'success',
+        iconName: 'checkmark-circle',
+        title: 'Session Live!',
+        message: `GPS check-in verified for ${program.title}. Daily attendance session is now actively running.`
+      });
     } catch (error: any) {
-      const msg = error.response?.data?.message || 'Failed to start GPS attendance for community program.';
-      alert(msg);
+      const errInfo = formatCommunityAttendanceError(error, true);
+      if (errInfo.isAlreadyStarted) {
+        await useCommunityAttendanceStore.getState().markStarted(programId);
+        setActiveSessionProgramId(programId);
+        refetchCommunities();
+      }
+      showThemedModal({
+        variant: errInfo.isAlreadyStarted ? 'info' : 'warning',
+        iconName: errInfo.isAlreadyStarted ? 'play-circle' : 'navigate-circle',
+        title: errInfo.title,
+        message: errInfo.message
+      });
     } finally {
       setStartingAttendanceLoading(null);
     }
   };
 
-  const handleEndAttendance = async (programId: string) => {
+  const handleEndAttendance = async (program: NormalizedCoachProgram) => {
+    const programId = program.programId;
     try {
       setEndingAttendanceLoading(programId);
 
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        alert('GPS location permission is required to end community session attendance.');
-        return;
-      }
-
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      const { latitude, longitude } = loc.coords;
+      const coords = await getQuickLocationCoordinates();
 
       await api.post(`/coach-app/programs/${programId}/attendance/end`, {
-        latitude,
-        longitude
+        latitude: coords.latitude,
+        longitude: coords.longitude
       });
+
+      await useCommunityAttendanceStore.getState().markCompleted(programId);
       setActiveSessionProgramId(null);
       refetchCommunities();
-      alert('Community Session Ended successfully!');
+
+      showThemedModal({
+        variant: 'success',
+        iconName: 'checkmark-done-circle',
+        title: 'Session Completed!',
+        message: `GPS check-out logged successfully for ${program.title}. Daily coaching session closed.`
+      });
     } catch (error: any) {
-      const msg = error.response?.data?.message || 'Failed to end GPS attendance for community program.';
-      alert(msg);
+      const errInfo = formatCommunityAttendanceError(error, false);
+      if (errInfo.isAlreadyEnded) {
+        await useCommunityAttendanceStore.getState().markCompleted(programId);
+        setActiveSessionProgramId(null);
+        refetchCommunities();
+      }
+      showThemedModal({
+        variant: errInfo.isAlreadyEnded ? 'info' : 'warning',
+        iconName: errInfo.isAlreadyEnded ? 'checkmark-circle' : 'alert-circle',
+        title: errInfo.title,
+        message: errInfo.message
+      });
     } finally {
       setEndingAttendanceLoading(null);
     }
   };
 
-  const displayCommunities = Array.isArray(communitiesResponse?.data) 
-    ? communitiesResponse.data 
-    : Array.isArray(communitiesResponse) 
-    ? communitiesResponse 
-    : [];
-
-  const displayEarningsHistory = Array.isArray(earningsHistoryResponse?.data) 
-    ? earningsHistoryResponse.data 
-    : Array.isArray(earningsHistoryResponse?.earnings)
-    ? earningsHistoryResponse.earnings
-    : Array.isArray(earningsHistoryResponse?.history)
-    ? earningsHistoryResponse.history
-    : Array.isArray(earningsHistoryResponse) 
-    ? earningsHistoryResponse 
-    : [];
+  const displayCommunities = React.useMemo(() => {
+    return normalizeCoachPrograms(communitiesResponse);
+  }, [communitiesResponse]);
 
   const displaySubscribers = Array.isArray(subscribersResponse?.data) 
     ? subscribersResponse.data 
@@ -1005,138 +1008,161 @@ export default function CoachDashboard() {
               <View className="w-2.5 h-2.5 rounded-full bg-primary ml-2" />
             </View>
 
-            <View className="flex-row items-center gap-2">
-              <TouchableOpacity 
-                onPress={() => setEarningsHistoryModalVisible(true)}
-                className="flex-row items-center bg-emerald-50 px-2.5 py-1.5 rounded-full border border-emerald-200 active:opacity-80"
-              >
-                <Ionicons name="cash-outline" size={13} color="#047857" className="mr-1" />
-                <Typography variant="caption" className="text-[#047857] font-bold text-[11px] font-outfit-bold">
-                  Earnings
-                </Typography>
-              </TouchableOpacity>
-
-              <TouchableOpacity 
-                onPress={() => router.push('/(coach)/community' as any)}
-                activeOpacity={0.7}
-                className="py-1 px-1"
-              >
-                <Typography variant="body2" color="primary" weight="bold" className="font-outfit-bold text-sm">
-                  View All
-                </Typography>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity 
+              onPress={() => router.push('/(coach)/community' as any)}
+              activeOpacity={0.7}
+              className="py-1 px-1"
+            >
+              <Typography variant="body2" color="primary" weight="bold" className="font-outfit-bold text-sm">
+                View All
+              </Typography>
+            </TouchableOpacity>
           </View>
 
           {displayCommunities.length === 0 ? (
             <View className="bg-white rounded-2xl p-6 items-center justify-center border border-gray-100 shadow-sm">
               <Ionicons name="people-circle-outline" size={36} color="#9CA3AF" className="mb-2" />
-              <Typography variant="body2" color="muted" align="center">
+              <Typography variant="body2" color="muted" align="center" className="font-outfit">
                 No assigned communities or programs yet.
               </Typography>
-              <Typography variant="caption" color="muted" align="center" className="mt-1">
+              <Typography variant="caption" color="muted" align="center" className="mt-1 font-outfit text-xs">
                 Programs assigned to you by community admins will appear here.
               </Typography>
             </View>
           ) : (
-            displayCommunities.map((item: any) => {
-              const programId = item._id || item.id;
-            const isSessionActive = activeSessionProgramId === programId || item.isAttendanceActive;
-            const isStarting = startingAttendanceLoading === programId;
-            const isEnding = endingAttendanceLoading === programId;
-            const subscriberCount = item.activeSubscribersCount ?? item.subscribersCount ?? 0;
+            displayCommunities.map((item) => {
+              const programId = item.programId;
+              const isStoreLive = useCommunityAttendanceStore.getState().isLive(programId);
+              const isStoreCompleted = useCommunityAttendanceStore.getState().isCompleted(programId);
+              const isSessionActive = activeSessionProgramId === programId || item.isAttendanceActive || isStoreLive;
+              const isStarting = startingAttendanceLoading === programId;
+              const isEnding = endingAttendanceLoading === programId;
+              const isScheduledToday = isProgramScheduledToday(item.sessionDays);
 
-            return (
-              <View 
-                key={programId} 
-                className="bg-white rounded-3xl p-5 mb-4 shadow-sm border border-gray-100 relative overflow-hidden"
-              >
-                <View className="flex-row justify-between items-start mb-3">
-                  <View className="flex-1 pr-2">
-                    <View className="flex-row items-center mb-1">
-                      <View className="bg-primary/10 px-2.5 py-0.5 rounded-full mr-2">
-                        <Typography variant="caption" color="primary" weight="bold" className="text-[10px]">
-                          {item.sport || 'Community'}
+              return (
+                <View 
+                  key={programId} 
+                  className="bg-white rounded-3xl p-5 mb-4 shadow-sm border border-gray-100 relative overflow-hidden"
+                >
+                  <View className="flex-row justify-between items-start mb-3">
+                    <View className="flex-1 pr-2">
+                      <View className="flex-row items-center mb-1">
+                        <View className="bg-primary/10 px-2.5 py-0.5 rounded-full mr-2">
+                          <Typography variant="caption" color="primary" weight="bold" className="text-[10px]">
+                            {item.sport}
+                          </Typography>
+                        </View>
+                        <Typography variant="caption" color="muted" weight="semibold" className="text-[11px] font-outfit flex-1" numberOfLines={1}>
+                          {item.communityName} {item.communityCity ? `• ${item.communityCity}` : ''}
                         </Typography>
                       </View>
-                      <Typography variant="caption" color="muted" weight="semibold" className="text-[11px]">
-                        {item.communityName || 'Community Center'}
+
+                      <Typography variant="subtitle1" color="secondary" weight="bold" className="text-[17px] font-outfit-bold">
+                        {item.title}
                       </Typography>
                     </View>
 
-                    <Typography variant="subtitle1" color="secondary" weight="bold" className="text-[17px]">
-                      {item.title || item.name}
-                    </Typography>
+                    {isSessionActive ? (
+                      <View className="flex-row items-center bg-emerald-500 px-2.5 py-1 rounded-full">
+                        <View className="w-1.5 h-1.5 rounded-full bg-white mr-1.5 animate-pulse" />
+                        <Typography variant="caption" color="white" weight="bold" className="text-[10px] uppercase tracking-wider font-outfit-bold">
+                          Session Live
+                        </Typography>
+                      </View>
+                    ) : isStoreCompleted ? (
+                      <View className="bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
+                        <Typography variant="caption" className="text-emerald-700 font-outfit-bold text-[10px]">
+                          Completed Today
+                        </Typography>
+                      </View>
+                    ) : !isScheduledToday ? (
+                      <View className="bg-gray-100 px-2.5 py-1 rounded-full">
+                        <Typography variant="caption" color="muted" className="text-[10px] font-outfit">
+                          No Session Today
+                        </Typography>
+                      </View>
+                    ) : null}
                   </View>
 
-                  {isSessionActive && (
-                    <View className="flex-row items-center bg-red-500 px-2.5 py-1 rounded-full">
-                      <View className="w-1.5 h-1.5 rounded-full bg-white mr-1.5 animate-pulse" />
-                      <Typography variant="caption" color="white" weight="bold" className="text-[10px] uppercase tracking-wider">
-                        Session Live
+                  <View className="bg-[#F8FAFC] rounded-2xl p-3 mb-4 border border-slate-100">
+                    <View className="flex-row items-center mb-1.5">
+                      <Ionicons name="calendar-outline" size={13} color="#64748B" className="mr-1.5" />
+                      <Typography variant="caption" color="secondary" weight="semibold" className="text-[12px] font-outfit-semibold">
+                        {formatWeekdays(item.sessionDays)}
                       </Typography>
                     </View>
-                  )}
-                </View>
 
-                <View className="bg-[#F8FAFC] rounded-2xl p-3 mb-4 border border-slate-100">
-                  <View className="flex-row items-center mb-1.5">
-                    <Ionicons name="time-outline" size={14} color="#64748B" className="mr-2" />
-                    <Typography variant="caption" color="secondary" weight="semibold" className="text-[12px]">
-                      {item.schedule || 'Regular Weekly Sessions'}
-                    </Typography>
-                  </View>
+                    {item.sessionStartTime ? (
+                      <View className="flex-row items-center mb-1.5">
+                        <Ionicons name="time-outline" size={13} color="#64748B" className="mr-1.5" />
+                        <Typography variant="caption" color="muted" className="text-[12px] font-outfit">
+                          {formatTimeHHmm(item.sessionStartTime)} - {formatTimeHHmm(item.sessionEndTime)} ({item.timeZone})
+                        </Typography>
+                      </View>
+                    ) : null}
 
-                  <View className="flex-row items-center justify-between">
-                    <View className="flex-row items-center">
-                      <Ionicons name="wallet-outline" size={14} color="#10B981" className="mr-2" />
-                      <Typography variant="caption" className="text-emerald-700 font-bold text-[12px]">
-                        {item.earnings || item.payout || item.salary || 'Contracted Earnings'}
-                      </Typography>
+                    <View className="flex-row items-center justify-between pt-1 border-t border-slate-200/60">
+                      <View className="flex-row items-center">
+                        <Ionicons name="wallet-outline" size={13} color="#10B981" className="mr-1.5" />
+                        <Typography variant="caption" className="text-emerald-700 font-bold text-[12px] font-outfit-bold">
+                          ₹{item.salary.toLocaleString()} / mo
+                        </Typography>
+                      </View>
+
+                      <TouchableOpacity 
+                        onPress={() => openSubscribersModal(programId, item.title)}
+                        className="flex-row items-center bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs"
+                      >
+                        <Ionicons name="people-outline" size={13} color="#0F2C59" className="mr-1" />
+                        <Typography variant="caption" color="secondary" weight="bold" className="text-[11px] font-outfit-bold">
+                          {item.subscribersCount} Enrolled
+                        </Typography>
+                        <Ionicons name="chevron-forward" size={10} color="#0F2C59" className="ml-1" />
+                      </TouchableOpacity>
                     </View>
+                  </View>
 
-                    <TouchableOpacity 
-                      onPress={() => openSubscribersModal(programId, item.title || item.name || 'Program')}
-                      className="flex-row items-center bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs"
-                    >
-                      <Ionicons name="people-outline" size={13} color="#0F2C59" className="mr-1" />
-                      <Typography variant="caption" color="secondary" weight="bold" className="text-[11px]">
-                        {subscriberCount} Subscribers
-                      </Typography>
-                      <Ionicons name="chevron-forward" size={10} color="#0F2C59" className="ml-1" />
-                    </TouchableOpacity>
+                  <View className="flex-row gap-2">
+                    {isSessionActive ? (
+                      <TouchableOpacity
+                        disabled={isEnding}
+                        onPress={() => handleEndAttendance(item)}
+                        className="flex-1 bg-[#EF4444] py-3 rounded-2xl flex-row items-center justify-center shadow-xs active:opacity-80"
+                      >
+                        <Ionicons name="stop-circle" size={18} color="white" className="mr-1.5" />
+                        <Typography variant="body2" color="white" weight="bold" className="font-outfit-bold">
+                          {isEnding ? 'Verifying GPS Check-out...' : 'End Program Session'}
+                        </Typography>
+                      </TouchableOpacity>
+                    ) : isStoreCompleted ? (
+                      <View className="flex-1 bg-emerald-50 py-2.5 rounded-2xl border border-emerald-200 items-center justify-center">
+                        <Typography variant="caption" className="text-emerald-800 font-outfit-bold text-xs">
+                          Attendance Completed for Today
+                        </Typography>
+                      </View>
+                    ) : isScheduledToday ? (
+                      <TouchableOpacity
+                        disabled={isStarting}
+                        onPress={() => handleStartAttendance(item)}
+                        className="flex-1 bg-[#10B981] py-3 rounded-2xl flex-row items-center justify-center shadow-xs active:opacity-80"
+                      >
+                        <Ionicons name="play-circle" size={18} color="white" className="mr-1.5" />
+                        <Typography variant="body2" color="white" weight="bold" className="font-outfit-bold">
+                          {isStarting ? 'Acquiring GPS Coordinates...' : 'Start Session Attendance'}
+                        </Typography>
+                      </TouchableOpacity>
+                    ) : (
+                      <View className="flex-1 bg-slate-100 py-2.5 rounded-2xl items-center justify-center">
+                        <Typography variant="caption" color="muted" className="font-outfit text-xs">
+                          Next Session on {formatWeekdays(item.sessionDays)}
+                        </Typography>
+                      </View>
+                    )}
                   </View>
                 </View>
-
-                <View className="flex-row gap-2">
-                  {!isSessionActive ? (
-                    <TouchableOpacity
-                      disabled={isStarting}
-                      onPress={() => handleStartAttendance(programId)}
-                      className="flex-1 bg-[#10B981] py-3 rounded-2xl flex-row items-center justify-center shadow-xs active:opacity-80"
-                    >
-                      <Ionicons name="play-circle" size={18} color="white" className="mr-1.5" />
-                      <Typography variant="body2" color="white" weight="bold">
-                        {isStarting ? 'Starting...' : 'Start Session Attendance'}
-                      </Typography>
-                    </TouchableOpacity>
-                  ) : (
-                    <TouchableOpacity
-                      disabled={isEnding}
-                      onPress={() => handleEndAttendance(programId)}
-                      className="flex-1 bg-[#EF4444] py-3 rounded-2xl flex-row items-center justify-center shadow-xs active:opacity-80"
-                    >
-                      <Ionicons name="stop-circle" size={18} color="white" className="mr-1.5" />
-                      <Typography variant="body2" color="white" weight="bold">
-                        {isEnding ? 'Ending...' : 'End Program Session'}
-                      </Typography>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </View>
-            );
-          })
-        )}
+              );
+            })
+          )}
 
         <TouchableOpacity
           onPress={() => router.push('/(coach)/community' as any)}
@@ -1510,81 +1536,6 @@ export default function CoachDashboard() {
               title="Close" 
               variant="secondary"
               onPress={() => setSubscribersModalVisible(false)} 
-            />
-          </View>
-        </View>
-      )}
-
-      {earningsHistoryModalVisible && (
-        <View className="absolute inset-0 bg-black/50 justify-end z-50">
-          <TouchableOpacity 
-            className="absolute inset-0" 
-            activeOpacity={1} 
-            onPress={() => setEarningsHistoryModalVisible(false)} 
-          />
-          <View 
-            onStartShouldSetResponder={() => true}
-            onTouchEnd={(e) => e.stopPropagation()}
-            className="bg-white rounded-t-[32px] px-6 pt-4 shadow-2xl border-t border-gray-200 max-h-[80%]"
-            style={{ paddingBottom: Math.max(insets.bottom + 24, 36) }}
-          >
-            <View className="w-12 h-1 bg-gray-300 rounded-full self-center mb-6" />
-
-            <View className="flex-row justify-between items-center mb-4">
-              <View>
-                <Typography variant="h3" color="secondary" weight="bold" className="text-xl">
-                  Earnings Payout History
-                </Typography>
-                <Typography variant="caption" color="muted">
-                  Assigned Community Contracts & Earnings Log
-                </Typography>
-              </View>
-
-              <TouchableOpacity 
-                onPress={() => setEarningsHistoryModalVisible(false)}
-                className="w-8 h-8 rounded-full bg-gray-100 justify-center items-center"
-              >
-                <Ionicons name="close" size={18} color="#0F2C59" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false} className="max-h-[380px] mb-4">
-              {displayEarningsHistory.length === 0 ? (
-                <View className="py-8 items-center">
-                  <Ionicons name="receipt-outline" size={36} color="#9CA3AF" className="mb-2" />
-                  <Typography variant="body2" color="muted">No earnings payout history available yet.</Typography>
-                </View>
-              ) : (
-                displayEarningsHistory.map((pay: any, idx: number) => (
-                  <View key={pay.id || idx} className="p-4 bg-gray-50 rounded-2xl mb-3 border border-gray-100 flex-row justify-between items-center">
-                    <View className="flex-1 pr-2">
-                      <Typography variant="subtitle2" color="secondary" weight="bold">
-                        {pay.period || 'Monthly Earnings Payout'}
-                      </Typography>
-                      <Typography variant="caption" color="muted" className="mt-0.5">
-                        {pay.date} • {pay.method || 'Bank Transfer'}
-                      </Typography>
-                    </View>
-
-                    <View className="items-end">
-                      <Typography variant="subtitle1" className="text-emerald-700 font-bold">
-                        {pay.amount}
-                      </Typography>
-                      <View className="bg-emerald-100 px-2 py-0.5 rounded-full mt-0.5">
-                        <Typography variant="caption" className="text-emerald-800 font-semibold text-[10px]">
-                          {pay.status || 'Paid'}
-                        </Typography>
-                      </View>
-                    </View>
-                  </View>
-                ))
-              )}
-            </ScrollView>
-
-            <Button 
-              title="Close" 
-              variant="secondary"
-              onPress={() => setEarningsHistoryModalVisible(false)} 
             />
           </View>
         </View>

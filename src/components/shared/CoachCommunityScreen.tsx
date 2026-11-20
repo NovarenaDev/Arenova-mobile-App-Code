@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   View, 
   ScrollView, 
   TouchableOpacity, 
   ActivityIndicator, 
-  Modal, 
-  Alert 
+  Modal 
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,11 +13,16 @@ import { router, useNavigation } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Location from 'expo-location';
 import { api } from '@/services/api';
-import { useAuthStore } from '@/store';
+import { useAuthStore, showThemedModal, useCommunityAttendanceStore } from '@/store';
 import { 
   formatTimeHHmm, 
   formatWeekdays, 
-  formatDateOnly 
+  formatDateOnly,
+  normalizeCoachPrograms,
+  NormalizedCoachProgram,
+  isProgramScheduledToday,
+  getQuickLocationCoordinates,
+  formatCommunityAttendanceError
 } from '@/utils/communityHelpers';
 
 export default function CoachCommunityScreen() {
@@ -42,8 +46,6 @@ export default function CoachCommunityScreen() {
 
   const [selectedProgramForHistory, setSelectedProgramForHistory] = useState<string | null>(null);
   const [attendanceHistoryModalVisible, setAttendanceHistoryModalVisible] = useState(false);
-
-  const [salaryHistoryModalVisible, setSalaryHistoryModalVisible] = useState(false);
 
   const [isStartingGps, setIsStartingGps] = useState<string | null>(null);
   const [isEndingGps, setIsEndingGps] = useState<string | null>(null);
@@ -99,22 +101,6 @@ export default function CoachCommunityScreen() {
     enabled: !!selectedProgramForHistory && attendanceHistoryModalVisible
   });
 
-  const { 
-    data: salaryHistoryResponse, 
-    isLoading: isLoadingSalaryHistory 
-  } = useQuery({
-    queryKey: ['coachSalaryHistory'],
-    queryFn: async () => {
-      try {
-        const res = await api.get('/coach-app/salary-history?page=1&limit=20');
-        return res.data?.data || res.data || [];
-      } catch (e) {
-        return [];
-      }
-    },
-    enabled: salaryHistoryModalVisible
-  });
-
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       refetchCommunities();
@@ -122,78 +108,87 @@ export default function CoachCommunityScreen() {
     return unsubscribe;
   }, [navigation, refetchCommunities]);
 
-  const handleStartAttendance = async (programId: string) => {
+  const handleStartAttendance = async (programId: string, programTitle?: string) => {
     try {
       setIsStartingGps(programId);
 
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert(
-          'Location Permission Required', 
-          'GPS location access is required to verify your physical presence at the community coaching facility.'
-        );
-        return;
-      }
-
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      const { latitude, longitude } = loc.coords;
+      const coords = await getQuickLocationCoordinates();
 
       const res = await api.post(`/coach-app/programs/${programId}/attendance/start`, {
-        latitude,
-        longitude
+        latitude: coords.latitude,
+        longitude: coords.longitude
       });
 
+      await useCommunityAttendanceStore.getState().markStarted(programId);
       refetchCommunities();
       queryClient.invalidateQueries({ queryKey: ['coachProgramAttendanceToday', programId] });
 
-      Alert.alert(
-        'Session Started!', 
-        res.data?.message || 'Daily session check-in verified via GPS successfully.'
-      );
+      showThemedModal({
+        variant: 'success',
+        iconName: 'checkmark-circle',
+        title: 'Session Live!',
+        message: res.data?.message || `GPS check-in verified for ${programTitle || 'program'}. Daily session attendance is active.`
+      });
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err.message || 'Could not verify GPS check-in.';
-      Alert.alert('Attendance Check-in Failed', msg);
+      const errInfo = formatCommunityAttendanceError(err, true);
+      if (errInfo.isAlreadyStarted) {
+        await useCommunityAttendanceStore.getState().markStarted(programId);
+        refetchCommunities();
+        queryClient.invalidateQueries({ queryKey: ['coachProgramAttendanceToday', programId] });
+      }
+      showThemedModal({
+        variant: errInfo.isAlreadyStarted ? 'info' : 'warning',
+        iconName: errInfo.isAlreadyStarted ? 'play-circle' : 'navigate-circle',
+        title: errInfo.title,
+        message: errInfo.message
+      });
     } finally {
       setIsStartingGps(null);
     }
   };
 
-  const handleEndAttendance = async (programId: string) => {
+  const handleEndAttendance = async (programId: string, programTitle?: string) => {
     try {
       setIsEndingGps(programId);
 
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Location Permission Required', 'GPS location access is required to complete session attendance.');
-        return;
-      }
-
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      const { latitude, longitude } = loc.coords;
+      const coords = await getQuickLocationCoordinates();
 
       const res = await api.post(`/coach-app/programs/${programId}/attendance/end`, {
-        latitude,
-        longitude
+        latitude: coords.latitude,
+        longitude: coords.longitude
       });
 
+      await useCommunityAttendanceStore.getState().markCompleted(programId);
       refetchCommunities();
       queryClient.invalidateQueries({ queryKey: ['coachProgramAttendanceToday', programId] });
 
-      Alert.alert(
-        'Session Completed!', 
-        res.data?.message || 'Daily session GPS check-out logged successfully.'
-      );
+      showThemedModal({
+        variant: 'success',
+        iconName: 'checkmark-done-circle',
+        title: 'Session Completed!',
+        message: res.data?.message || `Daily session GPS check-out logged successfully for ${programTitle || 'program'}.`
+      });
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err.message || 'Could not log session check-out.';
-      Alert.alert('Check-out Failed', msg);
+      const errInfo = formatCommunityAttendanceError(err, false);
+      if (errInfo.isAlreadyEnded) {
+        await useCommunityAttendanceStore.getState().markCompleted(programId);
+        refetchCommunities();
+        queryClient.invalidateQueries({ queryKey: ['coachProgramAttendanceToday', programId] });
+      }
+      showThemedModal({
+        variant: errInfo.isAlreadyEnded ? 'info' : 'warning',
+        iconName: errInfo.isAlreadyEnded ? 'checkmark-circle' : 'alert-circle',
+        title: errInfo.title,
+        message: errInfo.message
+      });
     } finally {
       setIsEndingGps(null);
     }
   };
 
-  const programsList: any[] = Array.isArray(communitiesResponse)
-    ? communitiesResponse
-    : (communitiesResponse?.data || []);
+  const programsList: NormalizedCoachProgram[] = useMemo(() => {
+    return normalizeCoachPrograms(communitiesResponse);
+  }, [communitiesResponse]);
 
   const subscribersList: any[] = Array.isArray(subscribersResponse)
     ? subscribersResponse
@@ -202,10 +197,6 @@ export default function CoachCommunityScreen() {
   const attendanceHistoryList: any[] = Array.isArray(attendanceHistoryResponse)
     ? attendanceHistoryResponse
     : (attendanceHistoryResponse?.data || []);
-
-  const salaryHistoryList: any[] = Array.isArray(salaryHistoryResponse)
-    ? salaryHistoryResponse
-    : (salaryHistoryResponse?.data || []);
 
   return (
     <SafeAreaView className="flex-1 bg-[#EEF3F9]" edges={['top']}>
@@ -243,18 +234,8 @@ export default function CoachCommunityScreen() {
 
         <View className="flex-row items-center">
           <TouchableOpacity 
-            onPress={() => setSalaryHistoryModalVisible(true)}
-            className="flex-row items-center bg-gray-100 px-3 py-1.5 rounded-full border border-gray-200 mr-2"
-          >
-            <Ionicons name="cash-outline" size={14} color="#0F2C59" className="mr-1" />
-            <Typography variant="caption" color="secondary" weight="bold" className="font-outfit-bold text-xs">
-              Earnings History
-            </Typography>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
             onPress={() => router.push('/(coach)/wallet' as any)}
-            className="flex-row items-center bg-[#0F2C59] px-3 py-1.5 rounded-full"
+            className="flex-row items-center bg-[#0F2C59] px-3.5 py-1.5 rounded-full"
           >
             <Ionicons name="wallet-outline" size={14} color="white" className="mr-1" />
             <Typography variant="caption" color="white" weight="bold" className="font-outfit-bold text-xs">
@@ -288,14 +269,13 @@ export default function CoachCommunityScreen() {
             <Button title="Refresh" onPress={() => refetchCommunities()} fullWidth={false} className="px-6" />
           </View>
         ) : (
-          programsList.map((item: any) => {
-            const programId = item.programId || item._id || item.id;
-            const communityName = item.community?.name || item.communityName || 'Sports Academy';
-            const communityAddress = item.community?.address || item.address || '';
-            const communityCity = item.community?.city || item.city || '';
-            const timeZone = item.community?.timeZone || item.timeZone || 'Asia/Kolkata';
-            const salary = item.salary ?? item.ownSalary ?? 0;
-            const isLive = item.isAttendanceActive || false;
+          programsList.map((item: NormalizedCoachProgram) => {
+            const programId = item.programId;
+            const communityName = item.communityName || 'Sports Academy';
+            const communityAddress = item.communityAddress || '';
+            const communityCity = item.communityCity || '';
+            const timeZone = item.timeZone || 'Asia/Kolkata';
+            const salary = item.salary;
 
             return (
               <View 
@@ -311,12 +291,12 @@ export default function CoachCommunityScreen() {
                         </Typography>
                       </View>
                       <Typography variant="caption" color="muted" weight="semibold" className="text-xs font-outfit flex-1" numberOfLines={1}>
-                        {communityName} • {communityCity}
+                        {communityName} {communityCity ? `• ${communityCity}` : ''}
                       </Typography>
                     </View>
 
                     <Typography variant="subtitle1" color="secondary" weight="bold" className="font-outfit-bold text-base">
-                      {item.title || item.name}
+                      {item.title}
                     </Typography>
                   </View>
 
@@ -338,12 +318,14 @@ export default function CoachCommunityScreen() {
                     </Typography>
                   </View>
 
-                  <View className="flex-row items-center mb-1">
-                    <Ionicons name="time-outline" size={13} color="#64748B" className="mr-1.5" />
-                    <Typography variant="caption" color="muted" className="font-outfit text-xs">
-                      {formatTimeHHmm(item.sessionStartTime)} - {formatTimeHHmm(item.sessionEndTime)} ({timeZone})
-                    </Typography>
-                  </View>
+                  {item.sessionStartTime ? (
+                    <View className="flex-row items-center mb-1">
+                      <Ionicons name="time-outline" size={13} color="#64748B" className="mr-1.5" />
+                      <Typography variant="caption" color="muted" className="font-outfit text-xs">
+                        {formatTimeHHmm(item.sessionStartTime)} - {formatTimeHHmm(item.sessionEndTime)} ({timeZone})
+                      </Typography>
+                    </View>
+                  ) : null}
 
                   {communityAddress ? (
                     <View className="flex-row items-center">
@@ -356,18 +338,18 @@ export default function CoachCommunityScreen() {
                 </View>
 
                 <CoachTodayAttendanceCard 
-                  programId={programId}
+                  program={item}
                   isStarting={isStartingGps === programId}
                   isEnding={isEndingGps === programId}
-                  onStart={() => handleStartAttendance(programId)}
-                  onEnd={() => handleEndAttendance(programId)}
+                  onStart={() => handleStartAttendance(programId, item.title)}
+                  onEnd={() => handleEndAttendance(programId, item.title)}
                 />
 
                 <View className="flex-row items-center justify-between pt-3 border-t border-gray-100 mt-2">
                   <TouchableOpacity
                     onPress={() => {
                       setSelectedProgramForSubscribers(programId);
-                      setSelectedProgramTitle(item.title || item.name || 'Program');
+                      setSelectedProgramTitle(item.title);
                       setSubscribersModalVisible(true);
                     }}
                     className="flex-row items-center bg-gray-100 px-3.5 py-1.5 rounded-full border border-gray-200"
@@ -381,7 +363,7 @@ export default function CoachCommunityScreen() {
                   <TouchableOpacity
                     onPress={() => {
                       setSelectedProgramForHistory(programId);
-                      setSelectedProgramTitle(item.title || item.name || 'Program');
+                      setSelectedProgramTitle(item.title);
                       setAttendanceHistoryModalVisible(true);
                     }}
                     className="flex-row items-center bg-gray-100 px-3.5 py-1.5 rounded-full border border-gray-200"
@@ -583,105 +565,29 @@ export default function CoachCommunityScreen() {
           </View>
         </View>
       </Modal>
-
-      <Modal
-        visible={salaryHistoryModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setSalaryHistoryModalVisible(false)}
-      >
-        <View className="flex-1 bg-black/60 justify-end">
-          <TouchableOpacity 
-            className="flex-1" 
-            activeOpacity={1} 
-            onPress={() => setSalaryHistoryModalVisible(false)} 
-          />
-          <View 
-            className="bg-white rounded-t-[32px] px-6 pt-5 pb-8 shadow-2xl border-t border-gray-200 max-h-[85%]"
-            style={{ paddingBottom: Math.max(insets.bottom + 20, 32) }}
-          >
-            <View className="w-12 h-1 bg-gray-300 rounded-full self-center mb-4" />
-
-            <View className="flex-row justify-between items-center mb-4">
-              <View>
-                <Typography variant="h2" color="secondary" weight="bold" className="font-outfit-bold text-xl">
-                  Earnings History
-                </Typography>
-                <Typography variant="caption" color="muted" className="font-outfit text-xs">
-                  Fixed platform-funded coaching contract payouts
-                </Typography>
-              </View>
-              <TouchableOpacity onPress={() => setSalaryHistoryModalVisible(false)}>
-                <Ionicons name="close" size={24} color="#0F2C59" />
-              </TouchableOpacity>
-            </View>
-
-            {isLoadingSalaryHistory ? (
-              <View className="py-12 items-center">
-                <ActivityIndicator size="large" color="#FF5100" />
-                <Typography variant="body2" color="muted" className="mt-2 font-outfit">
-                  Loading salary payouts...
-                </Typography>
-              </View>
-            ) : salaryHistoryList.length === 0 ? (
-              <View className="p-8 bg-gray-50 rounded-2xl items-center border border-gray-200 my-4">
-                <Ionicons name="cash-outline" size={36} color="#94A3B8" className="mb-2" />
-                <Typography variant="body2" color="muted" align="center" className="font-outfit">
-                  No monthly contract payouts recorded yet. Completed month payouts will appear here.
-                </Typography>
-              </View>
-            ) : (
-              <ScrollView showsVerticalScrollIndicator={false}>
-                {salaryHistoryList.map((item: any, idx: number) => {
-                  const itemId = item._id || item.id || idx.toString();
-                  const amount = item.amount ?? item.salary ?? 0;
-                  const month = item.month || item.period || 'Monthly Payout';
-
-                  return (
-                    <View key={itemId} className="bg-gray-50 rounded-2xl p-4 mb-2.5 border border-gray-200 flex-row items-center justify-between">
-                      <View className="flex-1 mr-2">
-                        <Typography variant="subtitle2" color="secondary" weight="bold" className="font-outfit-bold">
-                          {month}
-                        </Typography>
-                        <Typography variant="caption" color="muted" className="font-outfit text-xs">
-                          {item.programTitle || 'Community Program'}
-                        </Typography>
-                      </View>
-
-                      <View className="items-end">
-                        <Typography variant="subtitle2" color="primary" weight="bold" className="font-outfit-bold text-base">
-                          ₹{amount.toLocaleString()}
-                        </Typography>
-                        <Typography variant="caption" className="text-emerald-700 font-outfit-bold text-xs">
-                          {item.status || 'Paid'}
-                        </Typography>
-                      </View>
-                    </View>
-                  );
-                })}
-              </ScrollView>
-            )}
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
 
 function CoachTodayAttendanceCard({
-  programId,
+  program,
   isStarting,
   isEnding,
   onStart,
   onEnd
 }: {
-  programId: string;
+  program: NormalizedCoachProgram;
   isStarting: boolean;
   isEnding: boolean;
   onStart: () => void;
   onEnd: () => void;
 }) {
-  const { data: todayResponse, isLoading, refetch } = useQuery({
+  const programId = program.programId;
+  const isStoreLive = useCommunityAttendanceStore.getState().isLive(programId);
+  const isStoreCompleted = useCommunityAttendanceStore.getState().isCompleted(programId);
+  const storeRecord = useCommunityAttendanceStore.getState().getRecord(programId);
+
+  const { data: todayResponse, isLoading } = useQuery({
     queryKey: ['coachProgramAttendanceToday', programId],
     queryFn: async () => {
       try {
@@ -702,11 +608,11 @@ function CoachTodayAttendanceCard({
   }
 
   const attendance = todayResponse?.attendance;
-  const isScheduledToday = todayResponse?.isScheduled !== false;
+  const isScheduledToday = isProgramScheduledToday(program.sessionDays);
   const status = attendance?.status;
 
-  const isLive = status === 'started';
-  const isCompleted = status === 'completed';
+  const isLive = status === 'started' || isStoreLive || program.isAttendanceActive;
+  const isCompleted = status === 'completed' || isStoreCompleted;
   const isNoShow = status === 'no_show';
 
   return (
@@ -765,7 +671,7 @@ function CoachTodayAttendanceCard({
         />
       ) : isCompleted ? (
         <Typography variant="caption" color="muted" className="font-outfit text-xs">
-          Daily attendance logged. Check-in: {attendance?.startAt ? new Date(attendance.startAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Logged'}
+          Daily attendance logged. Check-in: {(attendance?.startAt || storeRecord?.startAt) ? new Date(attendance?.startAt || storeRecord?.startAt || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Logged today'}
         </Typography>
       ) : isScheduledToday ? (
         <Button

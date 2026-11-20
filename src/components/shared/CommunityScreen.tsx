@@ -235,10 +235,20 @@ export default function CommunityScreen() {
       if (child?._id) {
         setSelectedChildId(child._id);
       }
-      Alert.alert('Child Registered', 'Child profile has been linked to your account.');
+      showThemedModal({
+        variant: 'success',
+        iconName: 'checkmark-circle',
+        title: 'Child Registered',
+        message: 'Child profile has been linked to your account successfully.'
+      });
     },
     onError: (err: any) => {
-      Alert.alert('Registration Failed', err?.response?.data?.message || err.message || 'Could not add child.');
+      showThemedModal({
+        variant: 'warning',
+        iconName: 'alert-circle',
+        title: 'Registration Failed',
+        message: err?.response?.data?.message || err.message || 'Could not add child profile.'
+      });
     }
   });
 
@@ -270,7 +280,12 @@ export default function CommunityScreen() {
     },
     onError: (err: any) => {
       const msg = err?.response?.data?.message || err.message || 'Could not initiate subscription order.';
-      Alert.alert('Order Creation Failed', msg);
+      showThemedModal({
+        variant: 'warning',
+        iconName: 'alert-circle',
+        title: 'Order Creation Failed',
+        message: msg
+      });
     }
   });
 
@@ -304,7 +319,12 @@ export default function CommunityScreen() {
     onError: (err: any) => {
       setIsRazorpayModalVisible(false);
       const msg = err?.response?.data?.message || err.message || 'Payment verification could not be completed.';
-      Alert.alert('Verification Issue', msg);
+      showThemedModal({
+        variant: 'warning',
+        iconName: 'alert-circle',
+        title: 'Verification Issue',
+        message: msg
+      });
     }
   });
 
@@ -319,10 +339,20 @@ export default function CommunityScreen() {
       setComplaintReason('');
       queryClient.invalidateQueries({ queryKey: ['myCommunityComplaints'] });
       setActiveTab('complaints');
-      Alert.alert('Complaint Submitted', 'Your report has been logged and assigned for community review.');
+      showThemedModal({
+        variant: 'success',
+        iconName: 'checkmark-circle',
+        title: 'Complaint Submitted',
+        message: 'Your report has been logged and assigned for community academy review.'
+      });
     },
     onError: (err: any) => {
-      Alert.alert('Submission Error', err?.response?.data?.message || err.message || 'Could not submit complaint.');
+      showThemedModal({
+        variant: 'warning',
+        iconName: 'alert-circle',
+        title: 'Submission Error',
+        message: err?.response?.data?.message || err.message || 'Could not submit complaint.'
+      });
     }
   });
 
@@ -332,13 +362,28 @@ export default function CommunityScreen() {
       const downloadUrl = res.data?.data?.downloadUrl || res.data?.downloadUrl;
       if (downloadUrl) {
         Linking.openURL(downloadUrl).catch(() => {
-          Alert.alert('Error', 'Unable to open invoice download URL.');
+          showThemedModal({
+            variant: 'warning',
+            iconName: 'alert-circle',
+            title: 'Invoice Download',
+            message: 'Unable to open invoice download link at this time.'
+          });
         });
       } else {
-        Alert.alert('Processing', 'Invoice PDF is being generated. Please check back in a few moments.');
+        showThemedModal({
+          variant: 'info',
+          iconName: 'time-outline',
+          title: 'Generating Invoice',
+          message: 'Invoice PDF is being generated. Please check back in a few moments.'
+        });
       }
     } catch (e: any) {
-      Alert.alert('Invoice Error', e?.response?.data?.message || 'Failed to retrieve invoice download.');
+      showThemedModal({
+        variant: 'warning',
+        iconName: 'alert-circle',
+        title: 'Invoice Error',
+        message: e?.response?.data?.message || 'Failed to retrieve invoice download.'
+      });
     }
   };
 
@@ -851,10 +896,12 @@ export default function CommunityScreen() {
                     openComplaintModalForSub(subscriptionsList[0]);
                   } else {
                     setActiveTab('subscriptions');
-                    Alert.alert(
-                      'Report Program Issue',
-                      'Please tap "Report Issue" on the subscription pass for the specific coaching program.'
-                    );
+                    showThemedModal({
+                      variant: 'info',
+                      iconName: 'information-circle-outline',
+                      title: 'Report Program Issue',
+                      message: 'Please tap "Report Issue" on the subscription pass for the specific coaching program.'
+                    });
                   }
                 }}
                 className="flex-row items-center bg-[#0F2C59] px-3.5 py-2 rounded-full active:opacity-80"
@@ -1445,14 +1492,15 @@ export default function CommunityScreen() {
         visible={isRazorpayModalVisible}
         animationType="slide"
         onRequestClose={() => {
-          Alert.alert(
-            'Cancel Payment?',
-            'Are you sure you want to exit checkout? Uncompleted orders do not reserve spots.',
-            [
-              { text: 'Keep Paying', style: 'cancel' },
-              { text: 'Exit', style: 'destructive', onPress: () => setIsRazorpayModalVisible(false) }
-            ]
-          );
+          showThemedModal({
+            variant: 'warning',
+            iconName: 'alert-circle-outline',
+            title: 'Cancel Payment?',
+            message: 'Are you sure you want to exit checkout? Uncompleted orders do not reserve spots.',
+            confirmText: 'Exit Checkout',
+            cancelText: 'Keep Paying',
+            onConfirm: () => setIsRazorpayModalVisible(false)
+          });
         }}
       >
         <SafeAreaView className="flex-1 bg-white">
