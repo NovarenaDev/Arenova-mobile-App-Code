@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { View, TouchableOpacity, FlatList, RefreshControl, ActivityIndicator, Alert } from 'react-native';
+import { View, TouchableOpacity, FlatList, RefreshControl, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, ConfirmModal } from '@/components/ui';
 import { useRouter } from 'expo-router';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/services/api';
+import { showThemedModal } from '@/store';
 
 const getNotificationStyles = (type: string) => {
   switch (type?.toLowerCase()) {
@@ -105,7 +106,13 @@ export default function NotificationsScreen() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
-      Alert.alert('Success', 'All notifications marked as read.');
+      showThemedModal({
+        title: 'All Caught Up!',
+        message: 'All notifications have been marked as read.',
+        variant: 'success',
+        iconName: 'checkmark-circle-outline',
+        confirmText: 'Done'
+      });
     },
   });
 

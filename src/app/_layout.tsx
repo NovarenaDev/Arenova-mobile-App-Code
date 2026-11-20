@@ -35,6 +35,9 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 import { ThemedModalRoot } from '@/components/ui/ThemedModal';
+import { setupModernAlerts } from '@/utils/alertBridge';
+
+setupModernAlerts();
 
 export default function RootLayout() {
   const { hydrateAuth, isLoading } = useAuthStore();
