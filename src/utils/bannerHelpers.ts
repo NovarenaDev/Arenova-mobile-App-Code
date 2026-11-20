@@ -1,5 +1,6 @@
-import { Linking, Alert } from 'react-native';
-import { isRoutePermittedForRole, assertRoleNavigation } from './roleSecurity';
+import { Linking } from 'react-native';
+import { isRoutePermittedForRole, assertRoleNavigation, PLAYER_PARENT_ONLY_ROUTES, COACH_ONLY_ROUTES } from './roleSecurity';
+import { showThemedModal } from '@/store';
 
 export interface NormalizedBanner {
   id: string;
@@ -40,11 +41,6 @@ export const normalizeBanners = (
   const mapped: NormalizedBanner[] = validBanners.map((b: any, idx: number) => {
     const rawImage = b.imageUrl || b.image || b.bannerUrl || b.photo || b.posterUrl || b.mediaUrl;
     let rawRoute = b.link || b.route || b.targetUrl || b.actionUrl || b.url || defaultRoute;
-
-    if (userRole && !isRoutePermittedForRole(rawRoute, userRole)) {
-      rawRoute = '';
-    }
-
     const rawColor = b.color || b.backgroundColor || b.bg || (idx % 3 === 0 ? 'bg-primary' : idx % 3 === 1 ? 'bg-[#4B9C73]' : 'bg-[#0F2C59]');
     const isTailwindClass = typeof rawColor === 'string' && rawColor.startsWith('bg-');
 
@@ -74,8 +70,34 @@ export const handleBannerNavigation = (
 
   const routeStr = banner.route.trim();
 
-  if (!assertRoleNavigation(routeStr, userRole)) {
-    return;
+  // If coach clicks a banner that leads to player/parent features:
+  if (userRole === 'coach') {
+    const isForbidden = PLAYER_PARENT_ONLY_ROUTES.some(p => routeStr.toLowerCase().includes(p.toLowerCase()));
+    if (isForbidden) {
+      showThemedModal({
+        title: 'Player & Parent Feature',
+        message: 'This feature is designed for athletes and parents to book coaching sessions and explore venues. As a Coach, please manage your schedules, batches, and earnings from your Coach Dashboard.',
+        variant: 'primary',
+        iconName: 'information-circle-outline',
+        confirmText: 'Got It'
+      });
+      return;
+    }
+  }
+
+  // If athlete or parent clicks a coach-only section:
+  if (userRole === 'individual' || userRole === 'player' || userRole === 'parent') {
+    const isCoachRoute = COACH_ONLY_ROUTES.some(p => routeStr.toLowerCase().includes(p.toLowerCase()));
+    if (isCoachRoute) {
+      showThemedModal({
+        title: 'Coach Only Section',
+        message: 'This section is reserved for verified Arenova coaches to manage their training sessions and schedules.',
+        variant: 'primary',
+        iconName: 'fitness-outline',
+        confirmText: 'Got It'
+      });
+      return;
+    }
   }
 
   if (routeStr.startsWith('http://') || routeStr.startsWith('https://')) {

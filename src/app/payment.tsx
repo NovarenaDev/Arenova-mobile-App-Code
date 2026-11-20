@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, ScrollView, TouchableOpacity, Alert, Modal, ActivityIndicator } from 'react-native';
+import { View, ScrollView, TouchableOpacity, Modal, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,7 +7,7 @@ import { Typography, Button } from '@/components/ui';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { api, RAZORPAY_KEY_ID } from '@/services/api';
 import { queryClient } from '@/services/queryClient';
-import { useAuthStore } from '@/store';
+import { useAuthStore, showThemedModal } from '@/store';
 
 export default function PaymentScreen() {
   const insets = useSafeAreaInsets();
@@ -66,7 +66,13 @@ export default function PaymentScreen() {
 
   const handlePayment = async () => {
     if (!slotId) {
-      Alert.alert('Error', 'Invalid slot information.');
+      showThemedModal({
+        title: 'Slot Error',
+        message: 'Invalid slot information. Please re-select your slot to continue.',
+        variant: 'danger',
+        iconName: 'alert-circle-outline',
+        confirmText: 'Go Back'
+      });
       return;
     }
 
@@ -108,7 +114,13 @@ export default function PaymentScreen() {
     } catch (err: any) {
       setIsProcessing(false);
       const serverMsg = err.response?.data?.message || err.message || 'Could not initialize payment order.';
-      Alert.alert('Payment Order Error', serverMsg);
+      showThemedModal({
+        title: 'Payment Order Error',
+        message: serverMsg,
+        variant: 'danger',
+        iconName: 'alert-circle-outline',
+        confirmText: 'Try Again'
+      });
     }
   };
 
@@ -167,17 +179,35 @@ export default function PaymentScreen() {
         });
       } else if (data.status === 'cancelled') {
         setIsRazorpayModalVisible(false);
-        Alert.alert('Payment Cancelled', 'You cancelled the payment transaction.');
+        showThemedModal({
+          title: 'Payment Cancelled',
+          message: 'You cancelled the payment transaction. No amount was charged. You can complete your booking whenever you are ready.',
+          variant: 'warning',
+          iconName: 'card-outline',
+          confirmText: 'Understood'
+        });
       } else if (data.status === 'failed') {
         setIsRazorpayModalVisible(false);
-        const errorDesc = data.error?.description || 'Transaction failed.';
-        Alert.alert('Payment Failed', errorDesc);
+        const errorDesc = data.error?.description || 'Transaction failed. Please try a different payment method.';
+        showThemedModal({
+          title: 'Payment Failed',
+          message: errorDesc,
+          variant: 'danger',
+          iconName: 'alert-circle-outline',
+          confirmText: 'Try Again'
+        });
       }
     } catch (err: any) {
       setIsRazorpayModalVisible(false);
       setIsProcessing(false);
       const errorMsg = err?.response?.data?.message || err?.message || 'An error occurred during payment processing.';
-      Alert.alert('Payment Error', errorMsg);
+      showThemedModal({
+        title: 'Payment Error',
+        message: errorMsg,
+        variant: 'danger',
+        iconName: 'alert-circle-outline',
+        confirmText: 'OK'
+      });
     }
   };
 
@@ -272,18 +302,17 @@ export default function PaymentScreen() {
   };
 
   const handleCloseRazorpay = () => {
-    Alert.alert(
-      'Exit Checkout?',
-      'Are you sure you want to cancel payment? Your slot will not be reserved until payment is completed.',
-      [
-        { text: 'Keep Paying', style: 'cancel' },
-        { 
-          text: 'Exit', 
-          style: 'destructive',
-          onPress: () => setIsRazorpayModalVisible(false)
-        }
-      ]
-    );
+    showThemedModal({
+      title: 'Exit Checkout?',
+      message: 'Are you sure you want to cancel payment? Your slot will not be reserved until payment is completed.',
+      variant: 'warning',
+      iconName: 'wallet-outline',
+      cancelText: 'Keep Paying',
+      confirmText: 'Exit Checkout',
+      onConfirm: () => {
+        setIsRazorpayModalVisible(false);
+      }
+    });
   };
 
   return (

@@ -3,3 +3,4 @@ export * from './Button';
 export * from './TextInput';
 export * from './Card';
 export * from './ConfirmModal';
+export * from './ThemedModal';

@@ -34,6 +34,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
+import { ThemedModalRoot } from '@/components/ui';
+
 export default function RootLayout() {
   const { hydrateAuth, isLoading } = useAuthStore();
 
@@ -67,6 +69,7 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
         <Stack screenOptions={{ headerShown: false }} />
+        <ThemedModalRoot />
       </QueryClientProvider>
     </SafeAreaProvider>
   );

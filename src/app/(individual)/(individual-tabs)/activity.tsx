@@ -7,7 +7,7 @@ import { Typography, Button } from '@/components/ui';
 import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, RAZORPAY_KEY_ID } from '@/services/api';
-import { useAuthStore } from '@/store';
+import { useAuthStore, showThemedModal } from '@/store';
 import { resolveSessionSport, resolveSessionTitle, resolveCoachName } from '@/utils/sessionFormatter';
 import { 
   getDeletedPendingTournamentIds, 
@@ -361,10 +361,22 @@ export default function BookingsScreen() {
         Alert.alert('Payment Successful!', 'Your tournament entry has been verified and registered.');
       } else if (data.status === 'cancelled') {
         setIsRazorpayModalVisible(false);
-        Alert.alert('Payment Cancelled', 'Payment was cancelled. You can complete it whenever you are ready.');
+        showThemedModal({
+          title: 'Payment Cancelled',
+          message: 'Payment was cancelled. No amount was deducted. You can complete your registration whenever you are ready.',
+          variant: 'warning',
+          iconName: 'card-outline',
+          confirmText: 'Understood'
+        });
       } else if (data.status === 'failed') {
         setIsRazorpayModalVisible(false);
-        Alert.alert('Payment Failed', data.error?.description || 'Transaction failed. Please retry.');
+        showThemedModal({
+          title: 'Payment Failed',
+          message: data.error?.description || 'Transaction failed. Please retry or choose a different payment method.',
+          variant: 'danger',
+          iconName: 'alert-circle-outline',
+          confirmText: 'Try Again'
+        });
       }
     } catch (e) {
       setIsRazorpayModalVisible(false);

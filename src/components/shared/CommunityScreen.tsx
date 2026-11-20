@@ -19,7 +19,7 @@ import { router, useNavigation, useLocalSearchParams } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { WebView } from 'react-native-webview';
 import { api, RAZORPAY_KEY_ID } from '@/services/api';
-import { useAuthStore } from '@/store';
+import { useAuthStore, showThemedModal } from '@/store';
 import { 
   CommunityCenter, 
   CommunityProgram, 
@@ -357,10 +357,22 @@ export default function CommunityScreen() {
         });
       } else if (data.status === 'cancelled') {
         setIsRazorpayModalVisible(false);
-        Alert.alert('Payment Cancelled', 'You dismissed the payment checkout.');
+        showThemedModal({
+          title: 'Payment Cancelled',
+          message: 'You dismissed the checkout process. No payment was charged.',
+          variant: 'warning',
+          iconName: 'card-outline',
+          confirmText: 'Understood'
+        });
       } else if (data.status === 'failed') {
         setIsRazorpayModalVisible(false);
-        Alert.alert('Payment Failed', data.error?.description || 'Transaction could not be completed.');
+        showThemedModal({
+          title: 'Payment Failed',
+          message: data.error?.description || 'Transaction could not be completed. Please try again.',
+          variant: 'danger',
+          iconName: 'alert-circle-outline',
+          confirmText: 'Try Again'
+        });
       }
     } catch (_) {
       setIsRazorpayModalVisible(false);

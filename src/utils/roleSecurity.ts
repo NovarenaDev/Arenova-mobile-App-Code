@@ -1,4 +1,3 @@
-import { Alert } from 'react-native';
 
 export const PLAYER_PARENT_ONLY_ROUTES = [
   '/(individual)',

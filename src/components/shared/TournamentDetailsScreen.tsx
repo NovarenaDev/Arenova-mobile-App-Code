@@ -7,7 +7,7 @@ import { Typography, Button, TextInput } from '@/components/ui';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, RAZORPAY_KEY_ID } from '@/services/api';
-import { useAuthStore } from '@/store';
+import { useAuthStore, showThemedModal } from '@/store';
 import { getTournamentBanner } from '@/utils/tournamentImages';
 import { 
   unmarkPendingTournamentAsDeleted, 
@@ -559,17 +559,26 @@ export default function TournamentDetailsScreen() {
         setIsRazorpayModalVisible(false);
         setIsRegisterModalVisible(false);
         queryClient.invalidateQueries({ queryKey: ['myTournamentRegistrations'] });
-        Alert.alert(
-          'Payment Pending', 
-          'Your registration has been created with status Payment Pending. You can complete your payment anytime from your Activity tab or My Tournaments.'
-        );
+        showThemedModal({
+          title: 'Payment Pending',
+          message: 'Your registration has been created with status Payment Pending. You can complete your payment anytime from your Activity tab or My Tournaments.',
+          variant: 'warning',
+          iconName: 'card-outline',
+          confirmText: 'Understood'
+        });
       } else if (data.status === 'failed') {
         setIsRazorpayModalVisible(false);
         setIsRegisterModalVisible(true);
         setRegStep(2);
         const errorDesc = data.error?.description || 'Payment transaction failed. Please retry or choose a different payment method.';
         setRegisterError(errorDesc);
-        Alert.alert('Payment Failed', errorDesc);
+        showThemedModal({
+          title: 'Payment Failed',
+          message: errorDesc,
+          variant: 'danger',
+          iconName: 'alert-circle-outline',
+          confirmText: 'Try Again'
+        });
       }
     } catch (e) {
       setIsRazorpayModalVisible(false);
@@ -577,22 +586,19 @@ export default function TournamentDetailsScreen() {
   };
 
   const handleCloseRazorpay = () => {
-    Alert.alert(
-      'Exit Payment?',
-      'Are you sure you want to cancel payment? You can complete payment anytime from your pending list.',
-      [
-        { text: 'Keep Paying', style: 'cancel' },
-        { 
-          text: 'Exit', 
-          style: 'destructive',
-          onPress: () => {
-            setIsRazorpayModalVisible(false);
-            setIsRegisterModalVisible(true);
-            setRegStep(2);
-          }
-        }
-      ]
-    );
+    showThemedModal({
+      title: 'Exit Payment?',
+      message: 'Are you sure you want to cancel payment? You can complete payment anytime from your pending list.',
+      variant: 'warning',
+      iconName: 'wallet-outline',
+      cancelText: 'Keep Paying',
+      confirmText: 'Exit Payment',
+      onConfirm: () => {
+        setIsRazorpayModalVisible(false);
+        setIsRegisterModalVisible(true);
+        setRegStep(2);
+      }
+    });
   };
 
   const generateRazorpayHtml = () => {
