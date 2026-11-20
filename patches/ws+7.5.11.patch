@@ -10,3 +10,43 @@ index 722c786..18ffc9f 100644
 +WebSocket.WebSocketServer = WebSocket.Server;
  
  module.exports = WebSocket;
+diff --git a/node_modules/ws/lib/websocket.js b/node_modules/ws/lib/websocket.js
+index c36924a..8a6aefc 100644
+--- a/node_modules/ws/lib/websocket.js
++++ b/node_modules/ws/lib/websocket.js
+@@ -912,7 +912,11 @@ function initAsClient(websocket, address, protocols, options) {
+  */
+ function emitErrorAndClose(websocket, err) {
+   websocket._readyState = WebSocket.CLOSING;
+-  websocket.emit('error', err);
++  if (websocket.listenerCount('error') > 0) {
++    websocket.emit('error', err);
++  } else {
++    console.warn(`[ws] Handshake error: ${err.message}`);
++  }
+   websocket.emitClose();
+ }
+ 
+@@ -973,10 +977,20 @@ function abortHandshake(websocket, stream, message) {
+     }
+ 
+     stream.once('abort', websocket.emitClose.bind(websocket));
+-    websocket.emit('error', err);
++    if (websocket.listenerCount('error') > 0) {
++      websocket.emit('error', err);
++    } else {
++      console.warn(`[ws] Handshake aborted: ${err.message}`);
++    }
+   } else {
+     stream.destroy(err);
+-    stream.once('error', websocket.emit.bind(websocket, 'error'));
++    if (websocket.listenerCount('error') > 0) {
++      stream.once('error', websocket.emit.bind(websocket, 'error'));
++    } else {
++      stream.once('error', (e) => {
++        console.warn(`[ws] Stream error: ${e.message}`);
++      });
++    }
+     stream.once('close', websocket.emitClose.bind(websocket));
+   }
+ }
