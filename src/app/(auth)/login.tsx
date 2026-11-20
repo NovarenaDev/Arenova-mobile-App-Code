@@ -20,7 +20,7 @@ const formatPhoneForApi = (rawPhone: string): string => {
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const { role, phone: paramPhone } = useLocalSearchParams<{ role: string; phone?: string }>();
-  const [authMode, setAuthMode] = useState<'email' | 'phone'>('email');
+  const [authMode, setAuthMode] = useState<'email' | 'phone'>('phone');
   
   const [phoneNumber, setPhoneNumber] = useState(paramPhone || '');
   const [email, setEmail] = useState('');
@@ -512,6 +512,24 @@ export default function LoginScreen() {
           <View className="flex-row bg-gray-200 rounded-full p-1 mb-8">
             <TouchableOpacity 
               onPress={() => {
+                setAuthMode('phone');
+                setScreenError(null);
+                setScreenSuccess(null);
+              }} 
+              className="flex-1 py-3 rounded-full items-center"
+              style={authMode === 'phone' ? {
+                backgroundColor: 'white',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.1,
+                shadowRadius: 1,
+                elevation: 1
+              } : {}}
+            >
+              <Typography variant="subtitle2" color={authMode === 'phone' ? 'secondary' : 'muted'} weight="bold" className="font-outfit-bold">OTP Login</Typography>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              onPress={() => {
                 setAuthMode('email');
                 setPhoneOtpSent(false);
                 setScreenError(null);
@@ -528,24 +546,6 @@ export default function LoginScreen() {
               } : {}}
             >
               <Typography variant="subtitle2" color={authMode === 'email' ? 'secondary' : 'muted'} weight="bold" className="font-outfit-bold">Password Login</Typography>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              onPress={() => {
-                setAuthMode('phone');
-                setScreenError(null);
-                setScreenSuccess(null);
-              }} 
-              className="flex-1 py-3 rounded-full items-center"
-              style={authMode === 'phone' ? {
-                backgroundColor: 'white',
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 1 },
-                shadowOpacity: 0.1,
-                shadowRadius: 1,
-                elevation: 1
-              } : {}}
-            >
-              <Typography variant="subtitle2" color={authMode === 'phone' ? 'secondary' : 'muted'} weight="bold" className="font-outfit-bold">OTP Login</Typography>
             </TouchableOpacity>
           </View>
 
