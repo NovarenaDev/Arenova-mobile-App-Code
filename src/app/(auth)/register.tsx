@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, Modal } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -7,6 +7,7 @@ import { Typography, Button, TextInput } from '@/components/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/store';
 import { api } from '@/services/api';
+import { parseAuthError, getFriendlyAuthErrorMessage } from '@/utils/authErrors';
 
 const coachBenefits = [
   { title: 'Earn Money Coaching', desc: 'Get High-Quality Leads & Clients' },
@@ -70,54 +71,18 @@ export default function RegisterScreen() {
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [isResendingOtp, setIsResendingOtp] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   const sanitizeErrorMessage = (err: any): string => {
-    let message = '';
-    if (err && typeof err === 'object') {
-      if (err.response?.data) {
-        const data = err.response.data;
-        message = typeof data.message === 'string' ? data.message : 
-                  (Array.isArray(data.message) ? data.message[0] : 
-                  (data.error || ''));
-      }
-      if (!message) {
-        message = err.message || '';
-      }
-    } else if (typeof err === 'string') {
-      message = err;
-    }
-
-    if (!message) return 'An unexpected error occurred. Please try again.';
-
-    const status = err?.response?.status;
-    if (status === 409 ||
-        message.toLowerCase().includes('already registered') || 
-        message.toLowerCase().includes('already in use') || 
-        message.toLowerCase().includes('already exists') || 
-        message.toLowerCase().includes('email_exists') || 
-        message.toLowerCase().includes('email-already-in-use') ||
-        message.toLowerCase().includes('phone number already exists') ||
-        message.toLowerCase().includes('duplicate key')) {
-      return role === 'coach'
-        ? 'A coach account with this phone number or email already exists. Please log in instead.'
-        : 'An account with this phone number or email already exists. Please log in instead.';
-    }
-    if (message.toLowerCase().includes('auth/invalid-email') || message.toLowerCase().includes('invalid-email') || message.toLowerCase().includes('email must be a valid email')) {
-      return 'Please enter a valid email address.';
-    }
-    if (message.includes('auth/weak-password') || message.includes('weak-password') || message.toLowerCase().includes('password is too weak')) {
-      return 'The password is too weak. Please use a stronger password.';
-    }
-    if (message.includes('auth/network-request-failed')) {
-      return 'Network error. Please check your internet connection.';
-    }
-    if (status === 429 || message.toLowerCase().includes('too many') || message.toLowerCase().includes('rate limit')) {
-      return 'Too many requests sent in a short time. Please wait a few minutes before trying again.';
-    }
-    let clean = message.replace(/^Firebase:\s*/i, '');
-    clean = clean.replace(/^Error:\s*/i, '');
-    clean = clean.replace(/\(auth\/[^)]+\)\.?/g, '');
-    return clean.trim();
+    return getFriendlyAuthErrorMessage(err, role, 'register');
   };
 
   const { data: sportsResponse } = useQuery({
@@ -185,20 +150,18 @@ export default function RegisterScreen() {
           if ((response.status === 200 || response.status === 201) && response.data?.success !== false) {
             setRegistrationPhase('verify');
             setPhoneOtp('');
+            setResendCooldown(45);
             setScreenSuccess(`SMS OTP sent successfully to +91 ${cleanPhone}.`);
           } else {
-            setScreenError(response.data?.message || 'Failed to send OTP. Please try again.');
+            const errInfo = parseAuthError(response.data, role, 'register');
+            if (errInfo.isRateLimit) setResendCooldown(60);
+            setScreenError(errInfo.friendlyMessage);
           }
         } catch (err: any) {
           setIsSendingOtp(false);
-          const status = err?.response?.status;
-          const data = err?.response?.data;
-          const backendMessage = data?.message || data?.error;
-          if (status === 409) {
-            setScreenError(backendMessage || 'A coach account with this phone number already exists. Please log in instead.');
-          } else {
-            setScreenError(sanitizeErrorMessage(err));
-          }
+          const errInfo = parseAuthError(err, role, 'register');
+          if (errInfo.isRateLimit) setResendCooldown(60);
+          setScreenError(errInfo.friendlyMessage);
         }
       } else {
         if (!email.trim()) {
@@ -234,20 +197,18 @@ export default function RegisterScreen() {
           if ((response.status === 200 || response.status === 201) && response.data?.success !== false) {
             setRegistrationPhase('verify');
             setPhoneOtp('');
+            setResendCooldown(45);
             setScreenSuccess(`Email verification OTP sent to ${email.trim().toLowerCase()}.`);
           } else {
-            setScreenError(response.data?.message || 'Failed to send registration code. Please try again.');
+            const errInfo = parseAuthError(response.data, role, 'register');
+            if (errInfo.isRateLimit) setResendCooldown(60);
+            setScreenError(errInfo.friendlyMessage);
           }
         } catch (err: any) {
           setIsSendingOtp(false);
-          const status = err?.response?.status;
-          const data = err?.response?.data;
-          const backendMessage = data?.message || data?.error;
-          if (status === 409) {
-            setScreenError(backendMessage || 'A coach account with this email already exists. Please log in instead.');
-          } else {
-            setScreenError(sanitizeErrorMessage(err));
-          }
+          const errInfo = parseAuthError(err, role, 'register');
+          if (errInfo.isRateLimit) setResendCooldown(60);
+          setScreenError(errInfo.friendlyMessage);
         }
       }
     } else {
@@ -292,21 +253,19 @@ export default function RegisterScreen() {
           setIsSendingOtp(false);
           setRegistrationPhase('verify');
           setPhoneOtp('');
+          setResendCooldown(45);
           setScreenSuccess(`SMS OTP sent successfully to +91 ${cleanPhone}.`);
         } else {
           setIsSendingOtp(false);
-          setScreenError(response.data?.message || 'Failed to send verification code. Please try again.');
+          const errInfo = parseAuthError(response.data, role, 'register');
+          if (errInfo.isRateLimit) setResendCooldown(60);
+          setScreenError(errInfo.friendlyMessage);
         }
       } catch (err: any) {
         setIsSendingOtp(false);
-        const status = err?.response?.status;
-        const data = err?.response?.data;
-        const backendMessage = data?.message || data?.error;
-        if (status === 409) {
-          setScreenError(backendMessage || 'An account with this phone number already exists. Please log in instead.');
-        } else {
-          setScreenError(sanitizeErrorMessage(err));
-        }
+        const errInfo = parseAuthError(err, role, 'register');
+        if (errInfo.isRateLimit) setResendCooldown(60);
+        setScreenError(errInfo.friendlyMessage);
       }
     }
   };
@@ -364,14 +323,9 @@ export default function RegisterScreen() {
           });
         } catch (err: any) {
           setIsVerifyingOtp(false);
-          const status = err?.response?.status;
-          const data = err?.response?.data;
-          const backendMessage = data?.message || data?.error;
-          if (status === 409) {
-            setScreenError(backendMessage || 'A coach account with this phone number already exists. Please log in instead.');
-          } else {
-            setScreenError(sanitizeErrorMessage(data?.message || err?.message || 'Invalid or expired OTP. Please check your verification code and try again.'));
-          }
+          const errInfo = parseAuthError(err, role, 'otp');
+          if (errInfo.isRateLimit) setResendCooldown(60);
+          setScreenError(errInfo.friendlyMessage);
         }
       } else {
         const cleanEmail = email.trim().toLowerCase();
@@ -413,14 +367,9 @@ export default function RegisterScreen() {
           });
         } catch (err: any) {
           setIsVerifyingOtp(false);
-          const status = err?.response?.status;
-          const data = err?.response?.data;
-          const backendMessage = data?.message || data?.error;
-          if (status === 409) {
-            setScreenError(backendMessage || 'A coach account with this email already exists. Please log in instead.');
-          } else {
-            setScreenError(sanitizeErrorMessage(data?.message || err?.message || 'Invalid or expired OTP. Please check your verification code and try again.'));
-          }
+          const errInfo = parseAuthError(err, role, 'otp');
+          if (errInfo.isRateLimit) setResendCooldown(60);
+          setScreenError(errInfo.friendlyMessage);
         }
       }
     } else {
@@ -489,19 +438,15 @@ export default function RegisterScreen() {
         setShowWelcomeModal(true);
       } catch (err: any) {
         setIsVerifyingOtp(false);
-        const status = err?.response?.status;
-        const data = err?.response?.data;
-        const backendMessage = data?.message || data?.error;
-        if (status === 409) {
-          setScreenError(backendMessage || 'An account with this phone number already exists. Please log in instead.');
-        } else {
-          setScreenError(sanitizeErrorMessage(data?.message || err?.message || 'Invalid or expired verification code. Please try again.'));
-        }
+        const errInfo = parseAuthError(err, role, 'otp');
+        if (errInfo.isRateLimit) setResendCooldown(60);
+        setScreenError(errInfo.friendlyMessage);
       }
     }
   };
 
   const handleResendOtp = async () => {
+    if (resendCooldown > 0) return;
     setIsResendingOtp(true);
     setScreenError(null);
     try {
@@ -514,9 +459,12 @@ export default function RegisterScreen() {
           });
           setIsResendingOtp(false);
           if ((response.status === 200 || response.status === 201) && response.data?.success !== false) {
+            setResendCooldown(45);
             setScreenSuccess(`A new SMS verification code has been sent to +91 ${cleanPhone}.`);
           } else {
-            setScreenError(response.data?.message || 'Failed to resend SMS OTP.');
+            const errInfo = parseAuthError(response.data, role, 'register');
+            if (errInfo.isRateLimit) setResendCooldown(60);
+            setScreenError(errInfo.friendlyMessage);
           }
         } else {
           const cleanEmail = email.trim().toLowerCase();
@@ -525,9 +473,12 @@ export default function RegisterScreen() {
           });
           setIsResendingOtp(false);
           if ((response.status === 200 || response.status === 201) && response.data?.success !== false) {
+            setResendCooldown(45);
             setScreenSuccess(`A new verification code has been sent to ${cleanEmail}.`);
           } else {
-            setScreenError(response.data?.message || 'Failed to resend email OTP.');
+            const errInfo = parseAuthError(response.data, role, 'register');
+            if (errInfo.isRateLimit) setResendCooldown(60);
+            setScreenError(errInfo.friendlyMessage);
           }
         }
       } else {
@@ -538,14 +489,19 @@ export default function RegisterScreen() {
         });
         setIsResendingOtp(false);
         if ((response.status === 200 || response.status === 201) && response.data?.success !== false) {
+          setResendCooldown(45);
           setScreenSuccess(`A new SMS verification code has been sent to +91 ${cleanPhone}.`);
         } else {
-          setScreenError(response.data?.message || 'Failed to resend SMS OTP.');
+          const errInfo = parseAuthError(response.data, role, 'register');
+          if (errInfo.isRateLimit) setResendCooldown(60);
+          setScreenError(errInfo.friendlyMessage);
         }
       }
     } catch (err: any) {
       setIsResendingOtp(false);
-      setScreenError(sanitizeErrorMessage(err?.response?.data?.message || err?.message || 'Failed to resend code.'));
+      const errInfo = parseAuthError(err, role, 'register');
+      if (errInfo.isRateLimit) setResendCooldown(60);
+      setScreenError(errInfo.friendlyMessage);
     }
   };
 
@@ -995,15 +951,22 @@ export default function RegisterScreen() {
 
                 <TouchableOpacity 
                   onPress={handleResendOtp}
-                  disabled={isResendingOtp}
+                  disabled={isResendingOtp || resendCooldown > 0}
                   className="mt-3 py-1 items-center"
                 >
-                  <Typography variant="caption" color="primary" weight="bold" className="font-outfit-bold">
+                  <Typography 
+                    variant="caption" 
+                    color={resendCooldown > 0 ? "muted" : "primary"} 
+                    weight="bold" 
+                    className="font-outfit-bold"
+                  >
                     {isResendingOtp 
                       ? "Resending Code..." 
-                      : (role === 'coach' && coachMethod === 'email' 
-                        ? "Didn't receive email? Resend Email OTP" 
-                        : "Didn't receive SMS? Resend Mobile OTP")}
+                      : (resendCooldown > 0 
+                        ? `Resend OTP in ${resendCooldown}s` 
+                        : (role === 'coach' && coachMethod === 'email' 
+                          ? "Didn't receive email? Resend Email OTP" 
+                          : "Didn't receive SMS? Resend Mobile OTP"))}
                   </Typography>
                 </TouchableOpacity>
               </View>

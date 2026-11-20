@@ -17,6 +17,7 @@ try {
 LogBox.ignoreLogs([
   '[Reanimated] Reading from `value` during component render',
   '[Reanimated] Writing to `value` during component render',
+  'ImageBackground is deprecated',
 ]);
 import { 
   useFonts, 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, Modal, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -7,6 +7,7 @@ import { Typography, Button, TextInput } from '@/components/ui';
 import { useAuthStore } from '@/store';
 import { useMutation } from '@tanstack/react-query';
 import { api } from '@/services/api';
+import { parseAuthError, getFriendlyAuthErrorMessage } from '@/utils/authErrors';
 
 const formatPhoneForApi = (rawPhone: string): string => {
   const digits = rawPhone.trim().replace(/[^0-9]/g, '');
@@ -32,6 +33,15 @@ export default function LoginScreen() {
   const [isPhoneSending, setIsPhoneSending] = useState(false);
   const [isPhoneVerifying, setIsPhoneVerifying] = useState(false);
   const [screenSuccess, setScreenSuccess] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
   const [forgotStep, setForgotStep] = useState<1 | 2>(1);
@@ -45,64 +55,7 @@ export default function LoginScreen() {
   const [isResettingPassword, setIsResettingPassword] = useState(false);
 
   const sanitizeErrorMessage = (err: any): string => {
-    let message = '';
-    if (err && typeof err === 'object') {
-      if (err.response?.data) {
-        const data = err.response.data;
-        message = typeof data.message === 'string' ? data.message : 
-                  (Array.isArray(data.message) ? data.message[0] : 
-                  (data.error || ''));
-      }
-      if (!message) {
-        message = err.message || '';
-      }
-    } else if (typeof err === 'string') {
-      message = err;
-    }
-
-    if (!message) return 'An unexpected error occurred. Please try again.';
-
-    if (message.toLowerCase().includes('not found') || 
-        message.toLowerCase().includes('no account') || 
-        message.toLowerCase().includes('not registered') || 
-        message.toLowerCase().includes('user does not exist') ||
-        message.toLowerCase().includes('coach not found') ||
-        message.toLowerCase().includes('no coach found') ||
-        message.toLowerCase().includes('no user found')) {
-      return role === 'coach'
-        ? 'This mobile number has no registered coach account. Please register first.'
-        : 'This mobile number has no registered account. Please register first.';
-    }
-    if (message.toLowerCase().includes('auth/invalid-credential') || 
-        message.toLowerCase().includes('auth/user-not-found') || 
-        message.toLowerCase().includes('invalid credential') || 
-        message.toLowerCase().includes('user-not-found') ||
-        message.toLowerCase().includes('incorrect') ||
-        message.toLowerCase().includes('invalid email or password')) {
-      return 'Incorrect email or password. Please verify your credentials and try again.';
-    }
-    if (message.toLowerCase().includes('auth/invalid-email') || message.toLowerCase().includes('invalid-email')) {
-      return 'The email address is invalid. Please enter a correct email.';
-    }
-    if (message.includes('auth/wrong-password') || message.includes('wrong-password')) {
-      return 'Incorrect password. Please try again.';
-    }
-    if (message.includes('auth/email-already-in-use') || message.includes('email-already-in-use')) {
-      return 'This email address is already in use by another account.';
-    }
-    if (message.includes('auth/weak-password') || message.includes('weak-password')) {
-      return 'The password is too weak. Please use a stronger password.';
-    }
-    if (message.includes('auth/network-request-failed')) {
-      return 'Network error. Please check your internet connection and try again.';
-    }
-    if (message.toLowerCase().includes('too many') || message.toLowerCase().includes('rate limit') || err?.response?.status === 429) {
-      return 'Too many requests sent in a short time. Please wait a few minutes before trying again.';
-    }
-    let clean = message.replace(/^Firebase:\s*/i, '');
-    clean = clean.replace(/^Error:\s*/i, '');
-    clean = clean.replace(/\(auth\/[^)]+\)\.?/g, '');
-    return clean.trim();
+    return getFriendlyAuthErrorMessage(err, role, 'login');
   };
   
   const [isLoading, setIsLoading] = useState(false);
@@ -326,6 +279,10 @@ export default function LoginScreen() {
       setScreenError('Please enter a valid 10-digit mobile number.');
       return;
     }
+    if (resendCooldown > 0) {
+      setScreenError(`Please wait ${resendCooldown} seconds before requesting a new code.`);
+      return;
+    }
     setScreenError(null);
     setScreenSuccess(null);
     setIsPhoneSending(true);
@@ -338,31 +295,23 @@ export default function LoginScreen() {
         purpose: 'login'
       });
 
+      setIsPhoneSending(false);
       if ((response.status === 200 || response.status === 201) && response.data?.success !== false) {
-        setIsPhoneSending(false);
         setPhoneOtpSent(true);
+        setResendCooldown(45);
         setScreenSuccess(`Verification code sent to +91 ${cleanPhone}. Please enter the 6-digit OTP below.`);
       } else {
-        setIsPhoneSending(false);
-        setScreenError(response.data?.message || 'Failed to send OTP. Please try again.');
+        const errInfo = parseAuthError(response.data, role, 'login');
+        if (errInfo.isRateLimit) setResendCooldown(60);
+        setScreenError(errInfo.friendlyMessage);
       }
     } catch (sendErr: any) {
       setIsPhoneSending(false);
-      const status = sendErr?.response?.status;
-      const data = sendErr?.response?.data;
-      const backendMessage = data?.message || data?.error;
-
-      if (status === 404) {
-        setScreenError(role === 'coach'
-          ? 'This mobile number is not registered as a coach yet. Please register your account first.'
-          : 'This mobile number is not registered yet. Please register your account first.');
-      } else if (status === 429) {
-        setScreenError(backendMessage || 'Too many OTP requests from this number or device. Please wait a few minutes before trying again.');
-      } else if (status === 403 || status === 401) {
-        setScreenError(backendMessage || 'Account access restricted. Please check your account role or contact support.');
-      } else {
-        setScreenError(sanitizeErrorMessage(sendErr));
+      const errInfo = parseAuthError(sendErr, role, 'login');
+      if (errInfo.isRateLimit) {
+        setResendCooldown(60);
       }
+      setScreenError(errInfo.friendlyMessage);
     }
   };
 
@@ -389,21 +338,11 @@ export default function LoginScreen() {
       setIsPhoneVerifying(false);
     } catch (err: any) {
       setIsPhoneVerifying(false);
-      const status = err?.response?.status;
-      const data = err?.response?.data;
-      const backendMessage = data?.message || data?.error;
-
-      if (status === 404) {
-        setScreenError(role === 'coach'
-          ? 'This mobile number is not registered as a coach yet. Please register your account first.'
-          : 'This mobile number is not registered yet. Please register your account first.');
-      } else if (status === 429) {
-        setScreenError(backendMessage || 'Too many OTP verification attempts. Please wait a few minutes before trying again.');
-      } else if (status === 403 || status === 401) {
-        setScreenError(backendMessage || 'Account access restricted. Please contact support.');
-      } else {
-        setScreenError(sanitizeErrorMessage(err?.response?.data?.message || err?.message || 'Invalid or expired OTP. Please try again.'));
+      const errInfo = parseAuthError(err, role, 'otp');
+      if (errInfo.isRateLimit) {
+        setResendCooldown(60);
       }
+      setScreenError(errInfo.friendlyMessage);
     }
   };
 
@@ -679,11 +618,20 @@ export default function LoginScreen() {
                   />
                   <TouchableOpacity 
                     onPress={handleSendPhoneOtp}
-                    disabled={isPhoneSending}
+                    disabled={isPhoneSending || resendCooldown > 0}
                     className="mt-4 py-2 items-center"
                   >
-                    <Typography variant="caption" color="primary" weight="bold" className="font-outfit-bold">
-                      {isPhoneSending ? 'Resending Code...' : "Didn't receive the code? Resend OTP"}
+                    <Typography 
+                      variant="caption" 
+                      color={resendCooldown > 0 ? "muted" : "primary"} 
+                      weight="bold" 
+                      className="font-outfit-bold"
+                    >
+                      {isPhoneSending 
+                        ? 'Sending Code...' 
+                        : (resendCooldown > 0 
+                            ? `Resend OTP in ${resendCooldown}s` 
+                            : "Didn't receive the code? Resend OTP")}
                     </Typography>
                   </TouchableOpacity>
                 </View>

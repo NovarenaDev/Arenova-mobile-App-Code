@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Typography, Button, TextInput } from '@/components/ui';
@@ -9,6 +9,7 @@ import { useMutation } from '@tanstack/react-query';
 import { api } from '@/services/api';
 import { PhoneAuthProvider, signInWithCredential } from 'firebase/auth';
 import { auth } from '@/services/firebase';
+import { parseAuthError, getFriendlyAuthErrorMessage } from '@/utils/authErrors';
 
 const formatPhoneForApi = (rawPhone: string): string => {
   const digits = (rawPhone || '').trim().replace(/[^0-9]/g, '');
@@ -34,8 +35,18 @@ export default function OTPScreen() {
   const setToken = useAuthStore(state => state.setToken);
 
   const [otp, setOtp] = useState('');
-
   const [isFirebaseLoading, setIsFirebaseLoading] = useState(false);
+  const [screenError, setScreenError] = useState<string | null>(null);
+  const [screenSuccess, setScreenSuccess] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   const verifyMutation = useMutation<any, any, string | void>({
     mutationFn: async (firebaseIdToken?: string | void) => {
@@ -129,14 +140,19 @@ export default function OTPScreen() {
       }
     },
     onError: (error: any) => {
-      alert(error?.response?.data?.message || 'Verification failed');
+      const errInfo = parseAuthError(error, role, 'otp');
+      if (errInfo.isRateLimit) setResendCooldown(60);
+      setScreenError(errInfo.friendlyMessage);
     }
   });
 
   const [isResending, setIsResending] = useState(false);
 
   const handleResend = async () => {
+    if (resendCooldown > 0) return;
     setIsResending(true);
+    setScreenError(null);
+    setScreenSuccess(null);
     try {
       if (action === 'verify-email' || (!phone && !!email)) {
         const endpoint = role === 'coach' ? '/auth/coach/resend-email-otp' : '/auth/send-email-otp';
@@ -152,9 +168,12 @@ export default function OTPScreen() {
           purpose
         });
       }
-      alert('Verification code resent successfully.');
+      setResendCooldown(45);
+      setScreenSuccess('A fresh verification code has been sent.');
     } catch (err: any) {
-      alert(err?.response?.data?.message || 'Failed to resend code.');
+      const errInfo = parseAuthError(err, role, 'otp');
+      if (errInfo.isRateLimit) setResendCooldown(60);
+      setScreenError(errInfo.friendlyMessage);
     } finally {
       setIsResending(false);
     }
@@ -204,7 +223,7 @@ export default function OTPScreen() {
             <Ionicons name="arrow-back" size={28} color="#0F2C59" />
           </TouchableOpacity>
 
-          <View className="mb-10">
+          <View className="mb-6">
             <Typography variant="h2" color="secondary" className="mb-2 font-bold">
               OTP Verification
             </Typography>
@@ -212,6 +231,42 @@ export default function OTPScreen() {
               Please enter the 6-digit verification code sent to +{phone || 'your number'}.
             </Typography>
           </View>
+
+          {screenError && (
+            <View className="mb-6 bg-red-50 border border-red-200 rounded-2xl p-4 shadow-sm">
+              <View className="flex-row items-start">
+                <Ionicons name="alert-circle" size={20} color="#EF4444" className="mr-2.5 mt-0.5" />
+                <View className="flex-1">
+                  <Typography variant="subtitle2" weight="bold" className="font-outfit-bold text-red-800">
+                    Verification Notice
+                  </Typography>
+                  <Typography variant="caption" className="font-outfit text-red-600 mt-0.5">
+                    {screenError}
+                  </Typography>
+                </View>
+                <TouchableOpacity onPress={() => setScreenError(null)} className="p-1 -mr-1 -mt-1">
+                  <Ionicons name="close" size={16} color="#EF4444" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {screenSuccess && (
+            <View className="mb-6 bg-emerald-50 border border-emerald-200 rounded-2xl p-4 shadow-sm flex-row items-start">
+              <Ionicons name="checkmark-circle" size={20} color="#10B981" className="mr-2.5 mt-0.5" />
+              <View className="flex-1">
+                <Typography variant="subtitle2" weight="bold" className="font-outfit-bold text-emerald-800">
+                  Code Resent
+                </Typography>
+                <Typography variant="caption" className="font-outfit text-emerald-600 mt-0.5">
+                  {screenSuccess}
+                </Typography>
+              </View>
+              <TouchableOpacity onPress={() => setScreenSuccess(null)} className="p-1 -mr-1 -mt-1">
+                <Ionicons name="close" size={16} color="#10B981" />
+              </TouchableOpacity>
+            </View>
+          )}
 
           <View className="flex-1">
             <TextInput
@@ -235,10 +290,18 @@ export default function OTPScreen() {
             <TouchableOpacity 
               className="mt-6 self-center"
               onPress={handleResend}
-              disabled={isResending}
+              disabled={isResending || resendCooldown > 0}
             >
-              <Typography variant="body2" color="primary" weight="semibold">
-                {isResending ? 'Resending code...' : "Didn't receive the code? Resend"}
+              <Typography 
+                variant="body2" 
+                color={resendCooldown > 0 ? "muted" : "primary"} 
+                weight="semibold"
+              >
+                {isResending 
+                  ? 'Resending code...' 
+                  : (resendCooldown > 0 
+                      ? `Resend code in ${resendCooldown}s` 
+                      : "Didn't receive the code? Resend")}
               </Typography>
             </TouchableOpacity>
           </View>
