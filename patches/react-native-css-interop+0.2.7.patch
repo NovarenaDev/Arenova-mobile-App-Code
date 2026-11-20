@@ -89,7 +89,7 @@ index b89c565..7ea923d 100644
 +            return null;
 +        }
          if (type === "react-native-css-interop-jsx-pragma-check") {
-@@ -20,2 +23,12 @@ function wrapJSX(jsx) {
+@@ -20,2 +23,9 @@ function wrapJSX(jsx) {
          }
 +        if (!type) {
 +            return null;
@@ -97,9 +97,7 @@ index b89c565..7ea923d 100644
 +        try {
              return jsx.call(jsx, type, props, ...rest);
 +        } catch (e) {
-+            if (e && e.message && e.message.includes("Element type is invalid")) {
-+                return null;
-+            }
-+            throw e;
++            console.warn("wrapJSX caught render error for component:", (type && (type.displayName || type.name || typeof type)), e && e.message);
++            return null;
 +        }
      };

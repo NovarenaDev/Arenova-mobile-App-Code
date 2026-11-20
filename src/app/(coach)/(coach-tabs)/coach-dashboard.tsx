@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { View, ScrollView, TouchableOpacity, Modal, Image } from 'react-native';
+import { View, ScrollView, TouchableOpacity, Modal, Image, Dimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Typography, Button } from '@/components/ui';
@@ -478,7 +478,7 @@ export default function CoachDashboard() {
   }, [navigation, refetchDashboard, refetchWalletSummary, refetchCoachBanners]);
 
   const BANNER_CARD_GAP = 14;
-  const bannerCardWidth = require('react-native').Dimensions.get('window').width - 48;
+  const bannerCardWidth = Dimensions.get('window').width - 48;
 
   React.useEffect(() => {
     if (banners.length <= 1) return;
