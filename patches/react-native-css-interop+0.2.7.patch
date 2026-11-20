@@ -54,6 +54,14 @@ index 88d2ec1..5d7c607 100644
      if (animatedCache.has(Component)) {
          return animatedCache.get(Component);
      }
+diff --git a/node_modules/react-native-css-interop/dist/runtime/third-party-libs/react-native-safe-area-context.native.js b/node_modules/react-native-css-interop/dist/runtime/third-party-libs/react-native-safe-area-context.native.js
+index 9e06e30..c7ecb65 100644
+--- a/node_modules/react-native-css-interop/dist/runtime/third-party-libs/react-native-safe-area-context.native.js
++++ b/node_modules/react-native-css-interop/dist/runtime/third-party-libs/react-native-safe-area-context.native.js
+@@ -8,2 +8,3 @@ let safeAreaProviderShim;
+ function maybeHijackSafeAreaProvider(type) {
++    if (!type) return type;
+     const name = type.displayName || type.name;
 diff --git a/node_modules/react-native-css-interop/dist/runtime/web/color-scheme.js b/node_modules/react-native-css-interop/dist/runtime/web/color-scheme.js
 index 4030060..1e57374 100644
 --- a/node_modules/react-native-css-interop/dist/runtime/web/color-scheme.js
@@ -71,3 +79,27 @@ index 4030060..1e57374 100644
          }
          if (value === "system") {
              colorSchemeObservable.set(undefined);
+diff --git a/node_modules/react-native-css-interop/dist/runtime/wrap-jsx.js b/node_modules/react-native-css-interop/dist/runtime/wrap-jsx.js
+index b89c565..7ea923d 100644
+--- a/node_modules/react-native-css-interop/dist/runtime/wrap-jsx.js
++++ b/node_modules/react-native-css-interop/dist/runtime/wrap-jsx.js
+@@ -7,2 +7,5 @@ function wrapJSX(jsx) {
+     return function (type, props, ...rest) {
++        if (!type) {
++            return null;
++        }
+         if (type === "react-native-css-interop-jsx-pragma-check") {
+@@ -20,2 +23,12 @@ function wrapJSX(jsx) {
+         }
++        if (!type) {
++            return null;
++        }
++        try {
+             return jsx.call(jsx, type, props, ...rest);
++        } catch (e) {
++            if (e && e.message && e.message.includes("Element type is invalid")) {
++                return null;
++            }
++            throw e;
++        }
+     };
