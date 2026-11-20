@@ -14,10 +14,6 @@ export default function CoachTabLayout() {
 
   useEffect(() => {
     if (token && user && user.role !== 'coach') {
-      Alert.alert(
-        'Access Denied (Role Boundary)',
-        'This portal is strictly reserved for registered coaching partners.'
-      );
       const target = user.role === 'parent' 
         ? '/(parent)/(parent-tabs)/parent-dashboard' 
         : '/(individual)/(individual-tabs)/individual-dashboard';

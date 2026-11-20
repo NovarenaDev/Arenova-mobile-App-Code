@@ -15,10 +15,6 @@ export default function BookingConfirmedScreen() {
 
   useEffect(() => {
     if (user?.role === 'coach') {
-      Alert.alert(
-        'Access Denied (Role Boundary)',
-        'Coaches cannot access player booking confirmations. Please use your coach dashboard.'
-      );
       router.replace('/(coach)/(coach-tabs)/coach-dashboard');
     }
   }, [user, router]);

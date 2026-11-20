@@ -29,10 +29,6 @@ export default function CoachCommunityScreen() {
 
   useEffect(() => {
     if (user && user.role !== 'coach') {
-      Alert.alert(
-        'Access Denied (Role Boundary)',
-        'Coach Community is strictly reserved for coaching partners.'
-      );
       const target = user.role === 'parent'
         ? '/(parent)/(parent-tabs)/parent-dashboard'
         : '/(individual)/(individual-tabs)/individual-dashboard';

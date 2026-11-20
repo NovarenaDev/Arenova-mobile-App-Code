@@ -40,10 +40,6 @@ export default function CommunityScreen() {
 
   useEffect(() => {
     if (user?.role === 'coach') {
-      Alert.alert(
-        'Access Denied (Role Boundary)',
-        'Coaches cannot purchase academy subscriptions. Navigating to coach community portal.'
-      );
       router.replace('/(coach)/community');
     }
   }, [user]);

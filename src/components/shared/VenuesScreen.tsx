@@ -23,10 +23,6 @@ export default function VenuesScreen() {
 
   useEffect(() => {
     if (user?.role === 'coach') {
-      Alert.alert(
-        'Access Denied (Role Boundary)',
-        'Coaches cannot access player venue booking screens. Please use your coach dashboard.'
-      );
       router.replace('/(coach)/(coach-tabs)/coach-dashboard');
     }
   }, [user, router]);

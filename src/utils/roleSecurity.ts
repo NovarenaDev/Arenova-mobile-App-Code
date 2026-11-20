@@ -57,21 +57,13 @@ export const assertRoleNavigation = (targetRoute: string, role?: string): boolea
   if (role === 'coach') {
     const isForbidden = PLAYER_PARENT_ONLY_ROUTES.some(p => clean.includes(p.toLowerCase()));
     if (isForbidden) {
-      Alert.alert(
-        'Access Denied (Role Boundary)',
-        'You are logged in with a Coach account. Coaches cannot book other coaches or access player/parent booking screens.'
-      );
       return false;
     }
   }
 
   if (role === 'individual' || role === 'player' || role === 'parent') {
-    const isForbidden = COACH_ONLY_ROUTES.some(p => clean.includes(p.toLowerCase()));
-    if (isForbidden) {
-      Alert.alert(
-        'Access Denied (Role Boundary)',
-        'This portal is strictly reserved for registered coaching partners.'
-      );
+    const isCoachRoute = COACH_ONLY_ROUTES.some(p => clean.includes(p.toLowerCase()));
+    if (isCoachRoute) {
       return false;
     }
   }

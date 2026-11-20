@@ -33,10 +33,6 @@ export default function SelectDateScreen() {
 
   React.useEffect(() => {
     if (user?.role === 'coach') {
-      Alert.alert(
-        'Access Denied (Role Boundary)',
-        'Coaches cannot book coaching sessions. Please use your coach dashboard.'
-      );
       router.replace('/(coach)/(coach-tabs)/coach-dashboard');
     }
   }, [user, router]);

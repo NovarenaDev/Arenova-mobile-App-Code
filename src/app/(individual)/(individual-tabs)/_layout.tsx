@@ -14,10 +14,6 @@ export default function IndividualTabLayout() {
 
   useEffect(() => {
     if (token && user && user.role === 'coach') {
-      Alert.alert(
-        'Access Denied (Role Boundary)',
-        'Coaches cannot access player booking screens or book coaching sessions.'
-      );
       router.replace('/(coach)/(coach-tabs)/coach-dashboard');
     }
   }, [user, token, router]);

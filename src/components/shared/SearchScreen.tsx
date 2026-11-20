@@ -34,10 +34,6 @@ export default function FindCoachScreen() {
 
   useEffect(() => {
     if (user?.role === 'coach') {
-      Alert.alert(
-        'Access Denied (Role Boundary)',
-        'Coaches cannot search and book other coaches. Please use your coach dashboard.'
-      );
       router.replace('/(coach)/(coach-tabs)/coach-dashboard');
     }
   }, [user, router]);

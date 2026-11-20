@@ -14,10 +14,6 @@ export default function ParentTabLayout() {
 
   useEffect(() => {
     if (token && user && user.role === 'coach') {
-      Alert.alert(
-        'Access Denied (Role Boundary)',
-        'Coaches cannot access parent management screens.'
-      );
       router.replace('/(coach)/(coach-tabs)/coach-dashboard');
     }
   }, [user, token, router]);
